@@ -8,6 +8,7 @@ import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
 import SignalsHistory from "./pages/SignalsHistory";
+import CryptoMarket from "./pages/CryptoMarket";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/signals" element={<SignalsDashboard />} />
             <Route path="/history" element={<SignalsHistory />} />
+            <Route path="/market" element={<CryptoMarket />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
