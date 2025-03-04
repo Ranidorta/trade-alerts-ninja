@@ -11,7 +11,7 @@ import SignalCard from "@/components/SignalCard";
 import { 
   fetchCoinGeckoGlobal, 
   fetchCoinData, 
-  fetchCryptoNews, 
+  getMockCryptoNews, 
   fetchBinanceKlines,
   getTrendFromCandle
 } from "@/lib/apiServices";
@@ -118,37 +118,8 @@ const CryptoMarket = () => {
   const loadNewsData = async () => {
     setIsLoadingNews(true);
     try {
-      // In a real-world scenario, you would use the actual API
-      // For now, we'll create mock data
-      const mockNews = [
-        {
-          title: "Bitcoin Reaches New All-Time High as Institutional Adoption Increases",
-          description: "Bitcoin has reached a new all-time high as institutional investors continue to pour money into the cryptocurrency market.",
-          url: "https://example.com/news/1",
-          publishedAt: new Date().toISOString(),
-          source: { name: "Crypto News" },
-          urlToImage: "https://example.com/image1.jpg"
-        },
-        {
-          title: "Ethereum 2.0 Upgrade Shows Promise With Improved Transaction Speeds",
-          description: "The latest Ethereum upgrade has shown significant improvements in transaction speeds and reduced gas fees.",
-          url: "https://example.com/news/2",
-          publishedAt: new Date(Date.now() - 3600000).toISOString(),
-          source: { name: "Blockchain Times" },
-          urlToImage: "https://example.com/image2.jpg"
-        },
-        {
-          title: "Regulatory Clarity Needed for Cryptocurrency Market Growth, Says Expert",
-          description: "Experts suggest that clear regulations are essential for the sustained growth of the cryptocurrency market.",
-          url: "https://example.com/news/3",
-          publishedAt: new Date(Date.now() - 7200000).toISOString(),
-          source: { name: "Financial Post" },
-          urlToImage: "https://example.com/image3.jpg"
-        }
-      ];
-      
-      // In a real implementation, you'd use:
-      // const articles = await fetchCryptoNews("cryptocurrency");
+      // Use our mock news data instead of the API
+      const mockNews = getMockCryptoNews();
       setNews(mockNews);
     } catch (error) {
       console.error("Error loading news data:", error);

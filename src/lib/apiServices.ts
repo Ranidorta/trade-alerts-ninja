@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
 const COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global";
 const COINGECKO_API_KEY = "CG-r1Go4M9HPMrsNaH6tASKaWLr";
-const NEWS_API_URL = "https://newsapi.org/v2/everything";
 const TELEGRAM_BOT_TOKEN = "7807375635:AAGWvj86Ok_9oYdwdB-VtSb1QQ3ZjXBSz04";
 const TELEGRAM_CHAT_ID = "981122089";
 
@@ -80,24 +79,34 @@ export const fetchCoinData = async (coinId: string) => {
   }
 };
 
-// Fetch crypto news from NewsAPI
-export const fetchCryptoNews = async (keyword: string = "cryptocurrency", pageSize: number = 5) => {
-  try {
-    // Note: NewsAPI requires a valid API key. This is a placeholder for demonstration.
-    // In a real application, this should be in an environment variable or in a backend service.
-    const response = await fetch(
-      `${NEWS_API_URL}?q=${keyword}&sortBy=publishedAt&pageSize=${pageSize}&apiKey=YOUR_NEWS_API_KEY`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+// Get mock crypto news (no API call)
+export const getMockCryptoNews = () => {
+  return [
+    {
+      title: "Bitcoin Reaches New All-Time High as Institutional Adoption Increases",
+      description: "Bitcoin has reached a new all-time high as institutional investors continue to pour money into the cryptocurrency market.",
+      url: "https://example.com/news/1",
+      publishedAt: new Date().toISOString(),
+      source: { name: "Crypto News" },
+      urlToImage: "https://example.com/image1.jpg"
+    },
+    {
+      title: "Ethereum 2.0 Upgrade Shows Promise With Improved Transaction Speeds",
+      description: "The latest Ethereum upgrade has shown significant improvements in transaction speeds and reduced gas fees.",
+      url: "https://example.com/news/2",
+      publishedAt: new Date(Date.now() - 3600000).toISOString(),
+      source: { name: "Blockchain Times" },
+      urlToImage: "https://example.com/image2.jpg"
+    },
+    {
+      title: "Regulatory Clarity Needed for Cryptocurrency Market Growth, Says Expert",
+      description: "Experts suggest that clear regulations are essential for the sustained growth of the cryptocurrency market.",
+      url: "https://example.com/news/3",
+      publishedAt: new Date(Date.now() - 7200000).toISOString(),
+      source: { name: "Financial Post" },
+      urlToImage: "https://example.com/image3.jpg"
     }
-    
-    const data = await response.json();
-    return data.articles;
-  } catch (error) {
-    return handleApiError(error, "News API");
-  }
+  ];
 };
 
 // Send message via Telegram bot
