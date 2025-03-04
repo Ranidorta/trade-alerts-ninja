@@ -1,7 +1,7 @@
 
 import React, { useState } from "react";
 import { TradingSignal } from "@/lib/types";
-import { mockActiveSignals, mockHistoricalSignals } from "@/lib/mockData";
+import { mockSignals, mockHistoricalSignals } from "@/lib/mockData";
 import { Plus, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,10 @@ import SignalCard from "@/components/SignalCard";
 import { useToast } from "@/hooks/use-toast";
 
 const Admin = () => {
-  const [activeSignals] = useState<TradingSignal[]>(mockActiveSignals);
+  // Using mockSignals for active signals instead of mockActiveSignals
+  const [activeSignals] = useState<TradingSignal[]>(mockSignals.filter(signal => 
+    signal.status === "ACTIVE" || signal.status === "WAITING"
+  ));
   const [historySignals] = useState<TradingSignal[]>(mockHistoricalSignals);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
