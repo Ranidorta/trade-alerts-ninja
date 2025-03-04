@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers } from "lucide-react";
+import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import {
