@@ -3,9 +3,11 @@ import React, { useState, useMemo } from "react";
 import { TradingSignal } from "@/lib/types";
 import { mockHistoricalSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const SignalsHistory = () => {
   const [signals] = useState<TradingSignal[]>(mockHistoricalSignals);
@@ -45,6 +47,12 @@ const SignalsHistory = () => {
           <p className="text-muted-foreground">View past signals and performance</p>
         </div>
         <div className="flex mt-4 md:mt-0 space-x-2">
+          <Button variant="outline" asChild className="flex items-center">
+            <Link to="/performance">
+              <LineChart className="mr-2 h-4 w-4" />
+              Ver Dashboard Completo
+            </Link>
+          </Button>
           <Card className="shadow-sm">
             <CardContent className="p-3 flex items-center">
               <Calendar className="h-4 w-4 mr-2 text-primary" />

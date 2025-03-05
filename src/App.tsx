@@ -11,6 +11,7 @@ import SignalsHistory from "./pages/SignalsHistory";
 import CryptoMarket from "./pages/CryptoMarket";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
+import PerformanceDashboard from "./pages/PerformanceDashboard";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
             <Route path="/signals" element={<SignalsDashboard />} />
             <Route path="/history" element={<SignalsHistory />} />
             <Route path="/market" element={<CryptoMarket />} />
+            <Route path="/performance" element={<PerformanceDashboard />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

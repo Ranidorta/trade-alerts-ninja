@@ -1,6 +1,7 @@
+
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Menu, X, BarChart3, History, Activity, Lock } from "lucide-react";
+import { Menu, X, BarChart3, History, Activity, Lock, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -34,6 +35,11 @@ const Navbar = () => {
       name: "History",
       path: "/history",
       icon: <History className="h-4 w-4 mr-2" />,
+    },
+    {
+      name: "Performance",
+      path: "/performance",
+      icon: <LineChart className="h-4 w-4 mr-2" />,
     },
     {
       name: "Admin",
