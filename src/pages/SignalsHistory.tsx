@@ -1,15 +1,33 @@
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { TradingSignal } from "@/lib/types";
 import { mockHistoricalSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const SignalsHistory = () => {
   const [signals] = useState<TradingSignal[]>(mockHistoricalSignals);
   const [activeTab, setActiveTab] = useState("all");
+
+  // Calculate summary statistics
+  const summary = useMemo(() => {
+    const profitSignals = signals.filter(signal => signal.profit !== undefined && signal.profit > 0);
+    const lossSignals = signals.filter(signal => signal.profit !== undefined && signal.profit < 0);
+    
+    const totalProfit = profitSignals.reduce((sum, signal) => sum + (signal.profit || 0), 0);
+    const totalLoss = lossSignals.reduce((sum, signal) => sum + (signal.profit || 0), 0);
+    
+    return {
+      totalSignals: signals.length,
+      profitSignals: profitSignals.length,
+      lossSignals: lossSignals.length,
+      totalProfit: totalProfit.toFixed(2),
+      totalLoss: totalLoss.toFixed(2),
+      winRate: signals.length > 0 ? ((profitSignals.length / signals.length) * 100).toFixed(2) : "0.00"
+    };
+  }, [signals]);
 
   // Filter signals based on active tab
   const filteredSignals = signals.filter(signal => {
@@ -40,6 +58,55 @@ const SignalsHistory = () => {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Summary Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card className="bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Total Signals</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{summary.totalSignals}</p>
+            <p className="text-sm text-muted-foreground">Completed signals</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium flex items-center">
+              <TrendingUp className="h-4 w-4 mr-2 text-crypto-green" />
+              Profitable Signals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-crypto-green">{summary.profitSignals}</p>
+            <p className="text-sm text-muted-foreground">Total profit: +{summary.totalProfit}%</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium flex items-center">
+              <TrendingDown className="h-4 w-4 mr-2 text-crypto-red" />
+              Loss Signals
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold text-crypto-red">{summary.lossSignals}</p>
+            <p className="text-sm text-muted-foreground">Total loss: {summary.totalLoss}%</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Win Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-bold">{summary.winRate}%</p>
+            <p className="text-sm text-muted-foreground">Success rate</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-8">
