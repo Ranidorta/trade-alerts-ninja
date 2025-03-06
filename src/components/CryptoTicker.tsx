@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { CryptoCoin } from "@/lib/types";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 interface CryptoTickerProps {
   coins: CryptoCoin[];
@@ -15,7 +16,7 @@ const CryptoTicker: React.FC<CryptoTickerProps> = ({ coins, isLoading }) => {
     
     // Animation for the ticker
     const scrollWidth = tickerRef.current.scrollWidth;
-    const animationDuration = scrollWidth * 0.015; // Adjust speed based on content width
+    const animationDuration = scrollWidth * 0.02; // Adjusted speed
     
     tickerRef.current.style.animationDuration = `${animationDuration}s`;
     
@@ -28,7 +29,7 @@ const CryptoTicker: React.FC<CryptoTickerProps> = ({ coins, isLoading }) => {
 
   if (isLoading) {
     return (
-      <div className="w-full bg-accent/30 py-2 overflow-hidden">
+      <div className="w-full bg-gradient-to-r from-primary/20 to-primary/10 py-3 overflow-hidden border-b">
         <div className="flex space-x-8 animate-pulse">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="flex items-center min-w-32">
@@ -43,33 +44,40 @@ const CryptoTicker: React.FC<CryptoTickerProps> = ({ coins, isLoading }) => {
   }
 
   return (
-    <div className="w-full bg-accent/30 py-2 overflow-hidden">
-      <div 
-        className="flex space-x-8 animate-infinite-scroll whitespace-nowrap"
-        ref={tickerRef}
-      >
-        {/* Repeat coins twice to create a seamless loop */}
-        {[...coins, ...coins].map((coin, index) => (
-          <div key={`${coin.id}-${index}`} className="flex items-center min-w-32">
-            <img src={coin.image} alt={coin.name} className="w-5 h-5 mr-2" />
-            <span className="font-medium">{coin.symbol.replace('USDT', '')}</span>
-            <span 
-              className={`ml-2 text-sm ${
-                coin.priceChangePercentage24h >= 0 
-                  ? "text-crypto-green" 
-                  : "text-crypto-red"
-              }`}
-            >
-              ${coin.currentPrice.toLocaleString('en-US', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 6 
-              })}
-              {' '}
-              ({coin.priceChangePercentage24h >= 0 ? '+' : ''}
-              {coin.priceChangePercentage24h.toFixed(2)}%)
-            </span>
-          </div>
-        ))}
+    <div className="w-full bg-gradient-to-r from-primary/20 to-primary/10 py-3 overflow-hidden border-b shadow-sm">
+      <div className="ticker-container overflow-hidden whitespace-nowrap relative">
+        <div 
+          className="flex space-x-8 ticker-content"
+          ref={tickerRef}
+        >
+          {coins.map((coin, index) => (
+            <div key={`${coin.id}-${index}`} className="flex items-center min-w-32 px-2">
+              <img src={coin.image} alt={coin.name} className="w-6 h-6 mr-2" />
+              <span className="font-medium uppercase">{coin.symbol.replace('USDT', '')}</span>
+              <span 
+                className={`ml-2 text-sm font-bold flex items-center ${
+                  coin.priceChangePercentage24h >= 0 
+                    ? "text-crypto-green" 
+                    : "text-crypto-red"
+                }`}
+              >
+                ${coin.currentPrice.toLocaleString('en-US', { 
+                  minimumFractionDigits: 2, 
+                  maximumFractionDigits: 6 
+                })}
+                {' '}
+                <span className="flex items-center ml-1">
+                  {coin.priceChangePercentage24h >= 0 ? (
+                    <ArrowUp className="h-3 w-3 mr-1" />
+                  ) : (
+                    <ArrowDown className="h-3 w-3 mr-1" />
+                  )}
+                  {Math.abs(coin.priceChangePercentage24h).toFixed(2)}%
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

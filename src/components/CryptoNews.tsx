@@ -46,7 +46,7 @@ const CryptoNews: React.FC<CryptoNewsProps> = ({ news, isLoading }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex justify-between items-center mb-2">
         <CardTitle className="flex items-center space-x-2 text-lg">
           <NewspaperIcon className="h-5 w-5" />
@@ -62,37 +62,56 @@ const CryptoNews: React.FC<CryptoNewsProps> = ({ news, isLoading }) => {
         </Button>
       </div>
       
-      <Card className="w-full">
-        <CardContent className="p-0">
-          <div className="space-y-0">
-            {news.map((article, index) => (
-              <a
-                key={index}
-                href={article.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block border-b last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 p-4 transition-colors"
-              >
-                <div className="space-y-1">
-                  <h3 className="font-medium line-clamp-2">{article.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {article.description}
-                  </p>
-                  <div className="flex justify-between items-center text-xs text-muted-foreground">
-                    <span>{article.source.name}</span>
-                    <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {news.map((article, index) => (
+          <a
+            key={index}
+            href={article.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow bg-white dark:bg-gray-800 hover:scale-[1.01] transition-transform"
+          >
+            <div className="h-48 bg-gray-200 dark:bg-gray-700 relative">
+              <img 
+                src={article.urlToImage || "https://via.placeholder.com/300x200?text=Crypto+News"} 
+                alt={article.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 p-4 text-white">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/80 flex items-center justify-center text-white text-xs font-bold">
+                    {article.source.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{article.source.name}</p>
+                    <p className="text-xs opacity-80">
+                      {new Date(article.publishedAt).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
-              </a>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </div>
+            <div className="p-4">
+              <h3 className="font-bold mb-2 line-clamp-2">{article.title}</h3>
+              <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                {article.description}
+              </p>
+              <div className="flex justify-end">
+                <span className="text-xs text-primary font-medium flex items-center">
+                  Ler mais <ExternalLink className="h-3 w-3 ml-1" />
+                </span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
       
-      <div className="text-center mt-4">
+      <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
+        <h3 className="font-bold mb-4 text-center">Últimas Atualizações do Cointelegraph</h3>
         <iframe 
           src="https://cointelegraph.com.br/rss/" 
-          className="w-full h-96 border rounded-lg"
+          className="w-full h-[500px] border rounded-lg"
           title="Cointelegraph News"
         />
       </div>
