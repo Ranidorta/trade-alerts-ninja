@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { RefreshCw, Search } from "lucide-react";
@@ -8,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import MarketOverview from "@/components/MarketOverview";
 import CryptoNews from "@/components/CryptoNews";
 import SignalCard from "@/components/SignalCard";
+import NewsBanner from "@/components/NewsBanner";
+import CryptoTicker from "@/components/CryptoTicker";
 import { 
   fetchCoinGeckoGlobal, 
   fetchCoinData, 
@@ -77,10 +78,8 @@ const CryptoMarket = () => {
     try {
       const coinsData = await Promise.all(
         popularCoins.map(async (coin) => {
-          // Get coin data from CoinGecko
           const coinData = await fetchCoinData(coin.id);
           
-          // Get kline data from Binance for trend
           const klineData = await fetchBinanceKlines(coin.symbol);
           const trend = klineData ? getTrendFromCandle(klineData[klineData.length - 1]) : "NEUTRAL";
           
@@ -118,7 +117,6 @@ const CryptoMarket = () => {
   const loadNewsData = async () => {
     setIsLoadingNews(true);
     try {
-      // Use our mock news data instead of the API
       const mockNews = getMockCryptoNews();
       setNews(mockNews);
     } catch (error) {
@@ -151,161 +149,163 @@ const CryptoMarket = () => {
     });
   };
 
-  // Load all data on component mount
   useEffect(() => {
     loadMarketData();
     loadCoinsData();
     loadNewsData();
     
-    // Set up interval to refresh data every 5 minutes
     const intervalId = setInterval(refreshData, 300000);
     
     return () => clearInterval(intervalId);
   }, []);
 
-  // Filter coins based on search query
   const filteredCoins = coins.filter(coin => 
     coin.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Crypto Market</h1>
-          <p className="text-muted-foreground">Live prices, trends, and signals</p>
-        </div>
-        <div className="flex mt-4 md:mt-0 space-x-3">
-          <Button variant="outline" size="sm" onClick={refreshData}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {/* Market Overview */}
-      <div className="mb-8">
-        <MarketOverview data={marketData} isLoading={isLoadingMarket} />
-      </div>
-
-      <Tabs defaultValue="coins" className="mb-8">
-        <TabsList>
-          <TabsTrigger value="coins">Cryptocurrencies</TabsTrigger>
-          <TabsTrigger value="signals">Trading Signals</TabsTrigger>
-          <TabsTrigger value="news">Latest News</TabsTrigger>
-        </TabsList>
+    <div>
+      <CryptoTicker coins={coins} isLoading={isLoadingCoins} />
+      
+      <div className="container mx-auto px-4 py-8">
+        <NewsBanner />
         
-        <TabsContent value="coins">
-          <div className="mb-4 mt-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input
-                placeholder="Search by name or symbol..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Crypto Market</h1>
+            <p className="text-muted-foreground">Live prices, trends, and signals</p>
           </div>
+          <div className="flex mt-4 md:mt-0 space-x-3">
+            <Button variant="outline" size="sm" onClick={refreshData}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        <div className="mb-8">
+          <MarketOverview data={marketData} isLoading={isLoadingMarket} />
+        </div>
+
+        <Tabs defaultValue="coins" className="mb-8">
+          <TabsList>
+            <TabsTrigger value="coins">Cryptocurrencies</TabsTrigger>
+            <TabsTrigger value="signals">Trading Signals</TabsTrigger>
+            <TabsTrigger value="news">Latest News</TabsTrigger>
+          </TabsList>
           
-          {isLoadingCoins ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="rounded-lg border p-4 animate-pulse">
-                  <div className="flex items-center mb-4">
-                    <div className="w-10 h-10 bg-slate-200 rounded-full mr-3"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-slate-200 rounded w-24"></div>
-                      <div className="h-3 bg-slate-200 rounded w-16"></div>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="h-6 bg-slate-200 rounded w-1/2"></div>
-                    <div className="h-4 bg-slate-200 rounded w-1/3"></div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="h-4 bg-slate-200 rounded"></div>
-                      <div className="h-4 bg-slate-200 rounded"></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+          <TabsContent value="coins">
+            <div className="mb-4 mt-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                <Input
+                  placeholder="Search by name or symbol..."
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-          ) : filteredCoins.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCoins.map((coin) => (
-                <div key={coin.id} className="rounded-lg border p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-center mb-4">
-                    <img src={coin.image} alt={coin.name} className="w-10 h-10 mr-3" />
-                    <div>
-                      <h3 className="font-bold">{coin.name}</h3>
-                      <p className="text-sm text-muted-foreground">{coin.symbol.replace('USDT', '')}</p>
+            
+            {isLoadingCoins ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="rounded-lg border p-4 animate-pulse">
+                    <div className="flex items-center mb-4">
+                      <div className="w-10 h-10 bg-slate-200 rounded-full mr-3"></div>
+                      <div className="space-y-2">
+                        <div className="h-4 bg-slate-200 rounded w-24"></div>
+                        <div className="h-3 bg-slate-200 rounded w-16"></div>
+                      </div>
                     </div>
-                    <div className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
-                      coin.trend === "BULLISH" ? "bg-green-100 text-green-800" :
-                      coin.trend === "BEARISH" ? "bg-red-100 text-red-800" : 
-                      "bg-gray-100 text-gray-800"
-                    }`}>
-                      {coin.trend}
+                    <div className="space-y-3">
+                      <div className="h-6 bg-slate-200 rounded w-1/2"></div>
+                      <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="h-4 bg-slate-200 rounded"></div>
+                        <div className="h-4 bg-slate-200 rounded"></div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-2xl font-bold">${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}</span>
-                      <span className={`${coin.priceChangePercentage24h >= 0 ? 'text-crypto-green' : 'text-crypto-red'} font-medium`}>
-                        {coin.priceChangePercentage24h >= 0 ? '+' : ''}{coin.priceChangePercentage24h.toFixed(2)}%
-                      </span>
+                ))}
+              </div>
+            ) : filteredCoins.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCoins.map((coin) => (
+                  <div key={coin.id} className="rounded-lg border p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center mb-4">
+                      <img src={coin.image} alt={coin.name} className="w-10 h-10 mr-3" />
+                      <div>
+                        <h3 className="font-bold">{coin.name}</h3>
+                        <p className="text-sm text-muted-foreground">{coin.symbol.replace('USDT', '')}</p>
+                      </div>
+                      <div className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
+                        coin.trend === "BULLISH" ? "bg-green-100 text-green-800" :
+                        coin.trend === "BEARISH" ? "bg-red-100 text-red-800" : 
+                        "bg-gray-100 text-gray-800"
+                      }`}>
+                        {coin.trend}
+                      </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground">24h Volume</p>
-                        <p>${(coin.volume24h / 1000000).toFixed(2)}M</p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-2xl font-bold">${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}</span>
+                        <span className={`${coin.priceChangePercentage24h >= 0 ? 'text-crypto-green' : 'text-crypto-red'} font-medium`}>
+                          {coin.priceChangePercentage24h >= 0 ? '+' : ''}{coin.priceChangePercentage24h.toFixed(2)}%
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Market Cap</p>
-                        <p>${(coin.marketCap / 1000000000).toFixed(2)}B</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">24h High</p>
-                        <p>${coin.high24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">24h Low</p>
-                        <p>${coin.low24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">24h Volume</p>
+                          <p>${(coin.volume24h / 1000000).toFixed(2)}M</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Market Cap</p>
+                          <p>${(coin.marketCap / 1000000000).toFixed(2)}B</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">24h High</p>
+                          <p>${coin.high24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">24h Low</p>
+                          <p>${coin.low24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-xl font-medium mb-2">No cryptocurrencies found</p>
-              <p className="text-muted-foreground">Try a different search term</p>
-            </div>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="signals">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-            {signals.filter(signal => signal.status === "ACTIVE").map((signal) => (
-              <SignalCard key={signal.id} signal={signal} />
-            ))}
-            {signals.filter(signal => signal.status === "ACTIVE").length === 0 && (
-              <div className="col-span-3 text-center py-12">
-                <p className="text-xl font-medium mb-2">No active signals</p>
-                <p className="text-muted-foreground">Check back later for new trading opportunities</p>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-xl font-medium mb-2">No cryptocurrencies found</p>
+                <p className="text-muted-foreground">Try a different search term</p>
               </div>
             )}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="news">
-          <CryptoNews news={news} isLoading={isLoadingNews} />
-        </TabsContent>
-      </Tabs>
+          </TabsContent>
+          
+          <TabsContent value="signals">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+              {signals.filter(signal => signal.status === "ACTIVE").map((signal) => (
+                <SignalCard key={signal.id} signal={signal} />
+              ))}
+              {signals.filter(signal => signal.status === "ACTIVE").length === 0 && (
+                <div className="col-span-3 text-center py-12">
+                  <p className="text-xl font-medium mb-2">No active signals</p>
+                  <p className="text-muted-foreground">Check back later for new trading opportunities</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="news">
+            <CryptoNews news={news} isLoading={isLoadingNews} />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 };
