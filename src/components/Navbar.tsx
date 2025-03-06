@@ -4,6 +4,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { Menu, X, BarChart3, History, Activity, Lock, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ThemeToggle } from "./ThemeToggle";
 
 const Navbar = () => {
   const location = useLocation();
@@ -61,62 +62,66 @@ const Navbar = () => {
           </NavLink>
         </div>
 
-        {isMobile ? (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsMobileOpen(!isMobileOpen)}
-              aria-label="Toggle menu"
-            >
-              {isMobileOpen ? <X /> : <Menu />}
-            </Button>
-
-            {isMobileOpen && (
-              <div className="fixed inset-0 top-16 bg-background z-40 p-4">
-                <div className="flex flex-col space-y-2">
-                  {navLinks.map((link) => (
-                    <NavLink
-                      key={link.path}
-                      to={link.path}
-                      className={({ isActive }) =>
-                        `px-4 py-3 rounded-md transition-colors flex items-center ${
-                          isActive
-                            ? "bg-primary text-primary-foreground"
-                            : "text-foreground hover:bg-accent hover:text-accent-foreground"
-                        }`
-                      }
-                    >
-                      {link.icon}
-                      {link.name}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <nav className="flex space-x-1">
-            {navLinks.map((link) => (
-              <NavLink
-                key={link.path}
-                to={link.path}
-                className={({ isActive }) =>
-                  `px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-accent hover:text-accent-foreground"
-                  }`
-                }
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          
+          {isMobile ? (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileOpen(!isMobileOpen)}
+                aria-label="Toggle menu"
               >
-                <span className="flex items-center">
-                  {link.icon}
-                  {link.name}
-                </span>
-              </NavLink>
-            ))}
-          </nav>
-        )}
+                {isMobileOpen ? <X /> : <Menu />}
+              </Button>
+
+              {isMobileOpen && (
+                <div className="fixed inset-0 top-16 bg-background z-40 p-4">
+                  <div className="flex flex-col space-y-2">
+                    {navLinks.map((link) => (
+                      <NavLink
+                        key={link.path}
+                        to={link.path}
+                        className={({ isActive }) =>
+                          `px-4 py-3 rounded-md transition-colors flex items-center ${
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                          }`
+                        }
+                      >
+                        {link.icon}
+                        {link.name}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <nav className="flex space-x-1">
+              {navLinks.map((link) => (
+                <NavLink
+                  key={link.path}
+                  to={link.path}
+                  className={({ isActive }) =>
+                    `px-3 py-2 rounded-md text-sm transition-colors ${
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`
+                  }
+                >
+                  <span className="flex items-center">
+                    {link.icon}
+                    {link.name}
+                  </span>
+                </NavLink>
+              ))}
+            </nav>
+          )}
+        </div>
       </div>
     </header>
   );
