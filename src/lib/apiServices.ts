@@ -1,6 +1,5 @@
-
 import { useToast } from "@/hooks/use-toast";
-import { CryptoNews } from "./types";
+import { CryptoNews, TradingSignal } from "./types";
 
 // API URLs and keys
 const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
@@ -12,6 +11,10 @@ const CRYPTO_APIS_KEY = "34b71000c7b0a5e31fb4b7bb5aca0b87bab6d05f";
 const COIN_DESK_API_URL = "https://api.coindesk.com/v1/bpi/currentprice.json";
 const CRYPTONEWS_API_KEY = "yq8qjvqe7rknrfsswlzjiwmlzuurgk3p4thsqgfs";
 const CRYPTONEWS_API_URL = "https://cryptonews-api.com/api/v1";
+const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
+
+// Symbols to monitor
+const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT"];
 
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
@@ -226,4 +229,164 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   if (percentage > 0) return { value: "+" + formattedValue, color: "text-crypto-green" };
   if (percentage < 0) return { value: formattedValue, color: "text-crypto-red" };
   return { value: formattedValue, color: "text-gray-500" };
+};
+
+// Fetch kline data from Bybit
+export const fetchBybitKlines = async (
+  symbol: string,
+  interval: string = "5", // 5 min interval
+  limit: number = 50
+) => {
+  try {
+    const params = new URLSearchParams({
+      category: "linear",
+      symbol: symbol.toUpperCase(),
+      interval: interval,
+      limit: limit.toString()
+    });
+    
+    const response = await fetch(`${BYBIT_API_URL}?${params}`, {
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    if (data.retCode === 0 && data.result?.list) {
+      return data.result.list;
+    } else {
+      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
+      return null;
+    }
+  } catch (error) {
+    return handleApiError(error, `Bybit Klines for ${symbol}`);
+  }
+};
+
+// Calculate trading indicators
+export const calculateIndicators = (data: any[]) => {
+  if (!data || data.length < 15) {
+    console.error("Insufficient data for technical analysis");
+    return { shortMa: null, longMa: null, rsi: null, macd: null };
+  }
+  
+  const closingPrices = data.map(candle => parseFloat(candle[4]));
+  const highPrices = data.map(candle => parseFloat(candle[2]));
+  const lowPrices = data.map(candle => parseFloat(candle[3]));
+  
+  // Calculate moving averages
+  const shortMa = closingPrices.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const longMa = closingPrices.slice(-15).reduce((a, b) => a + b, 0) / 15;
+  
+  // Simple RSI calculation
+  const rsi = 100 - (100 / (1 + 
+    (closingPrices.slice(-5).reduce((a, b) => a + b, 0) / 5) / 
+    (closingPrices.slice(-15).reduce((a, b) => a + b, 0) / 15)
+  ));
+  
+  // Simple MACD
+  const macd = shortMa - longMa;
+  
+  return { shortMa, longMa, rsi, macd };
+};
+
+// Generate trading signal
+export const generateTradingSignal = async (symbol: string): Promise<TradingSignal | null> => {
+  try {
+    const marketData = await fetchBybitKlines(symbol);
+    if (!marketData) return null;
+    
+    const { shortMa, longMa, rsi, macd } = calculateIndicators(marketData);
+    if (shortMa === null || longMa === null) return null;
+    
+    const entryPrice = parseFloat(marketData[marketData.length - 1][4]);
+    const highestHigh = Math.max(...marketData.map(c => parseFloat(c[2])));
+    const lowestLow = Math.min(...marketData.map(c => parseFloat(c[3])));
+    const volatility = (highestHigh - lowestLow) / lowestLow;
+    const leverage = Math.min(10, Math.max(2, Math.floor(volatility * 50)));
+    
+    let signal: TradingSignal | null = null;
+    
+    if (shortMa > longMa && rsi < 70 && macd > 0) {
+      // Long signal
+      signal = {
+        id: `${symbol}-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        symbol: symbol,
+        pair: `${symbol.replace('USDT', '')}/USDT`,
+        direction: "BUY",
+        entryPrice: entryPrice,
+        stopLoss: entryPrice * 0.98,
+        takeProfit: [
+          entryPrice * 1.02,
+          entryPrice * 1.03,
+          entryPrice * 1.05
+        ],
+        status: "ACTIVE",
+        timeframe: "5m",
+        reason: `MA Cross (Short: ${shortMa.toFixed(2)} > Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
+        leverage: leverage
+      };
+    } else if (shortMa < longMa && rsi > 30 && macd < 0) {
+      // Short signal
+      signal = {
+        id: `${symbol}-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        symbol: symbol,
+        pair: `${symbol.replace('USDT', '')}/USDT`,
+        direction: "SELL",
+        entryPrice: entryPrice,
+        stopLoss: entryPrice * 1.02,
+        takeProfit: [
+          entryPrice * 0.98,
+          entryPrice * 0.97,
+          entryPrice * 0.95
+        ],
+        status: "ACTIVE",
+        timeframe: "5m",
+        reason: `MA Cross (Short: ${shortMa.toFixed(2)} < Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
+        leverage: leverage
+      };
+    }
+    
+    if (signal) {
+      // Send signal to Telegram
+      const signalMessage = 
+        `Sinal de Trade ⚡\n\n` +
+        `${signal.direction === "BUY" ? "Long" : "Short"} ${signal.symbol}\n` +
+        `Entrada: ${signal.entryPrice.toFixed(4)}\n` +
+        `SL: ${signal.stopLoss.toFixed(4)}\n` +
+        `TP1: ${signal.takeProfit[0].toFixed(4)}\n` +
+        `TP2: ${signal.takeProfit[1].toFixed(4)}\n` +
+        `TP3: ${signal.takeProfit[2].toFixed(4)}\n` +
+        `Alavancagem: ${signal.leverage}x\n`;
+        
+      await sendTelegramMessage(signalMessage);
+    }
+    
+    return signal;
+  } catch (error) {
+    console.error(`Error generating trading signal for ${symbol}:`, error);
+    return null;
+  }
+};
+
+// Generate signals for all monitored symbols
+export const generateAllSignals = async (): Promise<TradingSignal[]> => {
+  const signals: TradingSignal[] = [];
+  
+  for (const symbol of SYMBOLS) {
+    const signal = await generateTradingSignal(symbol);
+    if (signal) {
+      signals.push(signal);
+    }
+  }
+  
+  return signals;
 };

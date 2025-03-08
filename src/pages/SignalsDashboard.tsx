@@ -7,7 +7,8 @@ import {
   ArrowUpDown, 
   BarChart3, 
   Search, 
-  Bell
+  Bell,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { generateAllSignals } from "@/lib/apiServices";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -29,14 +31,14 @@ const SignalsDashboard = () => {
   const [statusFilter, setStatusFilter] = useState<SignalStatus | "ALL">("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   
   useEffect(() => {
-    // Simulate loading data from API
+    // Load initial signals
     const loadData = async () => {
       setIsLoading(true);
-      // Artificial delay to simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Start with mock signals
       setSignals(mockSignals);
       setFilteredSignals(mockSignals);
       setIsLoading(false);
@@ -94,6 +96,42 @@ const SignalsDashboard = () => {
     });
   };
   
+  const handleGenerateSignals = async () => {
+    setIsGenerating(true);
+    toast({
+      title: "Generating signals",
+      description: "Analyzing market data to find trading opportunities...",
+    });
+    
+    try {
+      const newSignals = await generateAllSignals();
+      
+      if (newSignals.length > 0) {
+        // Add new signals to existing ones
+        setSignals(prevSignals => [...newSignals, ...prevSignals]);
+        
+        toast({
+          title: "New signals generated",
+          description: `Found ${newSignals.length} new trading opportunities`,
+        });
+      } else {
+        toast({
+          title: "No new signals",
+          description: "No trading opportunities found at this time",
+        });
+      }
+    } catch (error) {
+      console.error("Error generating signals:", error);
+      toast({
+        title: "Error generating signals",
+        description: "An error occurred while analyzing market data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+  
   const renderSkeletons = () => {
     return Array(6).fill(0).map((_, index) => (
       <div key={index} className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 animate-pulse">
@@ -123,10 +161,21 @@ const SignalsDashboard = () => {
           </p>
         </div>
         
-        <Button onClick={handleSubscribe} className="mt-4 md:mt-0">
-          <Bell className="mr-2 h-4 w-4" />
-          Subscribe to Alerts
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+          <Button 
+            onClick={handleGenerateSignals} 
+            variant="default"
+            disabled={isGenerating}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Analyzing Market...' : 'Generate Signals'}
+          </Button>
+          
+          <Button onClick={handleSubscribe} variant="outline">
+            <Bell className="mr-2 h-4 w-4" />
+            Subscribe to Alerts
+          </Button>
+        </div>
       </div>
       
       <div className="flex flex-col md:flex-row gap-4 mb-8">
@@ -226,7 +275,7 @@ const SignalsDashboard = () => {
             <p className="text-slate-500 max-w-md mx-auto">
               {searchQuery ? 
                 `No signals matching "${searchQuery}" were found. Try a different search term.` : 
-                "There are no signals with the selected filter. Try changing your filters."}
+                "There are no signals with the selected filter. Try changing your filters or generate new signals."}
             </p>
           </div>
         )}
