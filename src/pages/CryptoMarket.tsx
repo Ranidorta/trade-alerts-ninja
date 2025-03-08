@@ -12,7 +12,7 @@ import CryptoTicker from "@/components/CryptoTicker";
 import { 
   fetchCoinGeckoGlobal, 
   fetchCoinData, 
-  getMockCryptoNews, 
+  fetchCryptoNews,
   fetchBinanceKlines,
   getTrendFromCandle
 } from "@/lib/apiServices";
@@ -117,8 +117,8 @@ const CryptoMarket = () => {
   const loadNewsData = async () => {
     setIsLoadingNews(true);
     try {
-      const mockNews = getMockCryptoNews();
-      setNews(mockNews);
+      const newsData = await fetchCryptoNews();
+      setNews(newsData);
     } catch (error) {
       console.error("Error loading news data:", error);
       toast({

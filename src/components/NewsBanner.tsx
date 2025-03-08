@@ -1,18 +1,110 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CryptoNews as CryptoNewsType } from "@/lib/types";
-import { getMockCryptoNews } from "@/lib/apiServices";
+import { fetchCryptoNews } from "@/lib/apiServices";
+import { useToast } from "@/hooks/use-toast";
 
 const NewsBanner: React.FC = () => {
-  const [stories] = useState<CryptoNewsType[]>(getMockCryptoNews().slice(0, 5));
+  const [stories, setStories] = useState<CryptoNewsType[]>([]);
   const [activeStory, setActiveStory] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const loadNews = async () => {
+      setIsLoading(true);
+      try {
+        const newsData = await fetchCryptoNews();
+        if (newsData && newsData.length > 0) {
+          setStories(newsData.slice(0, 5));
+        }
+      } catch (error) {
+        console.error("Error loading news:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load cryptocurrency news",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadNews();
+  }, [toast]);
 
   const handleStoryClick = (index: number) => {
     setActiveStory(index);
   };
+
+  if (isLoading) {
+    return (
+      <Card className="mb-6 bg-background shadow-md border-primary/10">
+        <CardContent className="p-4">
+          <div className="flex flex-col space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold">Notícias de Criptomoedas</h2>
+              <div className="w-24 h-8 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            </div>
+            
+            <div className="flex space-x-2 overflow-x-auto pb-2">
+              {[...Array(5)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="relative flex-shrink-0 w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-200 dark:bg-gray-700 animate-pulse"
+                ></div>
+              ))}
+            </div>
+            
+            <div className="bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden p-4 h-48 animate-pulse">
+              <div className="flex items-center space-x-2 mb-2">
+                <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                <div className="space-y-2">
+                  <div className="w-24 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                  <div className="w-16 h-2 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                </div>
+              </div>
+              <div className="w-3/4 h-5 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+              <div className="space-y-2">
+                <div className="w-full h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                <div className="w-5/6 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                <div className="w-4/6 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (stories.length === 0) {
+    return (
+      <Card className="mb-6 bg-background shadow-md border-primary/10">
+        <CardContent className="p-4">
+          <div className="flex flex-col space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-bold">Notícias de Criptomoedas</h2>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="shrink-0"
+                onClick={() => window.open("https://cointelegraph.com.br/", "_blank")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Ver mais
+              </Button>
+            </div>
+            <p className="text-center text-muted-foreground py-8">
+              Nenhuma notícia disponível no momento. Tente novamente mais tarde.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="mb-6 bg-background shadow-md border-primary/10">

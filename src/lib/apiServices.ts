@@ -1,5 +1,6 @@
 
 import { useToast } from "@/hooks/use-toast";
+import { CryptoNews } from "./types";
 
 // API URLs and keys
 const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
@@ -7,6 +8,10 @@ const COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global";
 const COINGECKO_API_KEY = "CG-r1Go4M9HPMrsNaH6tASKaWLr";
 const TELEGRAM_BOT_TOKEN = "7807375635:AAGWvj86Ok_9oYdwdB-VtSb1QQ3ZjXBSz04";
 const TELEGRAM_CHAT_ID = "981122089";
+const CRYPTO_APIS_KEY = "34b71000c7b0a5e31fb4b7bb5aca0b87bab6d05f";
+const COIN_DESK_API_URL = "https://api.coindesk.com/v1/bpi/currentprice.json";
+const CRYPTONEWS_API_KEY = "yq8qjvqe7rknrfsswlzjiwmlzuurgk3p4thsqgfs";
+const CRYPTONEWS_API_URL = "https://cryptonews-api.com/api/v1";
 
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
@@ -79,7 +84,62 @@ export const fetchCoinData = async (coinId: string) => {
   }
 };
 
-// Get mock crypto news (no API call)
+// Fetch crypto news from real APIs
+export const fetchCryptoNews = async (): Promise<CryptoNews[]> => {
+  try {
+    // Try CryptoNews API first
+    try {
+      const response = await fetch(
+        `${CRYPTONEWS_API_URL}/category?section=general&items=10&page=1&token=${CRYPTONEWS_API_KEY}`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.news && data.news.length > 0) {
+          return data.news.map((item: any) => ({
+            title: item.title,
+            description: item.text || item.description,
+            url: item.news_url,
+            publishedAt: item.date,
+            source: { name: item.source_name },
+            urlToImage: item.image_url
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching from CryptoNews API:", error);
+    }
+    
+    // Try CoinDesk API as fallback
+    try {
+      const response = await fetch("https://api.coindesk.com/v2/news/alerts/latest");
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data && data.data.items && data.data.items.length > 0) {
+          return data.data.items.map((item: any) => ({
+            title: item.headline,
+            description: item.summary || item.snippet,
+            url: item.url,
+            publishedAt: item.published_at,
+            source: { name: 'CoinDesk' },
+            urlToImage: item.cover_image_url
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching from CoinDesk API:", error);
+    }
+    
+    // If all else fails, use mock data
+    return getMockCryptoNews();
+  } catch (error) {
+    console.error("Error fetching crypto news:", error);
+    return getMockCryptoNews();
+  }
+};
+
+// Get mock crypto news (fallback when API fails)
 export const getMockCryptoNews = () => {
   return [
     {
