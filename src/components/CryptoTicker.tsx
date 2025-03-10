@@ -53,7 +53,7 @@ const CryptoTicker: React.FC<CryptoTickerProps> = ({ coins, isLoading }) => {
           {coins.map((coin, index) => (
             <div key={`${coin.id}-${index}`} className="flex items-center min-w-32 px-2">
               <img src={coin.image} alt={coin.name} className="w-6 h-6 mr-2" />
-              <span className="font-medium uppercase">{coin.symbol.replace('USDT', '')}</span>
+              <span className="font-medium uppercase">{coin.symbol}</span>
               <span 
                 className={`ml-2 text-sm font-bold flex items-center ${
                   coin.priceChangePercentage24h >= 0 

@@ -8,7 +8,8 @@ import {
   BarChart3, 
   Search, 
   Bell,
-  RefreshCw
+  RefreshCw,
+  Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,20 +33,42 @@ const SignalsDashboard = () => {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [useMockData, setUseMockData] = useState(true);
   const { toast } = useToast();
   
   useEffect(() => {
     // Load initial signals
     const loadData = async () => {
       setIsLoading(true);
-      // Start with mock signals
-      setSignals(mockSignals);
-      setFilteredSignals(mockSignals);
+      
+      if (useMockData) {
+        // Use mock signals
+        setSignals(mockSignals);
+        setFilteredSignals(mockSignals);
+      } else {
+        // Generate real signals from Bybit
+        try {
+          const realSignals = await generateAllSignals();
+          setSignals(prevSignals => realSignals.length > 0 ? realSignals : prevSignals);
+          setFilteredSignals(prevSignals => realSignals.length > 0 ? realSignals : prevSignals);
+        } catch (error) {
+          console.error("Error loading real signals:", error);
+          toast({
+            title: "Error loading signals",
+            description: "Failed to load signals from Bybit API. Using mock data instead.",
+            variant: "destructive"
+          });
+          // Fallback to mock signals
+          setSignals(mockSignals);
+          setFilteredSignals(mockSignals);
+        }
+      }
+      
       setIsLoading(false);
     };
     
     loadData();
-  }, []);
+  }, [useMockData, toast]);
   
   // Filter and sort signals whenever dependencies change
   useEffect(() => {
@@ -132,6 +155,14 @@ const SignalsDashboard = () => {
     }
   };
   
+  const toggleDataSource = () => {
+    setUseMockData(!useMockData);
+    toast({
+      title: `Using ${!useMockData ? 'mock' : 'real'} data`,
+      description: `Switched to ${!useMockData ? 'mock' : 'real Bybit API'} data for signals`,
+    });
+  };
+  
   const renderSkeletons = () => {
     return Array(6).fill(0).map((_, index) => (
       <div key={index} className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 animate-pulse">
@@ -159,9 +190,23 @@ const SignalsDashboard = () => {
           <p className="text-slate-600 dark:text-slate-300">
             Current active trading opportunities
           </p>
+          <div className="mt-2 flex items-center">
+            <span className={`text-xs font-medium px-2 py-1 rounded ${useMockData ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+              {useMockData ? 'Using Mock Data' : 'Using Bybit API Data'}
+            </span>
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+          <Button 
+            onClick={toggleDataSource} 
+            variant="outline"
+            className="border-dashed"
+          >
+            <Database className="mr-2 h-4 w-4" />
+            {useMockData ? 'Switch to Bybit API' : 'Switch to Mock Data'}
+          </Button>
+          
           <Button 
             onClick={handleGenerateSignals} 
             variant="default"

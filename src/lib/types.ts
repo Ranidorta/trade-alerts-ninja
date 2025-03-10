@@ -1,3 +1,4 @@
+
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -76,4 +77,15 @@ export interface MarketOverview {
   };
   marketCapChangePercentage24hUsd: number;
   lastUpdated: Date;
+}
+
+export interface MarketOverviewProps {
+  data: MarketOverview | null;
+  isLoading: boolean;
+}
+
+// Define the expected interface for CryptoChartProps to match CryptoChart component
+export interface CryptoChartDataPoint {
+  time: number;
+  price: number;
 }

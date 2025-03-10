@@ -1,4 +1,3 @@
-
 import { useToast } from "@/hooks/use-toast";
 import { CryptoNews, TradingSignal } from "./types";
 
@@ -369,4 +368,73 @@ export const generateAllSignals = async (): Promise<TradingSignal[]> => {
   }
   
   return signals;
+};
+
+// Add or update this function to convert Bybit candle data to CryptoCoin format
+export const convertBybitToCryptoCoin = async (symbol: string): Promise<CryptoCoin | null> => {
+  try {
+    const candles = await fetchBybitKlines(symbol);
+    if (!candles || candles.length === 0) return null;
+    
+    // Extract the most recent candle
+    const latestCandle = candles[0];
+    
+    // Parse candle data
+    const openPrice = parseFloat(latestCandle[1]);
+    const highPrice = parseFloat(latestCandle[2]);
+    const lowPrice = parseFloat(latestCandle[3]);
+    const closePrice = parseFloat(latestCandle[4]);
+    const volume = parseFloat(latestCandle[5]);
+    
+    // Calculate 24h change
+    const prevDayCandle = candles.find(c => {
+      const candleTime = new Date(parseInt(c[0]));
+      const now = new Date();
+      const hoursDiff = (now.getTime() - candleTime.getTime()) / (1000 * 60 * 60);
+      return hoursDiff >= 24;
+    }) || candles[candles.length - 1];
+    
+    const prevClosePrice = parseFloat(prevDayCandle[4]);
+    const priceChange = closePrice - prevClosePrice;
+    const priceChangePercent = (priceChange / prevClosePrice) * 100;
+    
+    // Generate a simple coin ID
+    const coinId = symbol.replace('USDT', '').toLowerCase();
+    
+    // Determine trend
+    const trend = getTrendFromCandle(latestCandle);
+    
+    return {
+      id: coinId,
+      symbol: symbol,
+      name: symbol.replace('USDT', ''),
+      image: `https://cryptologos.cc/logos/${coinId}-${coinId}-logo.png?v=022`, // Generic placeholder
+      currentPrice: closePrice,
+      priceChange24h: priceChange,
+      priceChangePercentage24h: priceChangePercent,
+      marketCap: closePrice * volume * 1000, // Rough estimate
+      volume24h: volume,
+      high24h: highPrice,
+      low24h: lowPrice,
+      lastUpdated: new Date(),
+      trend: trend
+    };
+  } catch (error) {
+    console.error(`Error converting Bybit data for ${symbol}:`, error);
+    return null;
+  }
+};
+
+// Add this function to get multiple crypto coins data
+export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoCoin[]> => {
+  const results: CryptoCoin[] = [];
+  
+  for (const symbol of symbols) {
+    const coin = await convertBybitToCryptoCoin(symbol);
+    if (coin) {
+      results.push(coin);
+    }
+  }
+  
+  return results;
 };

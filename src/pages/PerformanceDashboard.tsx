@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { mockSignals, mockHistoricalSignals } from "@/lib/mockData";
@@ -80,6 +79,18 @@ const PerformanceDashboard = () => {
       activeTrades: active.length,
       longTrades,
       shortTrades: allSignals.length - longTrades,
+    });
+
+    // Add this to handle bar coloring:
+    document.querySelectorAll('[data-value]').forEach(el => {
+      const value = parseFloat(el.getAttribute('data-value') || '0');
+      el.classList.add(value >= 0 ? 'fill-green-500' : 'fill-red-500');
+      el.closest('.recharts-bar-rectangle')?.classList.add('fill-[var(--bar-color)]');
+      if (value >= 0) {
+        el.closest('.recharts-bar-rectangle')?.style.setProperty('--bar-color', '#10b981');
+      } else {
+        el.closest('.recharts-bar-rectangle')?.style.setProperty('--bar-color', '#ef4444');
+      }
     });
   }, []);
 
@@ -343,7 +354,7 @@ const PerformanceDashboard = () => {
                       dataKey="profit"
                       name="Profit (%)"
                       fill="#10b981"
-                      className="fill-green-500 negative-fill-red-500"
+                      className="fill-[var(--bar-color)]"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -372,7 +383,7 @@ const PerformanceDashboard = () => {
                       dataKey="profit"
                       name="Profit (%)"
                       fill="#10b981"
-                      className="fill-green-500 negative-fill-red-500"
+                      className="fill-[var(--bar-color)]"
                     />
                   </BarChart>
                 </ResponsiveContainer>

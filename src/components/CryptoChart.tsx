@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { CryptoChartDataPoint } from "@/lib/types";
 
 export interface CryptoChartProps {
   symbol: string;
@@ -14,7 +15,7 @@ export interface CryptoChartProps {
 }
 
 // Generate mock data points
-const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, length: number = 24) => {
+const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, length: number = 24): CryptoChartDataPoint[] => {
   const trend = type === "LONG" ? 1 : -1;
   const volatility = entryPrice * 0.005; // 0.5% volatility
   
@@ -31,7 +32,7 @@ const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, length: nu
 };
 
 const CryptoChart = ({ symbol, type, entryPrice, stopLoss, targets, className }: CryptoChartProps) => {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<CryptoChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
