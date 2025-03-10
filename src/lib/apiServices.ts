@@ -2,7 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CryptoNews, TradingSignal } from "./types";
 
 // API URLs and keys
-const BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines";
+const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
 const COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global";
 const COINGECKO_API_KEY = "CG-r1Go4M9HPMrsNaH6tASKaWLr";
 const TELEGRAM_BOT_TOKEN = "7807375635:AAGWvj86Ok_9oYdwdB-VtSb1QQ3ZjXBSz04";
@@ -11,10 +11,9 @@ const CRYPTO_APIS_KEY = "34b71000c7b0a5e31fb4b7bb5aca0b87bab6d05f";
 const COIN_DESK_API_URL = "https://api.coindesk.com/v1/bpi/currentprice.json";
 const CRYPTONEWS_API_KEY = "yq8qjvqe7rknrfsswlzjiwmlzuurgk3p4thsqgfs";
 const CRYPTONEWS_API_URL = "https://cryptonews-api.com/api/v1";
-const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
 
-// Symbols to monitor
-const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT"];
+// Symbols to monitor - expanded list
+const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT", "AUCTIONUSDT", "XRPUSDT", "AVAXUSDT", "ADAUSDT", "UNIUSDT", "SOLUSDT"];
 
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
@@ -22,25 +21,39 @@ const handleApiError = (error: any, endpoint: string) => {
   return null;
 };
 
-// Fetch candlestick data from Binance
-export const fetchBinanceKlines = async (
+// Fetch kline data from Bybit
+export const fetchBybitKlines = async (
   symbol: string,
-  interval: string = "1h",
-  limit: number = 24
+  interval: string = "5", // 5 min interval
+  limit: number = 50
 ) => {
   try {
-    const response = await fetch(
-      `${BINANCE_KLINES_URL}?symbol=${symbol}&interval=${interval}&limit=${limit}`
-    );
+    const params = new URLSearchParams({
+      category: "linear",
+      symbol: symbol.toUpperCase(),
+      interval: interval,
+      limit: limit.toString()
+    });
+    
+    const response = await fetch(`${BYBIT_API_URL}?${params}`, {
+      headers: {
+        "Accept": "application/json"
+      }
+    });
     
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
     
     const data = await response.json();
-    return data;
+    if (data.retCode === 0 && data.result?.list) {
+      return data.result.list;
+    } else {
+      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
+      return null;
+    }
   } catch (error) {
-    return handleApiError(error, "Binance Klines");
+    return handleApiError(error, `Bybit Klines for ${symbol}`);
   }
 };
 
@@ -231,42 +244,6 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   return { value: formattedValue, color: "text-gray-500" };
 };
 
-// Fetch kline data from Bybit
-export const fetchBybitKlines = async (
-  symbol: string,
-  interval: string = "5", // 5 min interval
-  limit: number = 50
-) => {
-  try {
-    const params = new URLSearchParams({
-      category: "linear",
-      symbol: symbol.toUpperCase(),
-      interval: interval,
-      limit: limit.toString()
-    });
-    
-    const response = await fetch(`${BYBIT_API_URL}?${params}`, {
-      headers: {
-        "Accept": "application/json"
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    if (data.retCode === 0 && data.result?.list) {
-      return data.result.list;
-    } else {
-      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
-      return null;
-    }
-  } catch (error) {
-    return handleApiError(error, `Bybit Klines for ${symbol}`);
-  }
-};
-
 // Calculate trading indicators
 export const calculateIndicators = (data: any[]) => {
   if (!data || data.length < 15) {
@@ -330,7 +307,8 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         status: "ACTIVE",
         timeframe: "5m",
         reason: `MA Cross (Short: ${shortMa.toFixed(2)} > Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
-        leverage: leverage
+        leverage: leverage,
+        type: "LONG"
       };
     } else if (shortMa < longMa && rsi > 30 && macd < 0) {
       // Short signal
@@ -351,7 +329,8 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         status: "ACTIVE",
         timeframe: "5m",
         reason: `MA Cross (Short: ${shortMa.toFixed(2)} < Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
-        leverage: leverage
+        leverage: leverage,
+        type: "SHORT"
       };
     }
     

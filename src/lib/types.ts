@@ -1,6 +1,5 @@
-
 export type SignalType = "LONG" | "SHORT";
-
+export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
 
 export interface PriceTarget {
@@ -11,22 +10,27 @@ export interface PriceTarget {
 
 export interface TradingSignal {
   id: string;
-  type: SignalType;
   symbol: string;
   pair: string;
-  entryMin: number;
-  entryMax: number;
-  entryAvg: number;
+  direction?: SignalDirection;
+  entryPrice?: number;
+  entryMin?: number;
+  entryMax?: number;
+  entryAvg?: number;
   stopLoss: number;
-  targets: PriceTarget[];
+  takeProfit?: number[];
+  targets?: PriceTarget[];
   leverage: number;
   status: SignalStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  completedAt?: Date;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
   profit?: number;
   notes?: string;
   currentPrice?: number;
+  timeframe?: string;
+  reason?: string;
+  type?: SignalType;
 }
 
 export interface Feature {
