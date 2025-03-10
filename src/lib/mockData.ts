@@ -18,8 +18,8 @@ export const mockSignals: TradingSignal[] = [
     ],
     leverage: 5,
     status: "ACTIVE",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 2)),
-    updatedAt: new Date(),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString(),
+    updatedAt: new Date().toISOString(),
     currentPrice: 0.242
   },
   {
@@ -38,8 +38,8 @@ export const mockSignals: TradingSignal[] = [
     ],
     leverage: 10,
     status: "ACTIVE",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 1)),
-    updatedAt: new Date(),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(),
+    updatedAt: new Date().toISOString(),
     currentPrice: 64100
   },
   {
@@ -58,8 +58,8 @@ export const mockSignals: TradingSignal[] = [
     ],
     leverage: 5,
     status: "WAITING",
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     currentPrice: 3110
   },
   {
@@ -78,9 +78,9 @@ export const mockSignals: TradingSignal[] = [
     ],
     leverage: 5,
     status: "COMPLETED",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 5)),
-    updatedAt: new Date(new Date().setDate(new Date().getDate() - 3)),
-    completedAt: new Date(new Date().setDate(new Date().getDate() - 3)),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString(),
+    updatedAt: new Date(new Date().setDate(new Date().getDate() - 3)).toISOString(),
+    completedAt: new Date(new Date().setDate(new Date().getDate() - 3)).toISOString(),
     profit: 8.5,
     currentPrice: 137
   },
@@ -100,8 +100,8 @@ export const mockSignals: TradingSignal[] = [
     ],
     leverage: 10,
     status: "ACTIVE",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 3)),
-    updatedAt: new Date(),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 3)).toISOString(),
+    updatedAt: new Date().toISOString(),
     currentPrice: 0.57
   }
 ];
@@ -124,9 +124,9 @@ export const mockHistoricalSignals: TradingSignal[] = [
     ],
     leverage: 5,
     status: "COMPLETED",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 10)),
-    updatedAt: new Date(new Date().setDate(new Date().getDate() - 7)),
-    completedAt: new Date(new Date().setDate(new Date().getDate() - 7)),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 10)).toISOString(),
+    updatedAt: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
+    completedAt: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
     profit: 14.3,
     currentPrice: 0.42
   },
@@ -146,9 +146,9 @@ export const mockHistoricalSignals: TradingSignal[] = [
     ],
     leverage: 10,
     status: "COMPLETED",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 15)),
-    updatedAt: new Date(new Date().setDate(new Date().getDate() - 12)),
-    completedAt: new Date(new Date().setDate(new Date().getDate() - 12)),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 15)).toISOString(),
+    updatedAt: new Date(new Date().setDate(new Date().getDate() - 12)).toISOString(),
+    completedAt: new Date(new Date().setDate(new Date().getDate() - 12)).toISOString(),
     profit: -6.8,
     currentPrice: 7.0
   },
@@ -168,9 +168,9 @@ export const mockHistoricalSignals: TradingSignal[] = [
     ],
     leverage: 5,
     status: "COMPLETED",
-    createdAt: new Date(new Date().setDate(new Date().getDate() - 20)),
-    updatedAt: new Date(new Date().setDate(new Date().getDate() - 18)),
-    completedAt: new Date(new Date().setDate(new Date().getDate() - 18)),
+    createdAt: new Date(new Date().setDate(new Date().getDate() - 20)).toISOString(),
+    updatedAt: new Date(new Date().setDate(new Date().getDate() - 18)).toISOString(),
+    completedAt: new Date(new Date().setDate(new Date().getDate() - 18)).toISOString(),
     profit: 10.2,
     currentPrice: 0.109
   }

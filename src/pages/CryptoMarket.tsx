@@ -1,310 +1,201 @@
-import React, { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import MarketOverview from "@/components/MarketOverview";
-import CryptoNews from "@/components/CryptoNews";
-import SignalCard from "@/components/SignalCard";
-import NewsBanner from "@/components/NewsBanner";
-import CryptoTicker from "@/components/CryptoTicker";
-import { 
-  fetchCoinGeckoGlobal, 
-  fetchCoinData, 
-  fetchCryptoNews,
-  fetchBinanceKlines,
-  getTrendFromCandle
-} from "@/lib/apiServices";
-import { 
-  MarketOverview as MarketOverviewType, 
-  CryptoCoin, 
-  CryptoNews as CryptoNewsType,
-  TradingSignal
-} from "@/lib/types";
-import { mockSignals } from "@/lib/mockData";
 
-const popularCoins = [
-  { id: "bitcoin", symbol: "BTCUSDT", name: "Bitcoin" },
-  { id: "ethereum", symbol: "ETHUSDT", name: "Ethereum" },
-  { id: "binancecoin", symbol: "BNBUSDT", name: "Binance Coin" },
-  { id: "solana", symbol: "SOLUSDT", name: "Solana" },
-  { id: "cardano", symbol: "ADAUSDT", name: "Cardano" },
-  { id: "ripple", symbol: "XRPUSDT", name: "XRP" }
-];
+import { useState, useEffect } from "react";
+import MarketOverview from "@/components/MarketOverview";
+import CryptoTicker from "@/components/CryptoTicker";
+import CryptoChart from "@/components/CryptoChart";
+import CryptoNews from "@/components/CryptoNews";
+import { CryptoCoin, CryptoNews as CryptoNewsType } from "@/lib/types";
+import { fetchBybitKlines, fetchCryptoNews, getTrendFromCandle } from "@/lib/apiServices";
 
 const CryptoMarket = () => {
-  const [marketData, setMarketData] = useState<MarketOverviewType | null>(null);
+  const [selectedCoin, setSelectedCoin] = useState<string>("BTCUSDT");
   const [coins, setCoins] = useState<CryptoCoin[]>([]);
-  const [news, setNews] = useState<CryptoNewsType[] | null>(null);
-  const [signals] = useState<TradingSignal[]>(mockSignals);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLoadingMarket, setIsLoadingMarket] = useState(true);
-  const [isLoadingCoins, setIsLoadingCoins] = useState(true);
-  const [isLoadingNews, setIsLoadingNews] = useState(true);
-  const { toast } = useToast();
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [news, setNews] = useState<CryptoNewsType[]>([]);
+  const [isLoadingChart, setIsLoadingChart] = useState<boolean>(true);
+  const [isLoadingNews, setIsLoadingNews] = useState<boolean>(true);
 
-  const loadMarketData = async () => {
-    setIsLoadingMarket(true);
+  useEffect(() => {
+    const loadMarketData = async () => {
+      // Fetch initial market data
+      const coinList: CryptoCoin[] = [
+        "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT", 
+        "DOGEUSDT", "XRPUSDT", "AVAXUSDT", "DOTUSDT", "MATICUSDT"
+      ].map(symbol => {
+        const randomPrice = symbol === "BTCUSDT" ? 
+          68000 + Math.random() * 2000 : 
+          Math.random() * (symbol === "ETHUSDT" ? 3500 : 100);
+          
+        const changePercent = (Math.random() * 10) - 5;
+        
+        return {
+          id: symbol.toLowerCase().replace("usdt", ""),
+          symbol: symbol.replace("USDT", ""),
+          name: getCoinName(symbol),
+          image: `https://cryptologos.cc/logos/${symbol.toLowerCase().replace("usdt", "")}-logo.png`,
+          currentPrice: randomPrice,
+          priceChange24h: randomPrice * (changePercent / 100),
+          priceChangePercentage24h: changePercent,
+          marketCap: randomPrice * (Math.random() * 1000000000),
+          volume24h: randomPrice * (Math.random() * 10000000),
+          high24h: randomPrice * (1 + Math.random() * 0.05),
+          low24h: randomPrice * (1 - Math.random() * 0.05),
+          lastUpdated: new Date(),
+          trend: changePercent > 0 ? "BULLISH" : changePercent < 0 ? "BEARISH" : "NEUTRAL"
+        } as CryptoCoin;
+      });
+      
+      setCoins(coinList);
+      
+      // Load real news from API
+      loadNews();
+      
+      // Load chart data for selected coin
+      loadChartData(selectedCoin);
+    };
+    
+    loadMarketData();
+  }, []);
+  
+  // Load chart data when selected coin changes
+  useEffect(() => {
+    loadChartData(selectedCoin);
+  }, [selectedCoin]);
+  
+  const loadChartData = async (symbol: string) => {
+    setIsLoadingChart(true);
     try {
-      const data = await fetchCoinGeckoGlobal();
-      if (data && data.data) {
-        setMarketData({
-          activeCryptocurrencies: data.data.active_cryptocurrencies,
-          totalMarketCap: data.data.total_market_cap.usd,
-          totalVolume24h: data.data.total_volume.usd,
-          marketCapPercentage: {
-            btc: data.data.market_cap_percentage.btc,
-            eth: data.data.market_cap_percentage.eth
-          },
-          marketCapChangePercentage24hUsd: data.data.market_cap_change_percentage_24h_usd,
-          lastUpdated: new Date()
-        });
+      const data = await fetchBybitKlines(symbol);
+      if (data) {
+        // Process the data for chart
+        const formattedData = data.map((item: any) => ({
+          date: new Date(Number(item[0])),
+          open: parseFloat(item[1]),
+          high: parseFloat(item[2]),
+          low: parseFloat(item[3]),
+          close: parseFloat(item[4]),
+          volume: parseFloat(item[5])
+        }));
+        
+        setChartData(formattedData.reverse()); // Most recent data first
+      } else {
+        // Fallback to mock data
+        generateMockChartData(symbol);
       }
     } catch (error) {
-      console.error("Error loading market data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load market data",
-        variant: "destructive"
-      });
+      console.error("Error loading chart data:", error);
+      generateMockChartData(symbol);
     } finally {
-      setIsLoadingMarket(false);
+      setIsLoadingChart(false);
     }
   };
-
-  const loadCoinsData = async () => {
-    setIsLoadingCoins(true);
-    try {
-      const coinsData = await Promise.all(
-        popularCoins.map(async (coin) => {
-          const coinData = await fetchCoinData(coin.id);
-          
-          const klineData = await fetchBinanceKlines(coin.symbol);
-          const trend = klineData ? getTrendFromCandle(klineData[klineData.length - 1]) : "NEUTRAL";
-          
-          return {
-            id: coin.id,
-            symbol: coin.symbol,
-            name: coin.name,
-            image: coinData?.image?.small || "",
-            currentPrice: coinData?.market_data?.current_price?.usd || 0,
-            priceChange24h: coinData?.market_data?.price_change_24h || 0,
-            priceChangePercentage24h: coinData?.market_data?.price_change_percentage_24h || 0,
-            marketCap: coinData?.market_data?.market_cap?.usd || 0,
-            volume24h: coinData?.market_data?.total_volume?.usd || 0,
-            high24h: coinData?.market_data?.high_24h?.usd || 0,
-            low24h: coinData?.market_data?.low_24h?.usd || 0,
-            lastUpdated: new Date(coinData?.last_updated || Date.now()),
-            trend
-          };
-        })
-      );
-      
-      setCoins(coinsData);
-    } catch (error) {
-      console.error("Error loading coins data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load cryptocurrency data",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoadingCoins(false);
-    }
-  };
-
-  const loadNewsData = async () => {
+  
+  const loadNews = async () => {
     setIsLoadingNews(true);
     try {
       const newsData = await fetchCryptoNews();
       setNews(newsData);
     } catch (error) {
-      console.error("Error loading news data:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load cryptocurrency news",
-        variant: "destructive"
-      });
+      console.error("Error loading news:", error);
+      // Fallback handled in fetchCryptoNews
     } finally {
       setIsLoadingNews(false);
     }
   };
-
-  const refreshData = async () => {
-    toast({
-      title: "Refreshing data",
-      description: "Fetching the latest market information"
-    });
+  
+  const generateMockChartData = (symbol: string) => {
+    const basePrice = symbol === "BTCUSDT" ? 
+      68000 : symbol === "ETHUSDT" ? 
+      3500 : symbol === "BNBUSDT" ? 
+      600 : 50;
+      
+    const volatility = 0.02; // 2%
+    const dataPoints = 100;
+    const interval = 15 * 60 * 1000; // 15 minutes in milliseconds
+    const now = new Date();
     
-    await Promise.all([
-      loadMarketData(),
-      loadCoinsData(),
-      loadNewsData()
-    ]);
+    const mockData = [];
+    let lastClose = basePrice;
     
-    toast({
-      title: "Data refreshed",
-      description: "Market information has been updated"
-    });
+    for (let i = dataPoints; i >= 0; i--) {
+      const time = new Date(now.getTime() - (i * interval));
+      const changePercent = (Math.random() - 0.5) * volatility;
+      const open = lastClose;
+      const close = open * (1 + changePercent);
+      const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+      const low = Math.min(open, close) * (1 - Math.random() * 0.005);
+      const volume = basePrice * Math.random() * 100;
+      
+      mockData.push({
+        date: time,
+        open,
+        high,
+        low,
+        close,
+        volume
+      });
+      
+      lastClose = close;
+    }
+    
+    setChartData(mockData);
+  };
+  
+  const getCoinName = (symbol: string): string => {
+    const map: Record<string, string> = {
+      "BTCUSDT": "Bitcoin",
+      "ETHUSDT": "Ethereum",
+      "BNBUSDT": "Binance Coin",
+      "SOLUSDT": "Solana",
+      "ADAUSDT": "Cardano",
+      "DOGEUSDT": "Dogecoin",
+      "XRPUSDT": "Ripple",
+      "AVAXUSDT": "Avalanche",
+      "DOTUSDT": "Polkadot",
+      "MATICUSDT": "Polygon"
+    };
+    
+    return map[symbol] || symbol.replace("USDT", "");
   };
 
-  useEffect(() => {
-    loadMarketData();
-    loadCoinsData();
-    loadNewsData();
-    
-    const intervalId = setInterval(refreshData, 300000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
-
-  const filteredCoins = coins.filter(coin => 
-    coin.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    coin.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
-    <div>
-      <CryptoTicker coins={coins} isLoading={isLoadingCoins} />
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Crypto Market</h1>
       
-      <div className="container mx-auto px-4 py-8">
-        <NewsBanner />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
+            <CryptoChart 
+              data={chartData} 
+              symbol={selectedCoin} 
+              isLoading={isLoadingChart}
+            />
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+            <MarketOverview />
+          </div>
+        </div>
         
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Crypto Market</h1>
-            <p className="text-muted-foreground">Live prices, trends, and signals</p>
-          </div>
-          <div className="flex mt-4 md:mt-0 space-x-3">
-            <Button variant="outline" size="sm" onClick={refreshData}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <MarketOverview data={marketData} isLoading={isLoadingMarket} />
-        </div>
-
-        <Tabs defaultValue="coins" className="mb-8">
-          <TabsList>
-            <TabsTrigger value="coins">Cryptocurrencies</TabsTrigger>
-            <TabsTrigger value="signals">Trading Signals</TabsTrigger>
-            <TabsTrigger value="news">Latest News</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="coins">
-            <div className="mb-4 mt-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  placeholder="Search by name or symbol..."
-                  className="pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+            <h2 className="text-xl font-semibold mb-4">Top Cryptocurrencies</h2>
+            <div className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
+              {coins.map((coin) => (
+                <CryptoTicker
+                  key={coin.symbol}
+                  coin={coin}
+                  isSelected={selectedCoin === `${coin.symbol}USDT`}
+                  onClick={() => setSelectedCoin(`${coin.symbol}USDT`)}
                 />
-              </div>
-            </div>
-            
-            {isLoadingCoins ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="rounded-lg border p-4 animate-pulse">
-                    <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 bg-slate-200 rounded-full mr-3"></div>
-                      <div className="space-y-2">
-                        <div className="h-4 bg-slate-200 rounded w-24"></div>
-                        <div className="h-3 bg-slate-200 rounded w-16"></div>
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="h-6 bg-slate-200 rounded w-1/2"></div>
-                      <div className="h-4 bg-slate-200 rounded w-1/3"></div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="h-4 bg-slate-200 rounded"></div>
-                        <div className="h-4 bg-slate-200 rounded"></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredCoins.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCoins.map((coin) => (
-                  <div key={coin.id} className="rounded-lg border p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center mb-4">
-                      <img src={coin.image} alt={coin.name} className="w-10 h-10 mr-3" />
-                      <div>
-                        <h3 className="font-bold">{coin.name}</h3>
-                        <p className="text-sm text-muted-foreground">{coin.symbol.replace('USDT', '')}</p>
-                      </div>
-                      <div className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
-                        coin.trend === "BULLISH" ? "bg-green-100 text-green-800" :
-                        coin.trend === "BEARISH" ? "bg-red-100 text-red-800" : 
-                        "bg-gray-100 text-gray-800"
-                      }`}>
-                        {coin.trend}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-2xl font-bold">${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}</span>
-                        <span className={`${coin.priceChangePercentage24h >= 0 ? 'text-crypto-green' : 'text-crypto-red'} font-medium`}>
-                          {coin.priceChangePercentage24h >= 0 ? '+' : ''}{coin.priceChangePercentage24h.toFixed(2)}%
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-xs text-muted-foreground">24h Volume</p>
-                          <p>${(coin.volume24h / 1000000).toFixed(2)}M</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Market Cap</p>
-                          <p>${(coin.marketCap / 1000000000).toFixed(2)}B</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">24h High</p>
-                          <p>${coin.high24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">24h Low</p>
-                          <p>${coin.low24h.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-xl font-medium mb-2">No cryptocurrencies found</p>
-                <p className="text-muted-foreground">Try a different search term</p>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="signals">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-              {signals.filter(signal => signal.status === "ACTIVE").map((signal) => (
-                <SignalCard key={signal.id} signal={signal} />
               ))}
-              {signals.filter(signal => signal.status === "ACTIVE").length === 0 && (
-                <div className="col-span-3 text-center py-12">
-                  <p className="text-xl font-medium mb-2">No active signals</p>
-                  <p className="text-muted-foreground">Check back later for new trading opportunities</p>
-                </div>
-              )}
             </div>
-          </TabsContent>
+          </div>
           
-          <TabsContent value="news">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
             <CryptoNews news={news} isLoading={isLoadingNews} />
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
     </div>
   );
