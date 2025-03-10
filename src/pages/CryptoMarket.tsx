@@ -4,7 +4,7 @@ import MarketOverview from "@/components/MarketOverview";
 import CryptoTicker from "@/components/CryptoTicker";
 import CryptoChart from "@/components/CryptoChart";
 import CryptoNews from "@/components/CryptoNews";
-import { CryptoCoin, CryptoNews as CryptoNewsType } from "@/lib/types";
+import { CryptoCoin, CryptoNews as CryptoNewsType, MarketOverview as MarketOverviewType } from "@/lib/types";
 import { fetchBybitKlines, fetchCryptoNews, getTrendFromCandle } from "@/lib/apiServices";
 
 const CryptoMarket = () => {
@@ -14,6 +14,8 @@ const CryptoMarket = () => {
   const [news, setNews] = useState<CryptoNewsType[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState<boolean>(true);
   const [isLoadingNews, setIsLoadingNews] = useState<boolean>(true);
+  const [marketOverview, setMarketOverview] = useState<MarketOverviewType | null>(null);
+  const [isLoadingMarketOverview, setIsLoadingMarketOverview] = useState<boolean>(true);
 
   useEffect(() => {
     const loadMarketData = async () => {
@@ -49,6 +51,9 @@ const CryptoMarket = () => {
       
       // Load real news from API
       loadNews();
+
+      // Load mock market overview
+      loadMarketOverview();
       
       // Load chart data for selected coin
       loadChartData(selectedCoin);
@@ -101,6 +106,24 @@ const CryptoMarket = () => {
     } finally {
       setIsLoadingNews(false);
     }
+  };
+
+  const loadMarketOverview = () => {
+    setIsLoadingMarketOverview(true);
+    // Generate mock market overview data since we don't have a real API for this
+    const mockMarketOverview: MarketOverviewType = {
+      activeCryptocurrencies: 12500 + Math.floor(Math.random() * 500),
+      totalMarketCap: 2500000000000 + Math.random() * 100000000000,
+      totalVolume24h: 80000000000 + Math.random() * 20000000000,
+      marketCapPercentage: {
+        btc: 45 + Math.random() * 5,
+        eth: 18 + Math.random() * 3
+      },
+      marketCapChangePercentage24hUsd: (Math.random() * 8) - 4,
+      lastUpdated: new Date()
+    };
+    setMarketOverview(mockMarketOverview);
+    setIsLoadingMarketOverview(false);
   };
   
   const generateMockChartData = (symbol: string) => {
@@ -158,6 +181,17 @@ const CryptoMarket = () => {
     return map[symbol] || symbol.replace("USDT", "");
   };
 
+  // Find the selected coin data for chart
+  const selectedCoinData = coins.find(coin => `${coin.symbol}USDT` === selectedCoin);
+  const entryPrice = selectedCoinData?.currentPrice || 0;
+  const type = selectedCoinData?.priceChangePercentage24h >= 0 ? "LONG" : "SHORT";
+  const stopLoss = type === "LONG" ? entryPrice * 0.95 : entryPrice * 1.05;
+  const targets = [
+    { level: 1, price: type === "LONG" ? entryPrice * 1.02 : entryPrice * 0.98, hit: false },
+    { level: 2, price: type === "LONG" ? entryPrice * 1.05 : entryPrice * 0.95, hit: false },
+    { level: 3, price: type === "LONG" ? entryPrice * 1.1 : entryPrice * 0.9, hit: false }
+  ];
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Crypto Market</h1>
@@ -166,14 +200,19 @@ const CryptoMarket = () => {
         <div className="lg:col-span-2">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
             <CryptoChart 
-              data={chartData} 
-              symbol={selectedCoin} 
-              isLoading={isLoadingChart}
+              symbol={selectedCoin}
+              type={type}
+              entryPrice={entryPrice}
+              stopLoss={stopLoss}
+              targets={targets}
             />
           </div>
           
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
-            <MarketOverview />
+            <MarketOverview 
+              data={marketOverview}
+              isLoading={isLoadingMarketOverview}
+            />
           </div>
         </div>
         
@@ -182,12 +221,34 @@ const CryptoMarket = () => {
             <h2 className="text-xl font-semibold mb-4">Top Cryptocurrencies</h2>
             <div className="space-y-1 max-h-[400px] overflow-y-auto pr-2">
               {coins.map((coin) => (
-                <CryptoTicker
+                <div 
                   key={coin.symbol}
-                  coin={coin}
-                  isSelected={selectedCoin === `${coin.symbol}USDT`}
+                  className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                    selectedCoin === `${coin.symbol}USDT` 
+                      ? 'bg-primary/10 hover:bg-primary/20' 
+                      : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                   onClick={() => setSelectedCoin(`${coin.symbol}USDT`)}
-                />
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <img src={coin.image} alt={coin.name} className="w-6 h-6 mr-2" />
+                      <span className="font-medium">{coin.symbol}</span>
+                    </div>
+                    <div 
+                      className={`text-sm font-bold ${
+                        coin.priceChangePercentage24h >= 0 
+                          ? "text-green-500" 
+                          : "text-red-500"
+                      }`}
+                    >
+                      ${coin.currentPrice.toLocaleString('en-US', { 
+                        minimumFractionDigits: 2, 
+                        maximumFractionDigits: 6 
+                      })}
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -196,6 +257,10 @@ const CryptoMarket = () => {
             <CryptoNews news={news} isLoading={isLoadingNews} />
           </div>
         </div>
+      </div>
+      
+      <div className="mt-6">
+        <CryptoTicker coins={coins} isLoading={false} />
       </div>
     </div>
   );

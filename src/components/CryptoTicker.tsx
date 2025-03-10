@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { CryptoCoin } from "@/lib/types";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-interface CryptoTickerProps {
+export interface CryptoTickerProps {
   coins: CryptoCoin[];
   isLoading: boolean;
 }

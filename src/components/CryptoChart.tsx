@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-interface CryptoChartProps {
+export interface CryptoChartProps {
   symbol: string;
   type: "LONG" | "SHORT";
   entryPrice: number;

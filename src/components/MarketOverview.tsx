@@ -5,7 +5,7 @@ import { MarketOverview as MarketOverviewType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercentage } from "@/lib/apiServices";
 
-interface MarketOverviewProps {
+export interface MarketOverviewProps {
   data: MarketOverviewType | null;
   isLoading: boolean;
 }

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { mockSignals, mockHistoricalSignals } from "@/lib/mockData";
@@ -158,6 +159,11 @@ const PerformanceDashboard = () => {
   const tradeTypeData = prepareTradeTypeData();
   const winLossData = prepareWinLossData();
   const tradeHistoryData = prepareTradeHistoryData();
+
+  // Custom function to get fill color based on profit
+  const getFillColor = (entry: any) => {
+    return entry.profit >= 0 ? "#10b981" : "#ef4444";
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -336,9 +342,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Profit (%)"
-                      fill={(entry) =>
-                        entry.profit >= 0 ? "#10b981" : "#ef4444"
-                      }
+                      fill="#10b981"
+                      className="fill-green-500 negative-fill-red-500"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -366,9 +371,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Profit (%)"
-                      fill={(entry) =>
-                        entry.profit >= 0 ? "#10b981" : "#ef4444"
-                      }
+                      fill="#10b981"
+                      className="fill-green-500 negative-fill-red-500"
                     />
                   </BarChart>
                 </ResponsiveContainer>
