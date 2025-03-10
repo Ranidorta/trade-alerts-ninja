@@ -45,18 +45,15 @@ const PerformanceDashboard = () => {
     shortTrades: 0,
   });
 
-  // Format date strings
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   useEffect(() => {
-    // Load signals data
     const allSignals = [...mockSignals, ...mockHistoricalSignals];
     setSignals(allSignals);
 
-    // Calculate performance metrics
     const completed = allSignals.filter(
       (signal) => signal.status === "COMPLETED"
     );
@@ -81,20 +78,20 @@ const PerformanceDashboard = () => {
       shortTrades: allSignals.length - longTrades,
     });
 
-    // Add this to handle bar coloring:
     document.querySelectorAll('[data-value]').forEach(el => {
       const value = parseFloat(el.getAttribute('data-value') || '0');
       el.classList.add(value >= 0 ? 'fill-green-500' : 'fill-red-500');
-      el.closest('.recharts-bar-rectangle')?.classList.add('fill-[var(--bar-color)]');
-      if (value >= 0) {
-        el.closest('.recharts-bar-rectangle')?.style.setProperty('--bar-color', '#10b981');
-      } else {
-        el.closest('.recharts-bar-rectangle')?.style.setProperty('--bar-color', '#ef4444');
+      const rectangle = el.closest('.recharts-bar-rectangle');
+      if (rectangle && rectangle instanceof HTMLElement) {
+        if (value >= 0) {
+          rectangle.style.setProperty('--bar-color', '#10b981');
+        } else {
+          rectangle.style.setProperty('--bar-color', '#ef4444');
+        }
       }
     });
   }, []);
 
-  // Prepare data for charts
   const prepareMonthlyPerformanceData = () => {
     const completedSignals = signals.filter(
       (signal) => signal.status === "COMPLETED" && signal.completedAt
@@ -163,7 +160,7 @@ const PerformanceDashboard = () => {
         profit: signal.profit,
         symbol: signal.symbol,
       }))
-      .slice(-10); // Last 10 trades
+      .slice(-10);
   };
 
   const monthlyPerformanceData = prepareMonthlyPerformanceData();
@@ -171,7 +168,6 @@ const PerformanceDashboard = () => {
   const winLossData = prepareWinLossData();
   const tradeHistoryData = prepareTradeHistoryData();
 
-  // Custom function to get fill color based on profit
   const getFillColor = (entry: any) => {
     return entry.profit >= 0 ? "#10b981" : "#ef4444";
   };

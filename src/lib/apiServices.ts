@@ -1,5 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import { CryptoNews, TradingSignal } from "./types";
+import { CryptoNews, TradingSignal, SignalStatus, CryptoCoin } from "./types";
 
 // API URLs and keys
 const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
