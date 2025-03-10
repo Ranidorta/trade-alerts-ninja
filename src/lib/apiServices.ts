@@ -297,18 +297,21 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         symbol: symbol,
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "BUY",
-        entryPrice: entryPrice,
+        entryMin: entryPrice * 0.995,
+        entryMax: entryPrice * 1.005,
+        entryAvg: entryPrice,
         stopLoss: entryPrice * 0.98,
-        takeProfit: [
-          entryPrice * 1.02,
-          entryPrice * 1.03,
-          entryPrice * 1.05
+        targets: [
+          { level: 1, price: entryPrice * 1.02, hit: false },
+          { level: 2, price: entryPrice * 1.03, hit: false },
+          { level: 3, price: entryPrice * 1.05, hit: false }
         ],
         status: "ACTIVE",
         timeframe: "5m",
         reason: `MA Cross (Short: ${shortMa.toFixed(2)} > Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
-        type: "LONG"
+        type: "LONG",
+        currentPrice: entryPrice
       };
     } else if (shortMa < longMa && rsi > 30 && macd < 0) {
       // Short signal
@@ -319,18 +322,21 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         symbol: symbol,
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "SELL",
-        entryPrice: entryPrice,
+        entryMin: entryPrice * 0.995,
+        entryMax: entryPrice * 1.005,
+        entryAvg: entryPrice,
         stopLoss: entryPrice * 1.02,
-        takeProfit: [
-          entryPrice * 0.98,
-          entryPrice * 0.97,
-          entryPrice * 0.95
+        targets: [
+          { level: 1, price: entryPrice * 0.98, hit: false },
+          { level: 2, price: entryPrice * 0.97, hit: false },
+          { level: 3, price: entryPrice * 0.95, hit: false }
         ],
         status: "ACTIVE",
         timeframe: "5m",
         reason: `MA Cross (Short: ${shortMa.toFixed(2)} < Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
-        type: "SHORT"
+        type: "SHORT",
+        currentPrice: entryPrice
       };
     }
     
@@ -338,12 +344,12 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       // Send signal to Telegram
       const signalMessage = 
         `Sinal de Trade ⚡\n\n` +
-        `${signal.direction === "BUY" ? "Long" : "Short"} ${signal.symbol}\n` +
-        `Entrada: ${signal.entryPrice.toFixed(4)}\n` +
+        `${signal.type} ${signal.symbol}\n` +
+        `Entrada: ${signal.entryMin.toFixed(4)} - ${signal.entryMax.toFixed(4)}\n` +
         `SL: ${signal.stopLoss.toFixed(4)}\n` +
-        `TP1: ${signal.takeProfit[0].toFixed(4)}\n` +
-        `TP2: ${signal.takeProfit[1].toFixed(4)}\n` +
-        `TP3: ${signal.takeProfit[2].toFixed(4)}\n` +
+        `TP1: ${signal.targets[0].price.toFixed(4)}\n` +
+        `TP2: ${signal.targets[1].price.toFixed(4)}\n` +
+        `TP3: ${signal.targets[2].price.toFixed(4)}\n` +
         `Alavancagem: ${signal.leverage}x\n`;
         
       await sendTelegramMessage(signalMessage);
@@ -370,7 +376,7 @@ export const generateAllSignals = async (): Promise<TradingSignal[]> => {
   return signals;
 };
 
-// Add or update this function to convert Bybit candle data to CryptoCoin format
+// Convert Bybit candle data to CryptoCoin format
 export const convertBybitToCryptoCoin = async (symbol: string): Promise<CryptoCoin | null> => {
   try {
     const candles = await fetchBybitKlines(symbol);
@@ -425,7 +431,7 @@ export const convertBybitToCryptoCoin = async (symbol: string): Promise<CryptoCo
   }
 };
 
-// Add this function to get multiple crypto coins data
+// Get multiple crypto coins data
 export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoCoin[]> => {
   const results: CryptoCoin[] = [];
   

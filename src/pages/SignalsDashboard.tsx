@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { mockSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
@@ -25,6 +25,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { generateAllSignals } from "@/lib/apiServices";
 
+const DEFAULT_REFRESH_INTERVAL = 60000; // 1 minute in milliseconds
+
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -34,41 +36,64 @@ const SignalsDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [useMockData, setUseMockData] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
   
-  useEffect(() => {
-    // Load initial signals
-    const loadData = async () => {
-      setIsLoading(true);
-      
+  // Function to load signals data
+  const loadSignalsData = useCallback(async () => {
+    setIsLoading(true);
+    
+    try {
       if (useMockData) {
         // Use mock signals
         setSignals(mockSignals);
         setFilteredSignals(mockSignals);
       } else {
         // Generate real signals from Bybit
-        try {
-          const realSignals = await generateAllSignals();
-          setSignals(prevSignals => realSignals.length > 0 ? realSignals : prevSignals);
-          setFilteredSignals(prevSignals => realSignals.length > 0 ? realSignals : prevSignals);
-        } catch (error) {
-          console.error("Error loading real signals:", error);
+        const realSignals = await generateAllSignals();
+        if (realSignals.length > 0) {
+          setSignals(realSignals);
+          setFilteredSignals(realSignals);
+        } else {
           toast({
-            title: "Error loading signals",
-            description: "Failed to load signals from Bybit API. Using mock data instead.",
-            variant: "destructive"
+            title: "No signals found",
+            description: "No trading signals were found from Bybit API. Using existing signals.",
           });
-          // Fallback to mock signals
-          setSignals(mockSignals);
-          setFilteredSignals(mockSignals);
         }
       }
-      
+    } catch (error) {
+      console.error("Error loading signals:", error);
+      toast({
+        title: "Error loading signals",
+        description: "Failed to load signals from Bybit API. Using mock data instead.",
+        variant: "destructive"
+      });
+      // Fallback to mock signals
+      setSignals(mockSignals);
+      setFilteredSignals(mockSignals);
+    } finally {
       setIsLoading(false);
-    };
-    
-    loadData();
+      setLastUpdated(new Date());
+    }
   }, [useMockData, toast]);
+  
+  // Initial data load
+  useEffect(() => {
+    loadSignalsData();
+  }, [loadSignalsData]);
+  
+  // Set up auto-refresh interval
+  useEffect(() => {
+    if (!autoRefresh) return;
+    
+    const intervalId = setInterval(() => {
+      console.log("Auto-refreshing signals data...");
+      loadSignalsData();
+    }, DEFAULT_REFRESH_INTERVAL);
+    
+    return () => clearInterval(intervalId);
+  }, [autoRefresh, loadSignalsData]);
   
   // Filter and sort signals whenever dependencies change
   useEffect(() => {
@@ -131,11 +156,24 @@ const SignalsDashboard = () => {
       
       if (newSignals.length > 0) {
         // Add new signals to existing ones
-        setSignals(prevSignals => [...newSignals, ...prevSignals]);
-        
-        toast({
-          title: "New signals generated",
-          description: `Found ${newSignals.length} new trading opportunities`,
+        setSignals(prevSignals => {
+          // Merge signals, avoiding duplicates by ID
+          const existingIds = new Set(prevSignals.map(s => s.id));
+          const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+          
+          if (uniqueNewSignals.length > 0) {
+            toast({
+              title: "New signals generated",
+              description: `Found ${uniqueNewSignals.length} new trading opportunities`,
+            });
+            return [...uniqueNewSignals, ...prevSignals];
+          }
+          
+          toast({
+            title: "No new signals",
+            description: "No new trading opportunities found at this time",
+          });
+          return prevSignals;
         });
       } else {
         toast({
@@ -152,6 +190,7 @@ const SignalsDashboard = () => {
       });
     } finally {
       setIsGenerating(false);
+      setLastUpdated(new Date());
     }
   };
   
@@ -161,6 +200,22 @@ const SignalsDashboard = () => {
       title: `Using ${!useMockData ? 'mock' : 'real'} data`,
       description: `Switched to ${!useMockData ? 'mock' : 'real Bybit API'} data for signals`,
     });
+  };
+  
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(!autoRefresh);
+    toast({
+      title: `Auto-refresh ${!autoRefresh ? 'enabled' : 'disabled'}`,
+      description: `Signal data will ${!autoRefresh ? 'now' : 'no longer'} update automatically`,
+    });
+  };
+  
+  const handleManualRefresh = () => {
+    toast({
+      title: "Refreshing signals",
+      description: "Updating signal data...",
+    });
+    loadSignalsData();
   };
   
   const renderSkeletons = () => {
@@ -182,6 +237,11 @@ const SignalsDashboard = () => {
     ));
   };
   
+  // Format the last updated time
+  const formatLastUpdated = () => {
+    return lastUpdated.toLocaleTimeString();
+  };
+  
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
@@ -190,9 +250,12 @@ const SignalsDashboard = () => {
           <p className="text-slate-600 dark:text-slate-300">
             Current active trading opportunities
           </p>
-          <div className="mt-2 flex items-center">
+          <div className="mt-2 flex items-center gap-2">
             <span className={`text-xs font-medium px-2 py-1 rounded ${useMockData ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
               {useMockData ? 'Using Mock Data' : 'Using Bybit API Data'}
+            </span>
+            <span className="text-xs text-slate-500">
+              Last updated: {formatLastUpdated()}
             </span>
           </div>
         </div>
@@ -235,6 +298,26 @@ const SignalsDashboard = () => {
         </div>
         
         <div className="flex gap-2">
+          <Button 
+            onClick={toggleAutoRefresh} 
+            variant={autoRefresh ? "default" : "outline"}
+            size="icon"
+            className="w-10 h-10"
+            title={autoRefresh ? "Auto-refresh enabled" : "Auto-refresh disabled"}
+          >
+            <RefreshCw className={`h-4 w-4 ${autoRefresh ? 'animate-spin' : ''}`} />
+          </Button>
+          
+          <Button 
+            onClick={handleManualRefresh} 
+            variant="outline"
+            size="icon"
+            className="w-10 h-10"
+            title="Refresh signals now"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -309,7 +392,11 @@ const SignalsDashboard = () => {
           renderSkeletons()
         ) : filteredSignals.length > 0 ? (
           filteredSignals.map(signal => (
-            <SignalCard key={signal.id} signal={signal} />
+            <SignalCard 
+              key={signal.id} 
+              signal={signal} 
+              refreshInterval={30000} // Update target status every 30 seconds
+            />
           ))
         ) : (
           <div className="col-span-full py-12 text-center">

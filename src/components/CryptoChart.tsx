@@ -12,37 +12,72 @@ export interface CryptoChartProps {
   stopLoss: number;
   targets: Array<{level: number, price: number, hit?: boolean}>;
   className?: string;
+  refreshInterval?: number;
 }
 
 // Generate mock data points
-const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, length: number = 24): CryptoChartDataPoint[] => {
+const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: Array<{level: number, price: number, hit?: boolean}>, length: number = 24): CryptoChartDataPoint[] => {
   const trend = type === "LONG" ? 1 : -1;
   const volatility = entryPrice * 0.005; // 0.5% volatility
   
+  // Calculate max target price to ensure chart shows all targets
+  const maxTargetPrice = Math.max(...targets.map(t => t.price));
+  const minTargetPrice = Math.min(...targets.map(t => t.price));
+  
+  // Calculate max price change to ensure hit targets are shown on chart
+  const maxPriceChange = type === "LONG" 
+    ? Math.max(maxTargetPrice - entryPrice, entryPrice * 0.1) 
+    : Math.max(entryPrice - minTargetPrice, entryPrice * 0.1);
+  
   return Array.from({ length }).map((_, i) => {
-    const baseChange = (i / length) * entryPrice * 0.1 * trend; // 10% total change
-    const randomWalk = (Math.random() - 0.5) * volatility;
-    const price = entryPrice + baseChange + randomWalk;
+    // Calculate how far we've moved through the chart (0 to 1)
+    const progress = i / length;
+    
+    // For long positions, we want to trend upward, for short positions downward
+    // The trend intensity increases as we move through the chart
+    const baseChange = progress * maxPriceChange * trend;
+    
+    // Add some random noise around the trend
+    const randomWalk = (Math.random() - 0.5) * volatility * (1 + progress);
+    
+    // Calculate price at this point
+    const price = Math.max(0, entryPrice + baseChange + randomWalk);
     
     return {
       time: i,
-      price: Math.max(0, price)
+      price: price
     };
   });
 };
 
-const CryptoChart = ({ symbol, type, entryPrice, stopLoss, targets, className }: CryptoChartProps) => {
+const CryptoChart = ({ 
+  symbol, 
+  type, 
+  entryPrice, 
+  stopLoss, 
+  targets, 
+  className,
+  refreshInterval = 60000
+}: CryptoChartProps) => {
   const [data, setData] = useState<CryptoChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     // Simulate data loading
     setLoading(true);
-    setTimeout(() => {
-      setData(generateMockData(type, entryPrice));
+    const generateData = () => {
+      const newData = generateMockData(type, entryPrice, targets);
+      setData(newData);
       setLoading(false);
-    }, 1000);
-  }, [type, entryPrice]);
+    };
+    
+    generateData();
+    
+    // Periodically refresh data
+    const intervalId = setInterval(generateData, refreshInterval);
+    
+    return () => clearInterval(intervalId);
+  }, [type, entryPrice, targets, refreshInterval]);
   
   // Determine chart domain based on entry, SL and targets
   const prices = [entryPrice, stopLoss, ...targets.map(t => t.price)];

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check } from "lucide-react";
@@ -18,18 +18,76 @@ import { useToast } from "@/hooks/use-toast";
 
 interface SignalCardProps {
   signal: TradingSignal;
+  refreshInterval?: number;
 }
 
-const SignalCard = ({ signal }: SignalCardProps) => {
+const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCardProps) => {
   const [expanded, setExpanded] = useState(false);
+  const [signal, setSignal] = useState(initialSignal);
   const { toast } = useToast();
   
   const isShort = signal.type === "SHORT";
   const typeColor = isShort ? "crypto-red" : "crypto-green";
   const typeIcon = isShort ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />;
   
+  // Effect to periodically check if targets are hit based on current price
+  useEffect(() => {
+    const updateTargetStatus = () => {
+      if (!signal.currentPrice || signal.status !== "ACTIVE") return;
+      
+      // Create a copy of the signal to update
+      const updatedSignal = { ...signal };
+      let targetsUpdated = false;
+      
+      // Check if any targets are hit based on current price
+      if (updatedSignal.targets) {
+        updatedSignal.targets = updatedSignal.targets.map(target => {
+          // For SHORT positions, price needs to go DOWN to hit targets
+          // For LONG positions, price needs to go UP to hit targets
+          const isHit = isShort
+            ? signal.currentPrice <= target.price
+            : signal.currentPrice >= target.price;
+            
+          // Only update if status changed
+          if (isHit !== !!target.hit) {
+            targetsUpdated = true;
+            return { ...target, hit: isHit };
+          }
+          
+          return target;
+        });
+      }
+      
+      // Update the signal if targets were updated
+      if (targetsUpdated) {
+        setSignal(updatedSignal);
+        
+        // If all targets are hit, update status to COMPLETED
+        const allTargetsHit = updatedSignal.targets?.every(t => t.hit);
+        if (allTargetsHit) {
+          updatedSignal.status = "COMPLETED";
+          updatedSignal.completedAt = new Date().toISOString();
+          
+          toast({
+            title: "Signal completed!",
+            description: `All targets for ${signal.symbol} have been hit`,
+          });
+        }
+      }
+    };
+    
+    // Update on initial render
+    updateTargetStatus();
+    
+    // Set up interval for updates
+    const intervalId = setInterval(updateTargetStatus, refreshInterval);
+    
+    return () => clearInterval(intervalId);
+  }, [signal, isShort, refreshInterval, toast]);
+  
   // Calculate profit percentage from targets that were hit
   const calculateProgress = () => {
+    if (!signal.targets) return 0;
     const hitTargets = signal.targets.filter(t => t.hit).length;
     const totalTargets = signal.targets.length;
     return (hitTargets / totalTargets) * 100;
@@ -40,7 +98,7 @@ const SignalCard = ({ signal }: SignalCardProps) => {
   
   // Calculate price movement
   const getPriceMovement = () => {
-    if (!signal.currentPrice) return null;
+    if (!signal.currentPrice || !signal.entryAvg) return null;
     
     const diff = isShort 
       ? signal.entryAvg - signal.currentPrice
@@ -67,7 +125,7 @@ const SignalCard = ({ signal }: SignalCardProps) => {
 ${signal.type} ${signal.symbol} (${signal.pair})
 Entry: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})
 SL: ${signal.stopLoss}
-${signal.targets.map((t, i) => `TP${i+1}: ${t.price}`).join('\n')}
+${signal.targets ? signal.targets.map((t, i) => `TP${i+1}: ${t.price}`).join('\n') : ''}
 Leverage: ${signal.leverage}x
     `.trim();
     
@@ -122,9 +180,11 @@ Leverage: ${signal.leverage}x
           <div className="space-y-1">
             <p className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</p>
             <p className="font-medium text-error">{signal.stopLoss}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
-            </p>
+            {signal.entryAvg && (
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
+              </p>
+            )}
           </div>
         </div>
         
@@ -140,7 +200,7 @@ Leverage: ${signal.leverage}x
           )}
           
           <div className={cn("grid gap-2", expanded ? "grid-cols-1" : "grid-cols-3")}>
-            {signal.targets.map((target, index) => (
+            {signal.targets?.map((target, index) => (
               <div 
                 key={index} 
                 className={cn(
