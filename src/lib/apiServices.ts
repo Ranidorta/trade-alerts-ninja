@@ -1,5 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import { CryptoNews, TradingSignal, SignalStatus, CryptoCoin } from "./types";
+import { CryptoNews, TradingSignal, SignalStatus, CryptoCoin, PriceTarget } from "./types";
 
 // API URLs and keys
 const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
@@ -14,6 +14,9 @@ const CRYPTONEWS_API_URL = "https://cryptonews-api.com/api/v1";
 
 // Symbols to monitor - expanded list
 const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT", "AUCTIONUSDT", "XRPUSDT", "AVAXUSDT", "ADAUSDT", "UNIUSDT", "SOLUSDT"];
+
+// List of symbols that we'll always try to generate signals for
+const ALWAYS_SIGNAL_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
@@ -244,11 +247,31 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   return { value: formattedValue, color: "text-gray-500" };
 };
 
-// Calculate trading indicators
+// Calculate RSI using the improved algorithm
+const calculateRSI = (prices: number[], period: number = 14): number => {
+  if (prices.length <= period) {
+    return 50; // Default value if not enough data
+  }
+  
+  const deltas = prices.slice(1).map((price, i) => price - prices[i]);
+  const seed = deltas.slice(0, period);
+  
+  const up = seed.filter(d => d >= 0).reduce((sum, d) => sum + d, 0) / period;
+  const down = Math.abs(seed.filter(d => d < 0).reduce((sum, d) => sum + d, 0)) / period;
+  
+  if (down === 0) {
+    return 100; // Prevent division by zero
+  }
+  
+  const rs = up / down;
+  return 100 - (100 / (1 + rs));
+};
+
+// Calculate trading indicators (improved version)
 export const calculateIndicators = (data: any[]) => {
-  if (!data || data.length < 15) {
+  if (!data || data.length < 26) {
     console.error("Insufficient data for technical analysis");
-    return { shortMa: null, longMa: null, rsi: null, macd: null };
+    return { shortMa: null, longMa: null, rsi: null, macd: null, upperBand: null, lowerBand: null };
   }
   
   const closingPrices = data.map(candle => parseFloat(candle[4]));
@@ -259,37 +282,98 @@ export const calculateIndicators = (data: any[]) => {
   const shortMa = closingPrices.slice(-5).reduce((a, b) => a + b, 0) / 5;
   const longMa = closingPrices.slice(-15).reduce((a, b) => a + b, 0) / 15;
   
-  // Simple RSI calculation
-  const rsi = 100 - (100 / (1 + 
-    (closingPrices.slice(-5).reduce((a, b) => a + b, 0) / 5) / 
-    (closingPrices.slice(-15).reduce((a, b) => a + b, 0) / 15)
-  ));
+  // Calculate RSI using the improved algorithm
+  const rsi = calculateRSI(closingPrices);
   
   // Simple MACD
   const macd = shortMa - longMa;
   
-  return { shortMa, longMa, rsi, macd };
+  // Calculate Bollinger Bands
+  const ma20 = closingPrices.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const stdDev = Math.sqrt(
+    closingPrices.slice(-20).reduce((sum, price) => sum + Math.pow(price - ma20, 2), 0) / 20
+  );
+  const upperBand = ma20 + (2 * stdDev);
+  const lowerBand = ma20 - (2 * stdDev);
+  
+  return { 
+    shortMa, 
+    longMa, 
+    rsi, 
+    macd, 
+    currentPrice: closingPrices[closingPrices.length - 1],
+    highPrices,
+    lowPrices,
+    upperBand,
+    lowerBand
+  };
 };
 
-// Generate trading signal
+// Check if targets have been hit based on candle data
+export const checkTargetsHit = (targets: PriceTarget[], candles: any[], type: "LONG" | "SHORT"): PriceTarget[] => {
+  if (!candles || candles.length === 0 || !targets || targets.length === 0) {
+    return targets;
+  }
+  
+  // Clone the targets to avoid mutating the original
+  const updatedTargets = [...targets];
+  
+  // Get high/low prices from candles
+  const highPrices = candles.map(candle => parseFloat(candle[2]));
+  const lowPrices = candles.map(candle => parseFloat(candle[3]));
+  
+  // For LONG positions, check if the high price reached the target
+  // For SHORT positions, check if the low price reached the target
+  updatedTargets.forEach((target, index) => {
+    if (type === "LONG") {
+      // For long positions, check if price went above target
+      target.hit = highPrices.some(price => price >= target.price);
+    } else {
+      // For short positions, check if price went below target
+      target.hit = lowPrices.some(price => price <= target.price);
+    }
+  });
+  
+  return updatedTargets;
+};
+
+// Generate trading signal (improved version)
 export const generateTradingSignal = async (symbol: string): Promise<TradingSignal | null> => {
   try {
     const marketData = await fetchBybitKlines(symbol);
     if (!marketData) return null;
     
-    const { shortMa, longMa, rsi, macd } = calculateIndicators(marketData);
-    if (shortMa === null || longMa === null) return null;
+    const indicators = calculateIndicators(marketData);
+    if (!indicators.shortMa || !indicators.longMa) return null;
     
-    const entryPrice = parseFloat(marketData[marketData.length - 1][4]);
-    const highestHigh = Math.max(...marketData.map(c => parseFloat(c[2])));
-    const lowestLow = Math.min(...marketData.map(c => parseFloat(c[3])));
-    const volatility = (highestHigh - lowestLow) / lowestLow;
+    const { 
+      shortMa, 
+      longMa, 
+      rsi, 
+      macd, 
+      currentPrice, 
+      highPrices, 
+      lowPrices, 
+      upperBand, 
+      lowerBand 
+    } = indicators;
+    
+    const volatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
     const leverage = Math.min(10, Math.max(2, Math.floor(volatility * 50)));
     
     let signal: TradingSignal | null = null;
     
-    if (shortMa > longMa && rsi < 70 && macd > 0) {
+    // Enhanced signal generation logic similar to the Python code
+    if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
       // Long signal
+      const entryPrice = currentPrice;
+      const stopLoss = entryPrice * 0.98;
+      const targets = [
+        { level: 1, price: entryPrice * 1.01, hit: false },
+        { level: 2, price: entryPrice * 1.02, hit: false },
+        { level: 3, price: entryPrice * 1.03, hit: false }
+      ];
+      
       signal = {
         id: `${symbol}-${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -297,24 +381,29 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         symbol: symbol,
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "BUY",
+        entryPrice: entryPrice,
         entryMin: entryPrice * 0.995,
         entryMax: entryPrice * 1.005,
         entryAvg: entryPrice,
-        stopLoss: entryPrice * 0.98,
-        targets: [
-          { level: 1, price: entryPrice * 1.02, hit: false },
-          { level: 2, price: entryPrice * 1.03, hit: false },
-          { level: 3, price: entryPrice * 1.05, hit: false }
-        ],
+        stopLoss: stopLoss,
+        targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `MA Cross (Short: ${shortMa.toFixed(2)} > Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
+        reason: `MA Cross (${shortMa.toFixed(2)} > ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
         type: "LONG",
-        currentPrice: entryPrice
+        currentPrice: currentPrice
       };
-    } else if (shortMa < longMa && rsi > 30 && macd < 0) {
+    } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
       // Short signal
+      const entryPrice = currentPrice;
+      const stopLoss = entryPrice * 1.02;
+      const targets = [
+        { level: 1, price: entryPrice * 0.99, hit: false },
+        { level: 2, price: entryPrice * 0.98, hit: false },
+        { level: 3, price: entryPrice * 0.97, hit: false }
+      ];
+      
       signal = {
         id: `${symbol}-${Date.now()}`,
         createdAt: new Date().toISOString(),
@@ -322,22 +411,81 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         symbol: symbol,
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "SELL",
+        entryPrice: entryPrice,
         entryMin: entryPrice * 0.995,
         entryMax: entryPrice * 1.005,
         entryAvg: entryPrice,
-        stopLoss: entryPrice * 1.02,
-        targets: [
-          { level: 1, price: entryPrice * 0.98, hit: false },
-          { level: 2, price: entryPrice * 0.97, hit: false },
-          { level: 3, price: entryPrice * 0.95, hit: false }
-        ],
+        stopLoss: stopLoss,
+        targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `MA Cross (Short: ${shortMa.toFixed(2)} < Long: ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
+        reason: `MA Cross (${shortMa.toFixed(2)} < ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
         type: "SHORT",
-        currentPrice: entryPrice
+        currentPrice: currentPrice
       };
+    } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
+      // Always generate a potential signal for selected symbols, even if conditions aren't strong
+      const entryPrice = currentPrice;
+      const isBullish = rsi > 50 || shortMa > longMa; // Simple determination of trend
+      
+      if (isBullish) {
+        const stopLoss = entryPrice * 0.99;
+        const targets = [
+          { level: 1, price: entryPrice * 1.005, hit: false },
+          { level: 2, price: entryPrice * 1.01, hit: false },
+          { level: 3, price: entryPrice * 1.015, hit: false }
+        ];
+        
+        signal = {
+          id: `${symbol}-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          symbol: symbol,
+          pair: `${symbol.replace('USDT', '')}/USDT`,
+          direction: "BUY",
+          entryPrice: entryPrice,
+          entryMin: entryPrice * 0.995,
+          entryMax: entryPrice * 1.005,
+          entryAvg: entryPrice,
+          stopLoss: stopLoss,
+          targets: targets,
+          status: "WAITING", // Mark as "WAITING" since conditions aren't strong
+          timeframe: "5m",
+          reason: `Possível entrada (RSI: ${rsi.toFixed(2)}, MACD: ${macd.toFixed(4)})`,
+          leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
+          type: "LONG",
+          currentPrice: currentPrice
+        };
+      } else {
+        const stopLoss = entryPrice * 1.01;
+        const targets = [
+          { level: 1, price: entryPrice * 0.995, hit: false },
+          { level: 2, price: entryPrice * 0.99, hit: false },
+          { level: 3, price: entryPrice * 0.985, hit: false }
+        ];
+        
+        signal = {
+          id: `${symbol}-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          symbol: symbol,
+          pair: `${symbol.replace('USDT', '')}/USDT`,
+          direction: "SELL",
+          entryPrice: entryPrice,
+          entryMin: entryPrice * 0.995,
+          entryMax: entryPrice * 1.005,
+          entryAvg: entryPrice,
+          stopLoss: stopLoss,
+          targets: targets,
+          status: "WAITING", // Mark as "WAITING" since conditions aren't strong
+          timeframe: "5m",
+          reason: `Possível entrada (RSI: ${rsi.toFixed(2)}, MACD: ${macd.toFixed(4)})`,
+          leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
+          type: "SHORT",
+          currentPrice: currentPrice
+        };
+      }
     }
     
     if (signal) {
@@ -350,7 +498,8 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         `TP1: ${signal.targets[0].price.toFixed(4)}\n` +
         `TP2: ${signal.targets[1].price.toFixed(4)}\n` +
         `TP3: ${signal.targets[2].price.toFixed(4)}\n` +
-        `Alavancagem: ${signal.leverage}x\n`;
+        `Alavancagem: ${signal.leverage}x\n` +
+        `Status: ${signal.status}\n`;
         
       await sendTelegramMessage(signalMessage);
     }
@@ -359,6 +508,66 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
   } catch (error) {
     console.error(`Error generating trading signal for ${symbol}:`, error);
     return null;
+  }
+};
+
+// Update signals with current prices and check for hit targets
+export const updateSignalStatus = async (signal: TradingSignal): Promise<TradingSignal> => {
+  try {
+    // Clone the signal to avoid mutation
+    const updatedSignal = { ...signal };
+    
+    // Fetch the latest market data
+    const marketData = await fetchBybitKlines(signal.symbol);
+    if (!marketData || !updatedSignal.targets) {
+      return updatedSignal;
+    }
+    
+    // Get the current price from the latest candle
+    const currentPrice = parseFloat(marketData[0][4]);
+    updatedSignal.currentPrice = currentPrice;
+    updatedSignal.updatedAt = new Date().toISOString();
+    
+    // Check if targets have been hit
+    if (updatedSignal.targets) {
+      updatedSignal.targets = checkTargetsHit(
+        updatedSignal.targets, 
+        marketData, 
+        updatedSignal.type || "LONG"
+      );
+      
+      // Check if all targets are hit
+      const allTargetsHit = updatedSignal.targets.every(target => target.hit);
+      if (allTargetsHit) {
+        updatedSignal.status = "COMPLETED";
+        updatedSignal.completedAt = new Date().toISOString();
+        
+        // Calculate approximate profit
+        if (updatedSignal.type === "LONG") {
+          const lastTarget = updatedSignal.targets[updatedSignal.targets.length - 1];
+          updatedSignal.profit = ((lastTarget.price - (updatedSignal.entryAvg || 0)) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
+        } else {
+          const lastTarget = updatedSignal.targets[updatedSignal.targets.length - 1];
+          updatedSignal.profit = (((updatedSignal.entryAvg || 0) - lastTarget.price) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
+        }
+      }
+      
+      // Check if stop loss is hit
+      if (updatedSignal.type === "LONG" && currentPrice <= updatedSignal.stopLoss) {
+        updatedSignal.status = "COMPLETED";
+        updatedSignal.completedAt = new Date().toISOString();
+        updatedSignal.profit = -((updatedSignal.entryAvg || 0) - currentPrice) / (updatedSignal.entryAvg || 1) * 100 * (updatedSignal.leverage || 1);
+      } else if (updatedSignal.type === "SHORT" && currentPrice >= updatedSignal.stopLoss) {
+        updatedSignal.status = "COMPLETED";
+        updatedSignal.completedAt = new Date().toISOString();
+        updatedSignal.profit = -((currentPrice - (updatedSignal.entryAvg || 0)) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
+      }
+    }
+    
+    return updatedSignal;
+  } catch (error) {
+    console.error(`Error updating signal status for ${signal.symbol}:`, error);
+    return signal;
   }
 };
 

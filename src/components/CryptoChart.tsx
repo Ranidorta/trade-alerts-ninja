@@ -15,7 +15,7 @@ export interface CryptoChartProps {
   refreshInterval?: number;
 }
 
-// Generate mock data points
+// Generate mock data points with more realistic price movement based on target hits
 const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: Array<{level: number, price: number, hit?: boolean}>, length: number = 24): CryptoChartDataPoint[] => {
   const trend = type === "LONG" ? 1 : -1;
   const volatility = entryPrice * 0.005; // 0.5% volatility
@@ -29,6 +29,12 @@ const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: A
     ? Math.max(maxTargetPrice - entryPrice, entryPrice * 0.1) 
     : Math.max(entryPrice - minTargetPrice, entryPrice * 0.1);
   
+  // Find the highest hit target to ensure our chart shows it being hit
+  const hitTargets = targets.filter(t => t.hit);
+  const highestHitTargetIndex = hitTargets.length 
+    ? Math.max(...hitTargets.map(t => targets.indexOf(t)))
+    : -1;
+  
   return Array.from({ length }).map((_, i) => {
     // Calculate how far we've moved through the chart (0 to 1)
     const progress = i / length;
@@ -40,12 +46,23 @@ const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: A
     // Add some random noise around the trend
     const randomWalk = (Math.random() - 0.5) * volatility * (1 + progress);
     
-    // Calculate price at this point
-    const price = Math.max(0, entryPrice + baseChange + randomWalk);
+    // If we have hit targets, make sure our chart shows prices reaching them
+    let adjustedPrice = entryPrice + baseChange + randomWalk;
+    
+    // For targets that are hit, ensure the chart shows prices reaching that level
+    if (highestHitTargetIndex >= 0 && progress > 0.6) {
+      const hitTarget = targets[highestHitTargetIndex];
+      // Make the price fluctuate around the highest hit target
+      if (type === "LONG") {
+        adjustedPrice = Math.max(adjustedPrice, hitTarget.price * (0.995 + 0.01 * Math.random()));
+      } else {
+        adjustedPrice = Math.min(adjustedPrice, hitTarget.price * (1.005 - 0.01 * Math.random()));
+      }
+    }
     
     return {
       time: i,
-      price: price
+      price: Math.max(0, adjustedPrice)
     };
   });
 };
