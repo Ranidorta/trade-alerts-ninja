@@ -1,7 +1,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
-import { mockSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
 import { 
   ArrowUpDown, 
@@ -9,7 +8,6 @@ import {
   Search, 
   Bell,
   RefreshCw,
-  Database
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +33,6 @@ const SignalsDashboard = () => {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [useMockData, setUseMockData] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
@@ -45,38 +42,31 @@ const SignalsDashboard = () => {
     setIsLoading(true);
     
     try {
-      if (useMockData) {
-        // Use mock signals
-        setSignals(mockSignals);
-        setFilteredSignals(mockSignals);
+      // Generate real signals from Bybit
+      const realSignals = await generateAllSignals();
+      if (realSignals.length > 0) {
+        setSignals(realSignals);
+        setFilteredSignals(realSignals);
       } else {
-        // Generate real signals from Bybit
-        const realSignals = await generateAllSignals();
-        if (realSignals.length > 0) {
-          setSignals(realSignals);
-          setFilteredSignals(realSignals);
-        } else {
-          toast({
-            title: "No signals found",
-            description: "No trading signals were found from Bybit API. Using existing signals.",
-          });
-        }
+        toast({
+          title: "No signals found",
+          description: "No trading signals were found from Bybit API.",
+        });
       }
     } catch (error) {
       console.error("Error loading signals:", error);
       toast({
         title: "Error loading signals",
-        description: "Failed to load signals from Bybit API. Using mock data instead.",
+        description: "Failed to load signals from Bybit API.",
         variant: "destructive"
       });
-      // Fallback to mock signals
-      setSignals(mockSignals);
-      setFilteredSignals(mockSignals);
+      setSignals([]);
+      setFilteredSignals([]);
     } finally {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [useMockData, toast]);
+  }, [toast]);
   
   // Initial data load
   useEffect(() => {
@@ -194,14 +184,6 @@ const SignalsDashboard = () => {
     }
   };
   
-  const toggleDataSource = () => {
-    setUseMockData(!useMockData);
-    toast({
-      title: `Using ${!useMockData ? 'mock' : 'real'} data`,
-      description: `Switched to ${!useMockData ? 'mock' : 'real Bybit API'} data for signals`,
-    });
-  };
-  
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
@@ -251,8 +233,8 @@ const SignalsDashboard = () => {
             Current active trading opportunities
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <span className={`text-xs font-medium px-2 py-1 rounded ${useMockData ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-              {useMockData ? 'Using Mock Data' : 'Using Bybit API Data'}
+            <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
+              Using Bybit API Data
             </span>
             <span className="text-xs text-slate-500">
               Last updated: {formatLastUpdated()}
@@ -261,15 +243,6 @@ const SignalsDashboard = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
-          <Button 
-            onClick={toggleDataSource} 
-            variant="outline"
-            className="border-dashed"
-          >
-            <Database className="mr-2 h-4 w-4" />
-            {useMockData ? 'Switch to Bybit API' : 'Switch to Mock Data'}
-          </Button>
-          
           <Button 
             onClick={handleGenerateSignals} 
             variant="default"
