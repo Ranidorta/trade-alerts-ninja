@@ -1,134 +1,240 @@
 
-import React, { useState, useMemo } from "react";
-import { TradingSignal } from "@/lib/types";
-import { mockHistoricalSignals } from "@/lib/mockData";
+import { useState, useEffect, useCallback } from "react";
+import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, Search, Filter, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { DateRange } from "react-day-picker";
+import { format } from "date-fns";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getTradingSignalHistory } from "@/lib/apiServices";
+import { useToast } from "@/hooks/use-toast";
+import "../layouts/MainLayout.css";
 
 const SignalsHistory = () => {
-  const [signals] = useState<TradingSignal[]>(mockHistoricalSignals);
-  const [activeTab, setActiveTab] = useState("all");
+  const [signals, setSignals] = useState<TradingSignal[]>([]);
+  const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
+  const [isLoading, setIsLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const { toast } = useToast();
 
-  // Calculate summary statistics
-  const summary = useMemo(() => {
-    const profitSignals = signals.filter(signal => signal.profit !== undefined && signal.profit > 0);
-    const lossSignals = signals.filter(signal => signal.profit !== undefined && signal.profit < 0);
-    
-    const totalProfit = profitSignals.reduce((sum, signal) => sum + (signal.profit || 0), 0);
-    const totalLoss = lossSignals.reduce((sum, signal) => sum + (signal.profit || 0), 0);
-    
-    return {
-      totalSignals: signals.length,
-      profitSignals: profitSignals.length,
-      lossSignals: lossSignals.length,
-      totalProfit: totalProfit.toFixed(2),
-      totalLoss: totalLoss.toFixed(2),
-      winRate: signals.length > 0 ? ((profitSignals.length / signals.length) * 100).toFixed(2) : "0.00"
-    };
-  }, [signals]);
+  const loadSignalHistory = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const history = await getTradingSignalHistory();
+      setSignals(history);
+      setFilteredSignals(history);
+    } catch (error) {
+      console.error("Error loading signal history:", error);
+      toast({
+        title: "Error loading history",
+        description: "Failed to load signal history. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
-  // Filter signals based on active tab
-  const filteredSignals = signals.filter(signal => {
-    if (activeTab === "all") return true;
-    if (activeTab === "profit") return signal.profit !== undefined && signal.profit > 0;
-    if (activeTab === "loss") return signal.profit !== undefined && signal.profit < 0;
-    return true;
-  });
+  useEffect(() => {
+    loadSignalHistory();
+  }, [loadSignalHistory]);
+
+  useEffect(() => {
+    let result = [...signals];
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(signal => 
+        signal.symbol.toLowerCase().includes(query) || 
+        signal.trendType.toLowerCase().includes(query)
+      );
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      result = result.filter(signal => signal.status === statusFilter);
+    }
+
+    // Filter by date range
+    if (dateRange?.from) {
+      const fromDate = new Date(dateRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+      
+      result = result.filter(signal => {
+        const signalDate = new Date(signal.timestamp);
+        return signalDate >= fromDate;
+      });
+      
+      if (dateRange.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        
+        result = result.filter(signal => {
+          const signalDate = new Date(signal.timestamp);
+          return signalDate <= toDate;
+        });
+      }
+    }
+
+    // Sort results
+    result.sort((a, b) => {
+      const dateA = new Date(a.timestamp).getTime();
+      const dateB = new Date(b.timestamp).getTime();
+      return sortBy === "newest" ? dateB - dateA : dateA - dateB;
+    });
+
+    setFilteredSignals(result);
+  }, [signals, searchQuery, statusFilter, sortBy, dateRange]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+  };
+
+  const handleSortToggle = () => {
+    setSortBy(sortBy === "newest" ? "oldest" : "newest");
+  };
+
+  const handleRefresh = () => {
+    loadSignalHistory();
+    toast({
+      title: "Refreshed",
+      description: "Signal history has been refreshed",
+    });
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+    <div className="main-container animate-fade-in">
+      <div className="page-header">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Signals History</h1>
-          <p className="text-muted-foreground">View past signals and performance</p>
+          <h1 className="page-title">Signal History</h1>
+          <p className="page-description">
+            View past signal performance and outcomes
+          </p>
         </div>
-        <div className="flex mt-4 md:mt-0 space-x-2">
-          <Button variant="outline" asChild className="flex items-center">
-            <Link to="/performance">
-              <LineChart className="mr-2 h-4 w-4" />
-              Ver Dashboard Completo
-            </Link>
+        
+        <div className="flex space-x-2">
+          <Button variant="outline" onClick={handleRefresh}>
+            Refresh
           </Button>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center">
-              <Calendar className="h-4 w-4 mr-2 text-primary" />
-              <span className="text-sm">Filter by date</span>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-3 flex items-center">
-              <SortDesc className="h-4 w-4 mr-2 text-primary" />
-              <span className="text-sm">Sort by</span>
-            </CardContent>
-          </Card>
         </div>
       </div>
 
-      {/* Summary Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <Card className="bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Total Signals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{summary.totalSignals}</p>
-            <p className="text-sm text-muted-foreground">Completed signals</p>
-          </CardContent>
-        </Card>
+      <div className="section-container">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search signals..."
+              className="pl-8"
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-10">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}
+                      </>
+                    ) : (
+                      format(dateRange.from, "LLL dd, y")
+                    )
+                  ) : (
+                    "Date Range"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <CalendarComponent
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                />
+              </PopoverContent>
+            </Popover>
+            
+            <Select
+              value={statusFilter}
+              onValueChange={handleStatusFilterChange}
+            >
+              <SelectTrigger className="w-[140px] h-10">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value={SignalStatus.ACTIVE}>Active</SelectItem>
+                <SelectItem value={SignalStatus.COMPLETED}>Completed</SelectItem>
+                <SelectItem value={SignalStatus.CANCELLED}>Cancelled</SelectItem>
+                <SelectItem value={SignalStatus.TARGET_HIT}>Target Hit</SelectItem>
+                <SelectItem value={SignalStatus.STOP_LOSS_HIT}>Stop Loss Hit</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10"
+              onClick={handleSortToggle}
+            >
+              <ArrowUpDown className="mr-2 h-4 w-4" />
+              {sortBy === "newest" ? "Newest First" : "Oldest First"}
+            </Button>
+          </div>
+        </div>
         
-        <Card className="bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium flex items-center">
-              <TrendingUp className="h-4 w-4 mr-2 text-crypto-green" />
-              Profitable Signals
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-crypto-green">{summary.profitSignals}</p>
-            <p className="text-sm text-muted-foreground">Total profit: +{summary.totalProfit}%</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium flex items-center">
-              <TrendingDown className="h-4 w-4 mr-2 text-crypto-red" />
-              Loss Signals
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-crypto-red">{summary.lossSignals}</p>
-            <p className="text-sm text-muted-foreground">Total loss: {summary.totalLoss}%</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Win Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{summary.winRate}%</p>
-            <p className="text-sm text-muted-foreground">Success rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-8">
-        <TabsList>
-          <TabsTrigger value="all">All Signals</TabsTrigger>
-          <TabsTrigger value="profit">Profit</TabsTrigger>
-          <TabsTrigger value="loss">Loss</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSignals.map((signal) => (
-          <SignalCard key={signal.id} signal={signal} />
-        ))}
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-pulse space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-40 w-full rounded-md bg-muted"></div>
+              ))}
+            </div>
+          </div>
+        ) : filteredSignals.length > 0 ? (
+          <div className="grid-container">
+            {filteredSignals.map((signal) => (
+              <SignalCard key={signal.id} signal={signal} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-6xl mb-4">🔍</div>
+            <h3 className="text-2xl font-semibold">No signals found</h3>
+            <p className="text-muted-foreground mt-2">
+              {searchQuery || statusFilter !== "all" || dateRange?.from
+                ? "Try adjusting your filters"
+                : "No signal history is available yet"}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
