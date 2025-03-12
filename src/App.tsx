@@ -16,17 +16,23 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import "./App.css";
 import "./layouts/MainLayout.css";
 
+// Add Google Fonts link in a React way
+const fontLink = document.createElement("link");
+fontLink.rel = "stylesheet";
+fontLink.href = "https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800&display=swap";
+document.head.appendChild(fontLink);
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="light">
+    <ThemeProvider defaultTheme="dark">
       <TooltipProvider>
         <Toaster />
         <Sonner />
         <BrowserRouter>
           <Navbar />
-          <div className="pt-16 min-h-screen bg-[#f4f4f9]">
+          <div className="pt-16 min-h-screen bg-[#1A1F2C]">
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/signals" element={<SignalsDashboard />} />

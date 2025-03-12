@@ -1,308 +1,163 @@
 
-import { useState, useEffect, useCallback } from "react";
-import { TradingSignal } from "@/lib/types";
-import SignalCard from "@/components/SignalCard";
+import { useState, useEffect } from "react";
 import { 
-  ArrowUpDown, 
-  Filter, 
-  Search, 
-  Bell,
-  RefreshCw,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "@/hooks/use-toast";
-import { generateAllSignals } from "@/lib/apiServices";
-import "../layouts/MainLayout.css";
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import GamerSignalCard from "@/components/GamerSignalCard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useSignals } from "@/hooks/use-signals";
+import { Signal } from "@/lib/types";
+import { Gamepad, Flame, Target, BarChart } from "lucide-react";
 
 const SignalsDashboard = () => {
-  const [signals, setSignals] = useState<TradingSignal[]>([]);
-  const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const { data: signals, isLoading, error } = useSignals();
+  const [activeTabSignals, setActiveTabSignals] = useState<Signal[]>([]);
   
-  // Load signals from API
-  const fetchSignals = useCallback(async () => {
-    setIsLoading(true);
-    
-    try {
-      // Generate real signals from Bybit
-      const realSignals = await generateAllSignals();
-      if (realSignals.length > 0) {
-        setSignals(realSignals);
-        setFilteredSignals(realSignals);
-      } else {
-        toast({
-          title: "No signals found",
-          description: "No trading signals were found from Bybit API.",
-        });
-      }
-    } catch (error) {
-      console.error("Error loading signals:", error);
-      toast({
-        title: "Error loading signals",
-        description: "Failed to load signals from Bybit API.",
-        variant: "destructive"
-      });
-      setSignals([]);
-      setFilteredSignals([]);
-    } finally {
-      setIsLoading(false);
-      setLastUpdated(new Date());
-    }
-  }, []);
+  // Filter signals based on current tab
+  const [activeTab, setActiveTab] = useState("active");
   
-  // Initial data load
   useEffect(() => {
-    fetchSignals();
-  }, [fetchSignals]);
-  
-  // Auto refresh of signals
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval>;
+    if (!signals) return;
     
-    if (autoRefresh) {
-      // Check for price updates every 30 seconds
-      intervalId = setInterval(async () => {
-        try {
-          // Manually refresh signals every 30 seconds
-          await fetchSignals();
-        } catch (error) {
-          console.error("Error updating prices:", error);
-        }
-      }, 30000); // 30 seconds
+    switch (activeTab) {
+      case "active":
+        setActiveTabSignals(signals.filter(signal => signal.status === "ACTIVE"));
+        break;
+      case "completed":
+        setActiveTabSignals(signals.filter(signal => signal.status === "COMPLETED"));
+        break;
+      case "all":
+      default:
+        setActiveTabSignals(signals);
+        break;
     }
-    
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [autoRefresh, fetchSignals]);
+  }, [signals, activeTab]);
   
-  // Filter function
-  const filterSignals = (
-    signals: TradingSignal[],
-    query: string,
-    statusFilter: string,
-    sortOrder: "newest" | "oldest"
-  ): TradingSignal[] => {
-    let result = [...signals];
-    
-    // Filter by search query
-    if (query) {
-      const lowercaseQuery = query.toLowerCase();
-      result = result.filter(signal => 
-        signal.symbol.toLowerCase().includes(lowercaseQuery) || 
-        signal.type.toLowerCase().includes(lowercaseQuery)
-      );
-    }
-    
-    // Filter by status
-    if (statusFilter !== "all") {
-      result = result.filter(signal => signal.status === statusFilter);
-    }
-    
-    // Sort results
-    result.sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
-    });
-    
-    return result;
-  };
-  
-  // Apply filters when any filter changes
-  useEffect(() => {
-    const filtered = filterSignals(signals, searchQuery, statusFilter, sortBy);
-    setFilteredSignals(filtered);
-  }, [signals, searchQuery, statusFilter, sortBy]);
-  
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-  };
-  
-  // Handle status filter change
-  const handleStatusFilterChange = (value: string) => {
-    setStatusFilter(value);
-  };
-  
-  // Toggle sort order
-  const handleSortToggle = () => {
-    setSortBy(sortBy === "newest" ? "oldest" : "newest");
-  };
-  
-  // Format last updated time
-  const formatLastUpdated = () => {
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - lastUpdated.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) {
-      return "just now";
-    } else if (diffInMinutes === 1) {
-      return "1 minute ago";
-    } else if (diffInMinutes < 60) {
-      return `${diffInMinutes} minutes ago`;
-    } else {
-      const diffInHours = Math.floor(diffInMinutes / 60);
-      if (diffInHours === 1) {
-        return "1 hour ago";
-      } else {
-        return `${diffInHours} hours ago`;
-      }
-    }
-  };
-  
-  // Generate new signals
-  const handleGenerateSignals = async () => {
-    setIsGenerating(true);
-    try {
-      await fetchSignals();
-      toast({
-        title: "Signals generated",
-        description: "New trading signals have been generated",
-      });
-    } catch (error) {
-      console.error("Error generating signals:", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-  
-  const toggleAutoRefresh = () => {
-    setAutoRefresh(!autoRefresh);
-    toast({
-      title: `Auto refresh ${!autoRefresh ? 'enabled' : 'disabled'}`,
-      description: `Signal prices will ${!autoRefresh ? 'now' : 'no longer'} automatically update`,
-    });
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
   };
   
   return (
     <div className="main-container animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Trading Signals</h1>
+          <h1 className="page-title flex items-center gap-2">
+            <Gamepad className="w-7 h-7" />
+            Trading Signals
+          </h1>
           <p className="page-description">
-            Current active trading opportunities
+            Track and manage your crypto trading signals in real-time
           </p>
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
-              Using Bybit API Data
-            </span>
-            <span className="text-xs text-slate-500">
-              Last updated: {formatLastUpdated()}
-            </span>
-          </div>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
-          <Button 
-            onClick={handleGenerateSignals} 
-            variant="default"
-            disabled={isGenerating}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Generating...' : 'Generate Signals'}
-          </Button>
-          
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="auto-refresh"
-              checked={autoRefresh}
-              onCheckedChange={toggleAutoRefresh}
-            />
-            <Label htmlFor="auto-refresh">Auto refresh</Label>
-          </div>
         </div>
       </div>
       
       <div className="section-container">
-        <div className="flex flex-col sm:flex-row gap-4 justify-between mb-6">
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search signals..."
-              className="pl-8"
-              value={searchQuery}
-              onChange={handleSearchChange}
-            />
-          </div>
+        <Tabs defaultValue="active" onValueChange={handleTabChange} className="w-full">
+          <TabsList className="bg-[#221F26] border border-[#8B5CF6]/30 p-1">
+            <TabsTrigger 
+              value="active"
+              className="data-[state=active]:bg-[#8B5CF6] data-[state=active]:text-white"
+            >
+              <Flame className="w-4 h-4 mr-2" />
+              Active
+            </TabsTrigger>
+            <TabsTrigger 
+              value="completed"
+              className="data-[state=active]:bg-[#8B5CF6] data-[state=active]:text-white"
+            >
+              <Target className="w-4 h-4 mr-2" />
+              Completed
+            </TabsTrigger>
+            <TabsTrigger 
+              value="all"
+              className="data-[state=active]:bg-[#8B5CF6] data-[state=active]:text-white"
+            >
+              <BarChart className="w-4 h-4 mr-2" />
+              All Signals
+            </TabsTrigger>
+          </TabsList>
           
-          <div className="flex flex-wrap gap-2">
-            <Select
-              value={statusFilter}
-              onValueChange={handleStatusFilterChange}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Filter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-                <SelectItem value="target_hit">Target Hit</SelectItem>
-                <SelectItem value="stop_loss_hit">Stop Loss Hit</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-10"
-              onClick={handleSortToggle}
-            >
-              <ArrowUpDown className="mr-2 h-4 w-4" />
-              {sortBy === "newest" ? "Newest First" : "Oldest First"}
-            </Button>
-          </div>
-        </div>
-        
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-pulse space-y-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="h-40 w-full rounded-md bg-muted"></div>
-              ))}
-            </div>
-          </div>
-        ) : filteredSignals.length > 0 ? (
-          <div className="grid-container">
-            {filteredSignals.map((signal) => (
-              <SignalCard key={signal.id} signal={signal} />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-semibold">No signals found</h3>
-            <p className="text-muted-foreground mt-2">
-              {searchQuery || statusFilter !== "all"
-                ? "Try adjusting your filters"
-                : "No signals are available yet. Try generating signals."}
-            </p>
-            {(!searchQuery && statusFilter === "all") && (
-              <Button 
-                onClick={handleGenerateSignals} 
-                variant="default"
-                className="mt-4"
-                disabled={isGenerating}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                {isGenerating ? 'Generating...' : 'Generate Signals'}
-              </Button>
+          <TabsContent value="active" className="mt-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-[500px] bg-[#221F26] opacity-70" />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center p-6 text-[#FF3361]">
+                Error loading signals: {error.message}
+              </div>
+            ) : activeTabSignals.length === 0 ? (
+              <div className="text-center p-10 border border-dashed border-[#8B5CF6]/30 rounded-lg">
+                <Gamepad className="w-12 h-12 mx-auto text-[#8B5CF6]/50 mb-4" />
+                <h3 className="text-lg font-medium text-[#D946EF]">No Active Signals</h3>
+                <p className="text-[#c8c8ff]/70 mt-2">There are currently no active trading signals.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeTabSignals.map((signal) => (
+                  <GamerSignalCard key={signal.id} signal={signal} />
+                ))}
+              </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+          
+          <TabsContent value="completed" className="mt-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-[500px] bg-[#221F26] opacity-70" />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center p-6 text-[#FF3361]">
+                Error loading signals: {error.message}
+              </div>
+            ) : activeTabSignals.length === 0 ? (
+              <div className="text-center p-10 border border-dashed border-[#8B5CF6]/30 rounded-lg">
+                <Gamepad className="w-12 h-12 mx-auto text-[#8B5CF6]/50 mb-4" />
+                <h3 className="text-lg font-medium text-[#D946EF]">No Completed Signals</h3>
+                <p className="text-[#c8c8ff]/70 mt-2">There are currently no completed trading signals.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeTabSignals.map((signal) => (
+                  <GamerSignalCard key={signal.id} signal={signal} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="all" className="mt-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-[500px] bg-[#221F26] opacity-70" />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="text-center p-6 text-[#FF3361]">
+                Error loading signals: {error.message}
+              </div>
+            ) : activeTabSignals.length === 0 ? (
+              <div className="text-center p-10 border border-dashed border-[#8B5CF6]/30 rounded-lg">
+                <Gamepad className="w-12 h-12 mx-auto text-[#8B5CF6]/50 mb-4" />
+                <h3 className="text-lg font-medium text-[#D946EF]">No Signals Found</h3>
+                <p className="text-[#c8c8ff]/70 mt-2">There are currently no trading signals.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeTabSignals.map((signal) => (
+                  <GamerSignalCard key={signal.id} signal={signal} />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

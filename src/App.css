@@ -22,6 +22,19 @@
   animation: pulse 2s infinite;
 }
 
+/* Gamer-specific animations */
+.neon-pulse {
+  animation: neonPulse 1.5s infinite alternate;
+}
+
+.float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.glitch {
+  animation: glitch 0.4s linear both infinite;
+}
+
 /* Animation keyframes */
 @keyframes fadeIn {
   from {
@@ -66,40 +79,90 @@
   }
 }
 
-/* Status colors */
+@keyframes neonPulse {
+  from {
+    text-shadow: 0 0 5px rgba(217, 70, 239, 0.7), 
+                 0 0 10px rgba(217, 70, 239, 0.5);
+  }
+  to {
+    text-shadow: 0 0 10px rgba(217, 70, 239, 0.9), 
+                 0 0 20px rgba(217, 70, 239, 0.7),
+                 0 0 30px rgba(217, 70, 239, 0.5);
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+  20% {
+    transform: translate(-2px, 2px);
+  }
+  40% {
+    transform: translate(-2px, -2px);
+  }
+  60% {
+    transform: translate(2px, 2px);
+  }
+  80% {
+    transform: translate(2px, -2px);
+  }
+  100% {
+    transform: translate(0);
+  }
+}
+
+/* Status colors with gamer style */
 .status-active {
-  background-color: #3498db;
+  background: linear-gradient(135deg, #1EAEDB 0%, #3498db 100%);
   color: white;
+  box-shadow: 0 0 10px rgba(30, 174, 219, 0.5);
 }
 
 .status-completed {
-  background-color: #2ecc71;
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
   color: white;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
 }
 
 .status-cancelled {
-  background-color: #95a5a6;
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
   color: white;
+  box-shadow: 0 0 10px rgba(149, 165, 166, 0.5);
 }
 
 .status-target-hit {
-  background-color: #2ecc71;
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
   color: white;
+  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
 }
 
 .status-stop-loss-hit {
-  background-color: #e74c3c;
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
   color: white;
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
 }
 
 /* Card styling */
 .card-hover {
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
 .card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3);
 }
 
 /* Ticker Animation */
@@ -107,7 +170,9 @@
   position: relative;
   width: 100%;
   overflow: hidden;
-  background-color: #2c3e50;
+  background-color: #221F26;
+  border-top: 1px solid rgba(139, 92, 246, 0.3);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
 }
 
 .ticker-content {
@@ -132,11 +197,11 @@
 
 /* General Styling from your example */
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Rajdhani', 'Orbitron', sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #f4f4f9;
-  color: #333;
+  background-color: #1A1F2C;
+  color: #e0e0ff;
 }
 
 header {
@@ -144,8 +209,10 @@ header {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  background-color: #2c3e50;
+  background-color: #221F26;
   color: white;
+  border-bottom: 2px solid #8B5CF6;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 header img.logo {
@@ -153,36 +220,137 @@ header img.logo {
 }
 
 nav a {
-  color: white;
+  color: #D946EF;
   margin: 0 1rem;
   text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
+  transition: all 0.3s ease;
+}
+
+nav a:hover {
+  color: #8B5CF6;
+  text-shadow: 0 0 15px rgba(139, 92, 246, 0.8);
 }
 
 .btn {
   padding: 0.5rem 1rem;
-  background-color: #3498db;
+  background: linear-gradient(135deg, #8B5CF6 0%, #D946EF 100%);
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
+  transition: all 0.3s ease;
 }
 
 .btn:hover {
-  background-color: #2980b9;
+  background: linear-gradient(135deg, #9461FF 0%, #E95AFF 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(139, 92, 246, 0.5);
 }
 
 .hero {
   text-align: center;
   padding: 5rem 2rem;
-  background-color: #ecf0f1;
+  background: linear-gradient(135deg, #403E43 0%, #221F26 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0) 70%);
+  pointer-events: none;
 }
 
 .hero h1 {
   font-size: 2.5rem;
   margin-bottom: 1rem;
+  color: #D946EF;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 15px rgba(217, 70, 239, 0.5);
 }
 
 .hero p {
   font-size: 1.2rem;
   margin-bottom: 2rem;
+  color: #c8c8ff;
+}
+
+/* Gaming UI elements */
+.hud-element {
+  border: 1px solid #8B5CF6;
+  background-color: rgba(34, 31, 38, 0.8);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+  backdrop-filter: blur(10px);
+  border-radius: 6px;
+  padding: 1rem;
+  position: relative;
+}
+
+.hud-element::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  background-color: #D946EF;
+  border-radius: 0 6px 0 6px;
+}
+
+/* Adds cyberpunk-style corner decoration */
+.cyber-corners {
+  position: relative;
+}
+
+.cyber-corners::before,
+.cyber-corners::after {
+  content: '';
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-color: #8B5CF6;
+  pointer-events: none;
+}
+
+.cyber-corners::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+
+.cyber-corners::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+/* Gaming dashboards typical values */
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #D946EF;
+  text-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
+}
+
+.stat-label {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  color: #8B5CF6;
 }
