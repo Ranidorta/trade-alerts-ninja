@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { TradingSignal, SignalStatus } from "@/lib/types";
+import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import { Calendar, Search, Filter, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { getTradingSignalHistory } from "@/lib/apiServices";
+import { generateAllSignals } from "@/lib/apiServices";
 import { useToast } from "@/hooks/use-toast";
 import "../layouts/MainLayout.css";
 
@@ -35,7 +35,8 @@ const SignalsHistory = () => {
   const loadSignalHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const history = await getTradingSignalHistory();
+      // We'll use the same function as the dashboard since the other one is not available
+      const history = await generateAllSignals();
       setSignals(history);
       setFilteredSignals(history);
     } catch (error) {
@@ -62,7 +63,7 @@ const SignalsHistory = () => {
       const query = searchQuery.toLowerCase();
       result = result.filter(signal => 
         signal.symbol.toLowerCase().includes(query) || 
-        signal.trendType.toLowerCase().includes(query)
+        signal.type.toLowerCase().includes(query)
       );
     }
 
@@ -77,7 +78,7 @@ const SignalsHistory = () => {
       fromDate.setHours(0, 0, 0, 0);
       
       result = result.filter(signal => {
-        const signalDate = new Date(signal.timestamp);
+        const signalDate = new Date(signal.createdAt);
         return signalDate >= fromDate;
       });
       
@@ -86,7 +87,7 @@ const SignalsHistory = () => {
         toDate.setHours(23, 59, 59, 999);
         
         result = result.filter(signal => {
-          const signalDate = new Date(signal.timestamp);
+          const signalDate = new Date(signal.createdAt);
           return signalDate <= toDate;
         });
       }
@@ -94,8 +95,8 @@ const SignalsHistory = () => {
 
     // Sort results
     result.sort((a, b) => {
-      const dateA = new Date(a.timestamp).getTime();
-      const dateB = new Date(b.timestamp).getTime();
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
       return sortBy === "newest" ? dateB - dateA : dateA - dateB;
     });
 
@@ -190,11 +191,11 @@ const SignalsHistory = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value={SignalStatus.ACTIVE}>Active</SelectItem>
-                <SelectItem value={SignalStatus.COMPLETED}>Completed</SelectItem>
-                <SelectItem value={SignalStatus.CANCELLED}>Cancelled</SelectItem>
-                <SelectItem value={SignalStatus.TARGET_HIT}>Target Hit</SelectItem>
-                <SelectItem value={SignalStatus.STOP_LOSS_HIT}>Stop Loss Hit</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="target_hit">Target Hit</SelectItem>
+                <SelectItem value="stop_loss_hit">Stop Loss Hit</SelectItem>
               </SelectContent>
             </Select>
             

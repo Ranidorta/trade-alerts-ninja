@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { TradingSignal, SignalStatus } from "@/lib/types";
+import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import { 
   ArrowUpDown, 
@@ -13,20 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { generateAllSignals, checkForUpdatedPrices } from "@/lib/apiServices";
+import { generateAllSignals } from "@/lib/apiServices";
 import "../layouts/MainLayout.css";
 
 const SignalsDashboard = () => {
@@ -84,16 +73,8 @@ const SignalsDashboard = () => {
       // Check for price updates every 30 seconds
       intervalId = setInterval(async () => {
         try {
-          const updatedSignals = await checkForUpdatedPrices(signals);
-          if (updatedSignals && updatedSignals.length > 0) {
-            console.log("Updated signals with new prices:", updatedSignals);
-            setSignals(updatedSignals);
-            setFilteredSignals(prev => {
-              // Apply current filters to the updated signals
-              return filterSignals(updatedSignals, searchQuery, statusFilter, sortBy);
-            });
-            setLastUpdated(new Date());
-          }
+          // Manually refresh signals every 30 seconds
+          await fetchSignals();
         } catch (error) {
           console.error("Error updating prices:", error);
         }
@@ -103,7 +84,7 @@ const SignalsDashboard = () => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [autoRefresh, signals, searchQuery, statusFilter, sortBy]);
+  }, [autoRefresh, fetchSignals]);
   
   // Filter function
   const filterSignals = (
@@ -119,7 +100,7 @@ const SignalsDashboard = () => {
       const lowercaseQuery = query.toLowerCase();
       result = result.filter(signal => 
         signal.symbol.toLowerCase().includes(lowercaseQuery) || 
-        signal.trendType.toLowerCase().includes(lowercaseQuery)
+        signal.type.toLowerCase().includes(lowercaseQuery)
       );
     }
     
@@ -130,8 +111,8 @@ const SignalsDashboard = () => {
     
     // Sort results
     result.sort((a, b) => {
-      const dateA = new Date(a.timestamp).getTime();
-      const dateB = new Date(b.timestamp).getTime();
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
       return sortOrder === "newest" ? dateB - dateA : dateA - dateB;
     });
     
@@ -266,11 +247,11 @@ const SignalsDashboard = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value={SignalStatus.ACTIVE}>Active</SelectItem>
-                <SelectItem value={SignalStatus.COMPLETED}>Completed</SelectItem>
-                <SelectItem value={SignalStatus.CANCELLED}>Cancelled</SelectItem>
-                <SelectItem value={SignalStatus.TARGET_HIT}>Target Hit</SelectItem>
-                <SelectItem value={SignalStatus.STOP_LOSS_HIT}>Stop Loss Hit</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="target_hit">Target Hit</SelectItem>
+                <SelectItem value="stop_loss_hit">Stop Loss Hit</SelectItem>
               </SelectContent>
             </Select>
             
