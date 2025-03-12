@@ -13,6 +13,8 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import PerformanceDashboard from "./pages/PerformanceDashboard";
 import { ThemeProvider } from "./components/ThemeProvider";
+import "./App.css";
+import "./layouts/MainLayout.css";
 
 const queryClient = new QueryClient();
 
@@ -24,7 +26,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Navbar />
-          <div className="pt-16 min-h-screen">
+          <div className="pt-16 min-h-screen bg-[#f4f4f9]">
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/signals" element={<SignalsDashboard />} />

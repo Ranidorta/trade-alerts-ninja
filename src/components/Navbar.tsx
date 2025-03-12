@@ -50,12 +50,12 @@ const Navbar = () => {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-30 bg-background border-b">
+    <header className="fixed top-0 left-0 right-0 z-30 bg-[#2c3e50]">
       <div className="container flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center">
           <NavLink
             to="/"
-            className="text-xl font-bold text-primary flex items-center"
+            className="text-xl font-bold text-white flex items-center"
           >
             <span className="hidden sm:inline">CryptoSignals</span>
             <span className="sm:hidden">CS</span>
@@ -63,8 +63,6 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
-          
           {isMobile ? (
             <>
               <Button
@@ -72,12 +70,13 @@ const Navbar = () => {
                 size="icon"
                 onClick={() => setIsMobileOpen(!isMobileOpen)}
                 aria-label="Toggle menu"
+                className="text-white hover:bg-[#3a546d]"
               >
                 {isMobileOpen ? <X /> : <Menu />}
               </Button>
 
               {isMobileOpen && (
-                <div className="fixed inset-0 top-16 bg-background z-40 p-4">
+                <div className="fixed inset-0 top-16 bg-[#2c3e50] z-40 p-4">
                   <div className="flex flex-col space-y-2">
                     {navLinks.map((link) => (
                       <NavLink
@@ -86,8 +85,8 @@ const Navbar = () => {
                         className={({ isActive }) =>
                           `px-4 py-3 rounded-md transition-colors flex items-center ${
                             isActive
-                              ? "bg-primary text-primary-foreground"
-                              : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                              ? "bg-[#3498db] text-white"
+                              : "text-white hover:bg-[#3a546d]"
                           }`
                         }
                       >
@@ -108,8 +107,8 @@ const Navbar = () => {
                   className={({ isActive }) =>
                     `px-3 py-2 rounded-md text-sm transition-colors ${
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                        ? "bg-[#3498db] text-white"
+                        : "text-white hover:bg-[#3a546d]"
                     }`
                   }
                 >
