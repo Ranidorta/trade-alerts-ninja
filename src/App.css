@@ -1,356 +1,42 @@
-
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 1rem;
-}
-
-/* Animation classes */
-.fade-in {
-  animation: fadeIn 0.5s ease-in;
-}
-
-.scale-in {
-  animation: scaleIn 0.3s ease-out;
-}
-
-.slide-in {
-  animation: slideIn 0.4s ease-out;
-}
-
-.pulse {
-  animation: pulse 2s infinite;
-}
-
-/* Gamer-specific animations */
-.neon-pulse {
-  animation: neonPulse 1.5s infinite alternate;
-}
-
-.float {
-  animation: float 4s ease-in-out infinite;
-}
-
-.glitch {
-  animation: glitch 0.4s linear both infinite;
-}
-
-/* Animation keyframes */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes neonPulse {
-  from {
-    text-shadow: 0 0 5px rgba(217, 70, 239, 0.7), 
-                 0 0 10px rgba(217, 70, 239, 0.5);
-  }
-  to {
-    text-shadow: 0 0 10px rgba(217, 70, 239, 0.9), 
-                 0 0 20px rgba(217, 70, 239, 0.7),
-                 0 0 30px rgba(217, 70, 239, 0.5);
-  }
-}
-
-@keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-  100% {
-    transform: translateY(0px);
-  }
-}
-
-@keyframes glitch {
-  0% {
-    transform: translate(0);
-  }
-  20% {
-    transform: translate(-2px, 2px);
-  }
-  40% {
-    transform: translate(-2px, -2px);
-  }
-  60% {
-    transform: translate(2px, 2px);
-  }
-  80% {
-    transform: translate(2px, -2px);
-  }
-  100% {
-    transform: translate(0);
-  }
-}
-
-/* Status colors with gamer style */
-.status-active {
-  background: linear-gradient(135deg, #1EAEDB 0%, #3498db 100%);
-  color: white;
-  box-shadow: 0 0 10px rgba(30, 174, 219, 0.5);
-}
-
-.status-completed {
-  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-  color: white;
-  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-}
-
-.status-cancelled {
-  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
-  color: white;
-  box-shadow: 0 0 10px rgba(149, 165, 166, 0.5);
-}
-
-.status-target-hit {
-  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
-  color: white;
-  box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
-}
-
-.status-stop-loss-hit {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-  color: white;
-  box-shadow: 0 0 10px rgba(231, 76, 60, 0.5);
-}
-
-/* Card styling */
-.card-hover {
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.card-hover:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(139, 92, 246, 0.3);
-}
-
-/* Ticker Animation */
-.ticker-container {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  background-color: #221F26;
-  border-top: 1px solid rgba(139, 92, 246, 0.3);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
-}
-
-.ticker-content {
-  display: inline-flex;
-  white-space: nowrap;
-  animation: ticker-scroll 30s linear infinite;
-}
-
-@keyframes ticker-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-/* Progress animations */
-.progress-animation {
-  transition: width 0.5s ease-out;
-}
-
-/* General Styling from your example */
-body {
-  font-family: 'Rajdhani', 'Orbitron', sans-serif;
-  margin: 0;
-  padding: 0;
-  background-color: #1A1F2C;
-  color: #e0e0ff;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  background-color: #221F26;
-  color: white;
-  border-bottom: 2px solid #8B5CF6;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-}
-
-header img.logo {
-  height: 50px;
-}
-
-nav a {
-  color: #D946EF;
-  margin: 0 1rem;
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 600;
-  text-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
-  transition: all 0.3s ease;
-}
-
-nav a:hover {
-  color: #8B5CF6;
-  text-shadow: 0 0 15px rgba(139, 92, 246, 0.8);
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #8B5CF6 0%, #D946EF 100%);
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  font-weight: 600;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);
-  transition: all 0.3s ease;
-}
-
-.btn:hover {
-  background: linear-gradient(135deg, #9461FF 0%, #E95AFF 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(139, 92, 246, 0.5);
-}
-
-.hero {
+  padding: 2rem;
   text-align: center;
-  padding: 5rem 2rem;
-  background: linear-gradient(135deg, #403E43 0%, #221F26 100%);
-  position: relative;
-  overflow: hidden;
 }
 
-.hero::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0) 70%);
-  pointer-events: none;
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
-.hero h1 {
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-  color: #D946EF;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  text-shadow: 0 0 15px rgba(217, 70, 239, 0.5);
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.hero p {
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
-  color: #c8c8ff;
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
 }
 
-/* Gaming UI elements */
-.hud-element {
-  border: 1px solid #8B5CF6;
-  background-color: rgba(34, 31, 38, 0.8);
-  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
-  backdrop-filter: blur(10px);
-  border-radius: 6px;
-  padding: 1rem;
-  position: relative;
+.card {
+  padding: 2em;
 }
 
-.hud-element::after {
-  content: '';
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 10px;
-  height: 10px;
-  background-color: #D946EF;
-  border-radius: 0 6px 0 6px;
-}
-
-/* Adds cyberpunk-style corner decoration */
-.cyber-corners {
-  position: relative;
-}
-
-.cyber-corners::before,
-.cyber-corners::after {
-  content: '';
-  position: absolute;
-  width: 15px;
-  height: 15px;
-  border-color: #8B5CF6;
-  pointer-events: none;
-}
-
-.cyber-corners::before {
-  top: 0;
-  left: 0;
-  border-top: 2px solid;
-  border-left: 2px solid;
-}
-
-.cyber-corners::after {
-  bottom: 0;
-  right: 0;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
-}
-
-/* Gaming dashboards typical values */
-.stat-value {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #D946EF;
-  text-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
-}
-
-.stat-label {
-  text-transform: uppercase;
-  font-size: 0.8rem;
-  letter-spacing: 1px;
-  color: #8B5CF6;
+.read-the-docs {
+  color: #888;
 }
