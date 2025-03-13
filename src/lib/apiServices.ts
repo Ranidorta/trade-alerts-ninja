@@ -247,96 +247,24 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   return { value: formattedValue, color: "text-gray-500" };
 };
 
-// Enhanced RSI calculation based on the provided Python code
+// Calculate RSI using the improved algorithm
 const calculateRSI = (prices: number[], period: number = 14): number => {
   if (prices.length <= period) {
     return 50; // Default value if not enough data
   }
   
-  // Calculate price changes
   const deltas = prices.slice(1).map((price, i) => price - prices[i]);
   const seed = deltas.slice(0, period);
   
-  // Initialize with first period
-  let up = seed.filter(d => d >= 0).reduce((sum, d) => sum + d, 0) / period;
-  let down = Math.abs(seed.filter(d => d < 0).reduce((sum, d) => sum + d, 0)) / period;
+  const up = seed.filter(d => d >= 0).reduce((sum, d) => sum + d, 0) / period;
+  const down = Math.abs(seed.filter(d => d < 0).reduce((sum, d) => sum + d, 0)) / period;
   
-  // Prevent division by zero
   if (down === 0) {
-    return 100;
+    return 100; // Prevent division by zero
   }
   
-  // Calculate remaining periods using smoother method
-  for (let i = period + 1; i < deltas.length; i++) {
-    const delta = deltas[i - 1];
-    let upVal = 0;
-    let downVal = 0;
-    
-    if (delta > 0) {
-      upVal = delta;
-    } else {
-      downVal = -delta;
-    }
-    
-    // Calculate smoothed moving averages
-    up = (up * (period - 1) + upVal) / period;
-    down = (down * (period - 1) + downVal) / period;
-  }
-  
-  // Calculate RS and RSI
   const rs = up / down;
   return 100 - (100 / (1 + rs));
-};
-
-// Calculate EMA (Exponential Moving Average) for MACD
-const calculateEMA = (prices: number[], period: number): number[] => {
-  const k = 2 / (period + 1);
-  const emaData: number[] = [];
-  
-  // Initialize with SMA
-  let ema = prices.slice(0, period).reduce((sum, price) => sum + price, 0) / period;
-  emaData.push(ema);
-  
-  // Calculate EMA for remaining prices
-  for (let i = period; i < prices.length; i++) {
-    ema = prices[i] * k + ema * (1 - k);
-    emaData.push(ema);
-  }
-  
-  return emaData;
-};
-
-// Calculate MACD based on the provided Python code
-const calculateMACD = (
-  prices: number[], 
-  shortWindow: number = 12, 
-  longWindow: number = 26, 
-  signalWindow: number = 9
-): { macdLine: number; signalLine: number; histogram: number } => {
-  if (prices.length < Math.max(shortWindow, longWindow) + signalWindow) {
-    return { macdLine: 0, signalLine: 0, histogram: 0 };
-  }
-  
-  // Calculate EMAs
-  const shortEMA = calculateEMA(prices, shortWindow);
-  const longEMA = calculateEMA(prices, longWindow);
-  
-  // Calculate MACD Line
-  const macdLine = shortEMA[shortEMA.length - 1] - longEMA[longEMA.length - 1];
-  
-  // Calculate Signal Line (EMA of MACD Line)
-  // For simplicity, we'll use a simple approximation here
-  const prevMacdLines = [];
-  for (let i = Math.max(0, shortEMA.length - signalWindow); i < shortEMA.length; i++) {
-    prevMacdLines.push(shortEMA[i] - longEMA[i]);
-  }
-  
-  const signalLine = prevMacdLines.reduce((sum, value) => sum + value, 0) / prevMacdLines.length;
-  
-  // Calculate MACD Histogram
-  const histogram = macdLine - signalLine;
-  
-  return { macdLine, signalLine, histogram };
 };
 
 // Calculate trading indicators (improved version)
@@ -357,8 +285,8 @@ export const calculateIndicators = (data: any[]) => {
   // Calculate RSI using the improved algorithm
   const rsi = calculateRSI(closingPrices);
   
-  // Calculate MACD using the improved algorithm
-  const macdResult = calculateMACD(closingPrices);
+  // Simple MACD
+  const macd = shortMa - longMa;
   
   // Calculate Bollinger Bands
   const ma20 = closingPrices.slice(-20).reduce((a, b) => a + b, 0) / 20;
@@ -372,9 +300,7 @@ export const calculateIndicators = (data: any[]) => {
     shortMa, 
     longMa, 
     rsi, 
-    macd: macdResult.macdLine,
-    macdSignal: macdResult.signalLine,
-    macdHistogram: macdResult.histogram,
+    macd, 
     currentPrice: closingPrices[closingPrices.length - 1],
     highPrices,
     lowPrices,
@@ -411,7 +337,7 @@ export const checkTargetsHit = (targets: PriceTarget[], candles: any[], type: "L
   return updatedTargets;
 };
 
-// Generate trading signal (improved version with better indicators)
+// Generate trading signal (improved version)
 export const generateTradingSignal = async (symbol: string): Promise<TradingSignal | null> => {
   try {
     const marketData = await fetchBybitKlines(symbol);
@@ -425,8 +351,6 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       longMa, 
       rsi, 
       macd, 
-      macdSignal,
-      macdHistogram,
       currentPrice, 
       highPrices, 
       lowPrices, 
@@ -439,20 +363,15 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     
     let signal: TradingSignal | null = null;
     
-    // Enhanced signal generation logic with improved indicators
-    if (
-      (shortMa > longMa && macd > 0 && macd > macdSignal && rsi < 70 && rsi > 40 && currentPrice > lowerBand) ||
-      (macdHistogram > 0 && macdHistogram > macdHistogram && rsi < 70 && rsi > 45)
-    ) {
-      // Strong LONG signal
+    // Enhanced signal generation logic similar to the Python code
+    if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
+      // Long signal
       const entryPrice = currentPrice;
-      const stopLoss = Math.min(entryPrice * 0.985, entryPrice - (2 * stdDev));
-      
-      // More aggressive targets for stronger signals
+      const stopLoss = entryPrice * 0.98;
       const targets = [
         { level: 1, price: entryPrice * 1.01, hit: false },
-        { level: 2, price: entryPrice * 1.025, hit: false },
-        { level: 3, price: entryPrice * 1.04, hit: false }
+        { level: 2, price: entryPrice * 1.02, hit: false },
+        { level: 3, price: entryPrice * 1.03, hit: false }
       ];
       
       signal = {
@@ -463,31 +382,26 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "BUY",
         entryPrice: entryPrice,
-        entryMin: entryPrice * 0.998,
-        entryMax: entryPrice * 1.002,
+        entryMin: entryPrice * 0.995,
+        entryMax: entryPrice * 1.005,
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `FORTE SINAL DE COMPRA: RSI(${rsi.toFixed(2)}) com MACD(${macd.toFixed(4)}) cruzando Signal(${macdSignal.toFixed(4)})`,
+        reason: `MA Cross (${shortMa.toFixed(2)} > ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
         type: "LONG",
         currentPrice: currentPrice
       };
-    } else if (
-      (shortMa < longMa && macd < 0 && macd < macdSignal && rsi > 30 && rsi < 60 && currentPrice < upperBand) ||
-      (macdHistogram < 0 && macdHistogram < macdHistogram && rsi > 30 && rsi < 55)
-    ) {
-      // Strong SHORT signal
+    } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
+      // Short signal
       const entryPrice = currentPrice;
-      const stopLoss = Math.max(entryPrice * 1.015, entryPrice + (2 * stdDev));
-      
-      // More aggressive targets for stronger signals
+      const stopLoss = entryPrice * 1.02;
       const targets = [
         { level: 1, price: entryPrice * 0.99, hit: false },
-        { level: 2, price: entryPrice * 0.975, hit: false },
-        { level: 3, price: entryPrice * 0.96, hit: false }
+        { level: 2, price: entryPrice * 0.98, hit: false },
+        { level: 3, price: entryPrice * 0.97, hit: false }
       ];
       
       signal = {
@@ -498,14 +412,14 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "SELL",
         entryPrice: entryPrice,
-        entryMin: entryPrice * 0.998,
-        entryMax: entryPrice * 1.002,
+        entryMin: entryPrice * 0.995,
+        entryMax: entryPrice * 1.005,
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `FORTE SINAL DE VENDA: RSI(${rsi.toFixed(2)}) com MACD(${macd.toFixed(4)}) abaixo de Signal(${macdSignal.toFixed(4)})`,
+        reason: `MA Cross (${shortMa.toFixed(2)} < ${longMa.toFixed(2)}) with RSI: ${rsi.toFixed(2)} and MACD: ${macd.toFixed(4)}`,
         leverage: leverage,
         type: "SHORT",
         currentPrice: currentPrice
@@ -513,7 +427,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
       // Always generate a potential signal for selected symbols, even if conditions aren't strong
       const entryPrice = currentPrice;
-      const isBullish = rsi > 50 || (macd > 0 && macd > macdSignal) || shortMa > longMa;
+      const isBullish = rsi > 50 || shortMa > longMa; // Simple determination of trend
       
       if (isBullish) {
         const stopLoss = entryPrice * 0.99;
@@ -531,14 +445,14 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           pair: `${symbol.replace('USDT', '')}/USDT`,
           direction: "BUY",
           entryPrice: entryPrice,
-          entryMin: entryPrice * 0.998,
-          entryMax: entryPrice * 1.002,
+          entryMin: entryPrice * 0.995,
+          entryMax: entryPrice * 1.005,
           entryAvg: entryPrice,
           stopLoss: stopLoss,
           targets: targets,
           status: "WAITING", // Mark as "WAITING" since conditions aren't strong
           timeframe: "5m",
-          reason: `Possível entrada de COMPRA (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
+          reason: `Possível entrada (RSI: ${rsi.toFixed(2)}, MACD: ${macd.toFixed(4)})`,
           leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
           type: "LONG",
           currentPrice: currentPrice
@@ -559,14 +473,14 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           pair: `${symbol.replace('USDT', '')}/USDT`,
           direction: "SELL",
           entryPrice: entryPrice,
-          entryMin: entryPrice * 0.998,
-          entryMax: entryPrice * 1.002,
+          entryMin: entryPrice * 0.995,
+          entryMax: entryPrice * 1.005,
           entryAvg: entryPrice,
           stopLoss: stopLoss,
           targets: targets,
           status: "WAITING", // Mark as "WAITING" since conditions aren't strong
           timeframe: "5m",
-          reason: `Possível entrada de VENDA (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
+          reason: `Possível entrada (RSI: ${rsi.toFixed(2)}, MACD: ${macd.toFixed(4)})`,
           leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
           type: "SHORT",
           currentPrice: currentPrice
@@ -575,24 +489,17 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     }
     
     if (signal) {
-      // Send signal to Telegram with enhanced message
+      // Send signal to Telegram
       const signalMessage = 
-        `🔥 SINAL DE TRADING NINJA 🔥\n\n` +
-        `${signal.type === 'LONG' ? '🟢 COMPRA' : '🔴 VENDA'} ${signal.symbol}\n\n` +
-        `⚡ Entrada: ${formatPrice(signal.entryMin)} - ${formatPrice(signal.entryMax)}\n` +
-        `🛑 Stop Loss: ${formatPrice(signal.stopLoss)}\n` +
-        `🎯 Alvos:\n` +
-        `  ✅ TP1: ${formatPrice(signal.targets[0].price)}\n` +
-        `  ✅ TP2: ${formatPrice(signal.targets[1].price)}\n` +
-        `  ✅ TP3: ${formatPrice(signal.targets[2].price)}\n\n` +
-        `💰 Alavancagem: ${signal.leverage}x\n` +
-        `⏱️ Timeframe: ${signal.timeframe}\n` +
-        `📊 Status: ${signal.status}\n\n` +
-        `📈 Indicadores:\n` +
-        `  RSI: ${rsi.toFixed(2)}\n` +
-        `  MACD: ${macd.toFixed(4)}\n` +
-        `  Signal: ${macdSignal.toFixed(4)}\n` +
-        `  Histogram: ${macdHistogram.toFixed(4)}`;
+        `Sinal de Trade ⚡\n\n` +
+        `${signal.type} ${signal.symbol}\n` +
+        `Entrada: ${signal.entryMin.toFixed(4)} - ${signal.entryMax.toFixed(4)}\n` +
+        `SL: ${signal.stopLoss.toFixed(4)}\n` +
+        `TP1: ${signal.targets[0].price.toFixed(4)}\n` +
+        `TP2: ${signal.targets[1].price.toFixed(4)}\n` +
+        `TP3: ${signal.targets[2].price.toFixed(4)}\n` +
+        `Alavancagem: ${signal.leverage}x\n` +
+        `Status: ${signal.status}\n`;
         
       await sendTelegramMessage(signalMessage);
     }
