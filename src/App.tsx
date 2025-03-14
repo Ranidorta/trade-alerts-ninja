@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Plans from "./pages/Plans";
 import SignalsDashboard from "./pages/SignalsDashboard";
 import SignalsHistory from "./pages/SignalsHistory";
 import CryptoMarket from "./pages/CryptoMarket";
@@ -27,6 +30,9 @@ const App = () => (
           <div className="pt-16 min-h-screen">
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/plans" element={<Plans />} />
               <Route path="/signals" element={<SignalsDashboard />} />
               <Route path="/history" element={<SignalsHistory />} />
               <Route path="/market" element={<CryptoMarket />} />

@@ -96,6 +96,14 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-crypto-blue to-crypto-purple bg-clip-text text-transparent;
+  }
+  
+  .glass-card {
+    @apply backdrop-blur-md bg-white/70 dark:bg-slate-900/70;
+  }
 }
 
 /* Ticker Animation */
@@ -143,4 +151,52 @@
 
 .story-progress {
   animation: progress 5s linear;
+}
+
+/* Animation classes */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Grid pattern */
+.grid-pattern {
+  background-image: 
+    linear-gradient(rgba(100, 100, 100, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 100, 100, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Custom checkbox styles */
+.custom-checkbox {
+  @apply relative inline-flex items-center cursor-pointer;
+}
+
+.custom-checkbox input {
+  @apply sr-only;
+}
+
+.custom-checkbox .checkbox-icon {
+  @apply w-5 h-5 rounded border border-slate-300 dark:border-slate-600 transition-colors;
+}
+
+.custom-checkbox input:checked ~ .checkbox-icon {
+  @apply bg-primary border-primary;
+}
+
+.custom-checkbox .checkbox-icon::after {
+  content: '';
+  @apply absolute opacity-0 h-2.5 w-1.5 border-r-2 border-b-2 border-white transform rotate-45 left-1.5 top-0.5 transition-opacity;
+}
+
+.custom-checkbox input:checked ~ .checkbox-icon::after {
+  @apply opacity-100;
 }
