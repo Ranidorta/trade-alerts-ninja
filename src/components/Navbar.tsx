@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
-import { NavLink, useLocation, Link } from "react-router-dom";
-import { Menu, X, BarChart3, History, Activity, Lock, LineChart, LogIn, Home, User } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
+import { Menu, X, BarChart3, History, Activity, Lock, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "./ThemeToggle";
@@ -10,56 +10,30 @@ const Navbar = () => {
   const location = useLocation();
   const isMobile = useIsMobile();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check authentication status on mount and route change
+  // Close mobile menu when route changes
   useEffect(() => {
-    const authStatus = localStorage.getItem("isAuthenticated") === "true";
-    setIsAuthenticated(authStatus);
     setIsMobileOpen(false);
   }, [location.pathname]);
 
-  const publicLinks = [
+  const navLinks = [
     {
       name: "Home",
       path: "/",
-      icon: <Home className="h-4 w-4 mr-2" />,
+      icon: <Activity className="h-4 w-4 mr-2" />,
     },
     {
-      name: "Planos",
-      path: "/plans",
-      icon: <BarChart3 className="h-4 w-4 mr-2" />,
-    },
-    {
-      name: "Login",
-      path: "/login",
-      icon: <LogIn className="h-4 w-4 mr-2" />,
-    },
-  ];
-
-  const authenticatedLinks = [
-    {
-      name: "Home",
-      path: "/",
-      icon: <Home className="h-4 w-4 mr-2" />,
-    },
-    {
-      name: "Dashboard",
-      path: "/dashboard",
-      icon: <User className="h-4 w-4 mr-2" />,
-    },
-    {
-      name: "Sinais",
+      name: "Signals",
       path: "/signals",
       icon: <Activity className="h-4 w-4 mr-2" />,
     },
     {
-      name: "Mercado",
+      name: "Market",
       path: "/market",
       icon: <BarChart3 className="h-4 w-4 mr-2" />,
     },
     {
-      name: "Histórico",
+      name: "History",
       path: "/history",
       icon: <History className="h-4 w-4 mr-2" />,
     },
@@ -68,30 +42,24 @@ const Navbar = () => {
       path: "/performance",
       icon: <LineChart className="h-4 w-4 mr-2" />,
     },
-  ];
-
-  // Only show admin link if authenticated
-  if (isAuthenticated) {
-    authenticatedLinks.push({
+    {
       name: "Admin",
       path: "/admin",
       icon: <Lock className="h-4 w-4 mr-2" />,
-    });
-  }
-
-  const navLinks = isAuthenticated ? authenticatedLinks : publicLinks;
+    },
+  ];
 
   return (
     <header className="fixed top-0 left-0 right-0 z-30 bg-background border-b">
       <div className="container flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center">
-          <Link
+          <NavLink
             to="/"
             className="text-xl font-bold text-primary flex items-center"
           >
             <span className="hidden sm:inline">CryptoSignals</span>
             <span className="sm:hidden">CS</span>
-          </Link>
+          </NavLink>
         </div>
 
         <div className="flex items-center gap-2">
@@ -127,21 +95,6 @@ const Navbar = () => {
                         {link.name}
                       </NavLink>
                     ))}
-                    
-                    {isAuthenticated && (
-                      <Button
-                        variant="outline"
-                        className="mt-4"
-                        onClick={() => {
-                          localStorage.removeItem("isAuthenticated");
-                          localStorage.removeItem("userEmail");
-                          localStorage.removeItem("userName");
-                          window.location.href = "/login";
-                        }}
-                      >
-                        Sair
-                      </Button>
-                    )}
                   </div>
                 </div>
               )}
@@ -166,22 +119,6 @@ const Navbar = () => {
                   </span>
                 </NavLink>
               ))}
-              
-              {isAuthenticated && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-2"
-                  onClick={() => {
-                    localStorage.removeItem("isAuthenticated");
-                    localStorage.removeItem("userEmail");
-                    localStorage.removeItem("userName");
-                    window.location.href = "/login";
-                  }}
-                >
-                  Sair
-                </Button>
-              )}
             </nav>
           )}
         </div>
