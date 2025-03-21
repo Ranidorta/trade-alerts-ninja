@@ -247,44 +247,30 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   return { value: formattedValue, color: "text-gray-500" };
 };
 
-// Enhanced RSI calculation based on the provided Python code
+// Improved RSI calculation based on Python code
 const calculateRSI = (prices: number[], period: number = 14): number => {
   if (prices.length <= period) {
     return 50; // Default value if not enough data
   }
   
-  // Calculate price changes
+  // Calculate price deltas
   const deltas = prices.slice(1).map((price, i) => price - prices[i]);
-  const seed = deltas.slice(0, period);
   
-  // Initialize with first period
-  let up = seed.filter(d => d >= 0).reduce((sum, d) => sum + d, 0) / period;
-  let down = Math.abs(seed.filter(d => d < 0).reduce((sum, d) => sum + d, 0)) / period;
+  // Initialize gains and losses
+  const gains = deltas.map(delta => delta > 0 ? delta : 0);
+  const losses = deltas.map(delta => delta < 0 ? -delta : 0);
+  
+  // Calculate average gain and loss for the initial period
+  const avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
+  const avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
   
   // Prevent division by zero
-  if (down === 0) {
+  if (avgLoss === 0) {
     return 100;
   }
   
-  // Calculate remaining periods using smoother method
-  for (let i = period + 1; i < deltas.length; i++) {
-    const delta = deltas[i - 1];
-    let upVal = 0;
-    let downVal = 0;
-    
-    if (delta > 0) {
-      upVal = delta;
-    } else {
-      downVal = -delta;
-    }
-    
-    // Calculate smoothed moving averages
-    up = (up * (period - 1) + upVal) / period;
-    down = (down * (period - 1) + downVal) / period;
-  }
-  
   // Calculate RS and RSI
-  const rs = up / down;
+  const rs = avgGain / avgLoss;
   return 100 - (100 / (1 + rs));
 };
 
@@ -306,7 +292,7 @@ const calculateEMA = (prices: number[], period: number): number[] => {
   return emaData;
 };
 
-// Calculate MACD based on the provided Python code
+// Calculate MACD based on the Python code
 const calculateMACD = (
   prices: number[], 
   shortWindow: number = 12, 
@@ -339,7 +325,7 @@ const calculateMACD = (
   return { macdLine, signalLine, histogram };
 };
 
-// Calculate trading indicators (improved version)
+// Calculate trading indicators (improved version aligned with Python code)
 export const calculateIndicators = (data: any[]) => {
   if (!data || data.length < 26) {
     console.error("Insufficient data for technical analysis");
@@ -412,7 +398,7 @@ export const checkTargetsHit = (targets: PriceTarget[], candles: any[], type: "L
   return updatedTargets;
 };
 
-// Generate trading signal (improved version with better indicators)
+// Generate trading signal (improved version matching Python code)
 export const generateTradingSignal = async (symbol: string): Promise<TradingSignal | null> => {
   try {
     const marketData = await fetchBybitKlines(symbol);
@@ -441,20 +427,16 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     
     let signal: TradingSignal | null = null;
     
-    // Enhanced signal generation logic with improved indicators
-    if (
-      (shortMa > longMa && macd > 0 && macd > macdSignal && rsi < 70 && rsi > 40 && currentPrice > lowerBand) ||
-      (macdHistogram > 0 && macdHistogram > macdHistogram && rsi < 70 && rsi > 45)
-    ) {
-      // Strong LONG signal
+    // Logic aligned with the Python code
+    if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
+      // LONG signal
       const entryPrice = currentPrice;
-      const stopLoss = Math.min(entryPrice * 0.985, entryPrice - (2 * stdDev));
+      const stopLoss = entryPrice * 0.98;
       
-      // More aggressive targets for stronger signals
       const targets = [
         { level: 1, price: entryPrice * 1.01, hit: false },
-        { level: 2, price: entryPrice * 1.025, hit: false },
-        { level: 3, price: entryPrice * 1.04, hit: false }
+        { level: 2, price: entryPrice * 1.02, hit: false },
+        { level: 3, price: entryPrice * 1.03, hit: false }
       ];
       
       signal = {
@@ -477,19 +459,15 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         type: "LONG",
         currentPrice: currentPrice
       };
-    } else if (
-      (shortMa < longMa && macd < 0 && macd < macdSignal && rsi > 30 && rsi < 60 && currentPrice < upperBand) ||
-      (macdHistogram < 0 && macdHistogram < macdHistogram && rsi > 30 && rsi < 55)
-    ) {
-      // Strong SHORT signal
+    } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
+      // SHORT signal
       const entryPrice = currentPrice;
-      const stopLoss = Math.max(entryPrice * 1.015, entryPrice + (2 * stdDev));
+      const stopLoss = entryPrice * 1.02;
       
-      // More aggressive targets for stronger signals
       const targets = [
         { level: 1, price: entryPrice * 0.99, hit: false },
-        { level: 2, price: entryPrice * 0.975, hit: false },
-        { level: 3, price: entryPrice * 0.96, hit: false }
+        { level: 2, price: entryPrice * 0.98, hit: false },
+        { level: 3, price: entryPrice * 0.97, hit: false }
       ];
       
       signal = {
@@ -515,7 +493,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
       // Always generate a potential signal for selected symbols, even if conditions aren't strong
       const entryPrice = currentPrice;
-      const isBullish = rsi > 50 || (macd > 0 && macd > macdSignal) || shortMa > longMa;
+      const isBullish = rsi > 50 || macd > 0 || shortMa > longMa;
       
       if (isBullish) {
         const stopLoss = entryPrice * 0.99;
@@ -748,4 +726,3 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
-
