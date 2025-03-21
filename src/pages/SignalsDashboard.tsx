@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -26,8 +25,6 @@ import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
 
-const DEFAULT_REFRESH_INTERVAL = 60000; // 1 minute in milliseconds
-
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -36,18 +33,16 @@ const SignalsDashboard = () => {
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [coinSearch, setCoinSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   
-  // Function to load signals data
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Generate real signals from Bybit
       const realSignals = await generateAllSignals();
       if (realSignals.length > 0) {
         setSignals(realSignals);
@@ -73,15 +68,14 @@ const SignalsDashboard = () => {
     }
   }, [toast]);
   
-  // Initial data load
   useEffect(() => {
-    loadSignalsData();
-  }, [loadSignalsData]);
+    setIsLoading(false);
+  }, []);
   
-  // Set up auto-refresh interval
   useEffect(() => {
     if (!autoRefresh) return;
     
+    const DEFAULT_REFRESH_INTERVAL = 60000;
     const intervalId = setInterval(() => {
       console.log("Auto-refreshing signals data...");
       loadSignalsData();
@@ -90,16 +84,13 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
-  // Filter and sort signals whenever dependencies change
   useEffect(() => {
     let result = [...signals];
     
-    // Apply status filter
     if (statusFilter !== "ALL") {
       result = result.filter(signal => signal.status === statusFilter);
     }
     
-    // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(signal => 
@@ -108,7 +99,6 @@ const SignalsDashboard = () => {
       );
     }
     
-    // Apply sorting
     result.sort((a, b) => {
       if (sortBy === "newest") {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -155,7 +145,6 @@ const SignalsDashboard = () => {
     setIsSearching(true);
     let symbol = coinSearch;
     
-    // Add USDT suffix if not present
     if (!symbol.endsWith("USDT")) {
       symbol = `${symbol}USDT`;
     }
@@ -170,7 +159,6 @@ const SignalsDashboard = () => {
       
       if (signal) {
         setSignals(prevSignals => {
-          // Check if this signal already exists (by ID)
           const exists = prevSignals.some(s => s.id === signal.id);
           if (exists) {
             toast({
@@ -185,11 +173,9 @@ const SignalsDashboard = () => {
             description: `New ${signal.type} signal for ${symbol} has been added to your dashboard.`,
           });
           
-          // Add the new signal at the beginning of the array
           return [signal, ...prevSignals];
         });
         
-        // Clear the search field
         setCoinSearch("");
       } else {
         toast({
@@ -221,9 +207,7 @@ const SignalsDashboard = () => {
       const newSignals = await generateAllSignals();
       
       if (newSignals.length > 0) {
-        // Add new signals to existing ones
         setSignals(prevSignals => {
-          // Merge signals, avoiding duplicates by ID
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
           
@@ -295,7 +279,6 @@ const SignalsDashboard = () => {
     ));
   };
   
-  // Format the last updated time
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
@@ -312,9 +295,11 @@ const SignalsDashboard = () => {
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
               Using Bybit API Data
             </span>
-            <span className="text-xs text-slate-500">
-              Last updated: {formatLastUpdated()}
-            </span>
+            {signals.length > 0 && (
+              <span className="text-xs text-slate-500">
+                Last updated: {formatLastUpdated()}
+              </span>
+            )}
           </div>
         </div>
         
@@ -335,7 +320,6 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      {/* Search for specific coin signals */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Generate Signal for Specific Coin</h2>
@@ -466,7 +450,23 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      {/* Signals Grid */}
+      {!isLoading && signals.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+            <Zap className="h-8 w-8" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Generate your first signals</h3>
+          <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
+            Click the "Generate Signals" button to analyze the market and find trading opportunities, 
+            or search for a specific cryptocurrency above.
+          </p>
+          <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Analyzing Market...' : 'Generate Signals Now'}
+          </Button>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {isLoading ? (
           renderSkeletons()
@@ -478,7 +478,7 @@ const SignalsDashboard = () => {
               refreshInterval={30000} // Update target status every 30 seconds
             />
           ))
-        ) : (
+        ) : signals.length > 0 ? (
           <div className="col-span-full py-12 text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
               <Search className="h-6 w-6 text-slate-400" />
@@ -490,7 +490,7 @@ const SignalsDashboard = () => {
                 "There are no signals with the selected filter. Try changing your filters or generate new signals."}
             </p>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

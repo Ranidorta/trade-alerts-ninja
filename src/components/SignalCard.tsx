@@ -162,7 +162,7 @@ Leverage: ${signal.leverage}x
           {priceMovement && signal.status === "ACTIVE" && (
             <div className={`flex items-center text-sm ${priceMovement.isProfit ? 'text-success' : 'text-error'}`}>
               {priceMovement.icon}
-              <span className="ml-1">
+              <span className="ml-1 truncate">
                 {priceMovement.percentChange.toFixed(2)}% 
                 ({priceMovement.isProfit ? '+' : ''}{priceMovement.diff.toFixed(isShort && signal.entryAvg < 1 ? 4 : 2)})
               </span>
@@ -174,14 +174,14 @@ Leverage: ${signal.leverage}x
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="space-y-1">
             <div className="text-xs text-slate-500 dark:text-slate-400">Entry Zone</div>
-            <div className="font-medium">{signal.entryMin} - {signal.entryMax}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Average: {signal.entryAvg}</div>
+            <div className="font-medium truncate">{signal.entryMin} - {signal.entryMax}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">Average: {signal.entryAvg}</div>
           </div>
           <div className="space-y-1">
             <div className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</div>
-            <div className="font-medium text-error">{signal.stopLoss}</div>
+            <div className="font-medium text-error truncate">{signal.stopLoss}</div>
             {signal.entryAvg && (
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                 Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
               </div>
             )}
@@ -208,11 +208,11 @@ Leverage: ${signal.leverage}x
                   target.hit ? "bg-success/10 border-success/30" : "bg-slate-50 dark:bg-slate-800/50"
                 )}
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium">{`TP${index + 1}`}</div>
                   <div className="font-medium truncate">{target.price}</div>
                 </div>
-                {target.hit && <Check className="h-4 w-4 text-success" />}
+                {target.hit && <Check className="h-4 w-4 text-success flex-shrink-0" />}
               </div>
             ))}
           </div>
