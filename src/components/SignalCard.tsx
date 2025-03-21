@@ -173,26 +173,26 @@ Leverage: ${signal.leverage}x
       <CardContent className="pb-2">
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="space-y-1">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Entry Zone</p>
-            <p className="font-medium">{signal.entryMin} - {signal.entryMax}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Average: {signal.entryAvg}</p>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Entry Zone</div>
+            <div className="font-medium">{signal.entryMin} - {signal.entryMax}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Average: {signal.entryAvg}</div>
           </div>
           <div className="space-y-1">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</p>
-            <p className="font-medium text-error">{signal.stopLoss}</p>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</div>
+            <div className="font-medium text-error">{signal.stopLoss}</div>
             {signal.entryAvg && (
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
                 Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
-              </p>
+              </div>
             )}
           </div>
         </div>
         
         <div>
           <div className="flex justify-between items-center mb-1">
-            <p className="text-xs text-slate-500 dark:text-slate-400">Targets</p>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Targets</div>
             {signal.status === "ACTIVE" && calculateProgress() > 0 && (
-              <p className="text-xs text-success">{Math.round(calculateProgress())}% Complete</p>
+              <div className="text-xs text-success">{Math.round(calculateProgress())}% Complete</div>
             )}
           </div>
           {signal.status === "ACTIVE" && (
@@ -209,8 +209,8 @@ Leverage: ${signal.leverage}x
                 )}
               >
                 <div>
-                  <p className="text-xs font-medium">{`TP${index + 1}`}</p>
-                  <p className="font-medium">{target.price}</p>
+                  <div className="text-xs font-medium">{`TP${index + 1}`}</div>
+                  <div className="font-medium truncate">{target.price}</div>
                 </div>
                 {target.hit && <Check className="h-4 w-4 text-success" />}
               </div>
@@ -222,37 +222,37 @@ Leverage: ${signal.leverage}x
           <div className="mt-4 pt-4 border-t animate-fade-in">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Leverage</p>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Leverage</div>
                 <div className="flex items-center mt-1">
                   <Layers className="h-4 w-4 mr-1 text-yellow-500" />
-                  <p className="font-medium">{signal.leverage}x</p>
+                  <div className="font-medium">{signal.leverage}x</div>
                 </div>
               </div>
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Current Price</p>
-                <p className="font-medium mt-1">{signal.currentPrice || "N/A"}</p>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Current Price</div>
+                <div className="font-medium mt-1 truncate">{signal.currentPrice || "N/A"}</div>
               </div>
             </div>
             
             {signal.status === "COMPLETED" && signal.profit !== undefined && (
               <div className="mt-4 pt-4 border-t">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Result</p>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Result</div>
                 <div className={`flex items-center mt-1 ${signal.profit >= 0 ? 'text-success' : 'text-error'}`}>
                   {signal.profit >= 0 ? 
                     <TrendingUp className="h-4 w-4 mr-1" /> : 
                     <TrendingDown className="h-4 w-4 mr-1" />
                   }
-                  <p className="font-medium">
+                  <div className="font-medium">
                     {signal.profit >= 0 ? '+' : ''}{signal.profit}%
-                  </p>
+                  </div>
                 </div>
               </div>
             )}
             
             {signal.notes && (
               <div className="mt-4 pt-4 border-t">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Notes</p>
-                <p className="text-sm mt-1">{signal.notes}</p>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Notes</div>
+                <div className="text-sm mt-1">{signal.notes}</div>
               </div>
             )}
           </div>
