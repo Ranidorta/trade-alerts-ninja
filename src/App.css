@@ -81,3 +81,33 @@ body {
   border: 1px solid var(--panel-border);
   box-shadow: var(--panel-glow);
 }
+
+/* Crypto-specific styles */
+.text-crypto-green {
+  color: #00c853;
+}
+
+.text-crypto-red {
+  color: #ff3d00;
+}
+
+/* Ticker animation */
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.ticker-container {
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.ticker-content {
+  display: inline-flex;
+  animation: ticker 30s linear infinite;
+}
