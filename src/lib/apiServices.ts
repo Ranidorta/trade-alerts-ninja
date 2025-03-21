@@ -379,7 +379,8 @@ export const calculateIndicators = (data: any[]) => {
     highPrices,
     lowPrices,
     upperBand,
-    lowerBand
+    lowerBand,
+    stdDev
   };
 };
 
@@ -431,7 +432,8 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       highPrices, 
       lowPrices, 
       upperBand, 
-      lowerBand 
+      lowerBand,
+      stdDev
     } = indicators;
     
     const volatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
@@ -746,3 +748,4 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
+

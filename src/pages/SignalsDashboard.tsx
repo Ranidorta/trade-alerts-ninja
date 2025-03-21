@@ -8,6 +8,7 @@ import {
   Search, 
   Bell,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { generateAllSignals } from "@/lib/apiServices";
+import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import GenericSearchBar from "@/components/GenericSearchBar";
 
 const DEFAULT_REFRESH_INTERVAL = 60000; // 1 minute in milliseconds
 
@@ -35,6 +38,8 @@ const SignalsDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [coinSearch, setCoinSearch] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   
   // Function to load signals data
@@ -132,6 +137,77 @@ const SignalsDashboard = () => {
       title: "Subscribed to notifications",
       description: "You'll receive alerts when new signals are posted",
     });
+  };
+  
+  const handleCoinSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCoinSearch(e.target.value.toUpperCase());
+  };
+
+  const handleGenerateSignalForCoin = async () => {
+    if (!coinSearch) {
+      toast({
+        title: "Please enter a symbol",
+        description: "Enter a cryptocurrency symbol to generate signals (e.g., BTCUSDT, ETHUSDT)",
+      });
+      return;
+    }
+
+    setIsSearching(true);
+    let symbol = coinSearch;
+    
+    // Add USDT suffix if not present
+    if (!symbol.endsWith("USDT")) {
+      symbol = `${symbol}USDT`;
+    }
+
+    try {
+      toast({
+        title: "Generating signal",
+        description: `Analyzing market data for ${symbol}...`,
+      });
+
+      const signal = await generateTradingSignal(symbol);
+      
+      if (signal) {
+        setSignals(prevSignals => {
+          // Check if this signal already exists (by ID)
+          const exists = prevSignals.some(s => s.id === signal.id);
+          if (exists) {
+            toast({
+              title: "Signal already exists",
+              description: `A signal for ${symbol} already exists in your dashboard.`,
+            });
+            return prevSignals;
+          }
+          
+          toast({
+            title: "Signal generated",
+            description: `New ${signal.type} signal for ${symbol} has been added to your dashboard.`,
+          });
+          
+          // Add the new signal at the beginning of the array
+          return [signal, ...prevSignals];
+        });
+        
+        // Clear the search field
+        setCoinSearch("");
+      } else {
+        toast({
+          title: "No signal generated",
+          description: `Could not generate a signal for ${symbol}. Market conditions may not meet criteria.`,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error generating signal for specific coin:", error);
+      toast({
+        title: "Error generating signal",
+        description: `Failed to generate signal for ${symbol}.`,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSearching(false);
+    }
   };
   
   const handleGenerateSignals = async () => {
@@ -257,6 +333,37 @@ const SignalsDashboard = () => {
             Subscribe to Alerts
           </Button>
         </div>
+      </div>
+      
+      {/* Search for specific coin signals */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Generate Signal for Specific Coin</h2>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Enter crypto symbol (e.g., BTC, ETH)"
+              value={coinSearch}
+              onChange={handleCoinSearchChange}
+              className="pr-10"
+            />
+          </div>
+          
+          <Button 
+            onClick={handleGenerateSignalForCoin} 
+            disabled={isSearching || !coinSearch}
+            className="shrink-0"
+          >
+            <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
+            {isSearching ? 'Analyzing...' : 'Generate Signal'}
+          </Button>
+        </div>
+        
+        <p className="text-xs text-slate-500 mt-2">
+          Enter a cryptocurrency symbol to generate a trading signal based on current market conditions.
+        </p>
       </div>
       
       <div className="flex flex-col md:flex-row gap-4 mb-8">
