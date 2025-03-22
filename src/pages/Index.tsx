@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
 import SignalCard from "@/components/SignalCard";
+import NinjaLogo from "@/components/NinjaLogo";
 import { Button } from "@/components/ui/button";
 import { 
   Bell, 
@@ -58,6 +59,11 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <Hero />
+      
+      {/* Ninja Logo Section */}
+      <section className="py-10 flex justify-center">
+        <NinjaLogo link="/signals" className="mx-auto" />
+      </section>
       
       {/* Features Section */}
       <section className="py-16 bg-slate-50 dark:bg-slate-900/50">

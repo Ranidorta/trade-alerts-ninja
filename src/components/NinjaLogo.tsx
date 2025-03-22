@@ -1,0 +1,27 @@
+
+import { Link } from "react-router-dom";
+
+interface NinjaLogoProps {
+  link?: string;
+  className?: string;
+}
+
+const NinjaLogo = ({ link = "/signals", className = "" }: NinjaLogoProps) => {
+  return (
+    <Link 
+      to={link}
+      className={`block transition-transform hover:scale-105 ${className}`}
+      aria-label="Ninja Trading Logo"
+    >
+      <img 
+        src="/lovable-uploads/1a486e4e-4234-474b-ba38-f49d46002127.png" 
+        alt="Ninja Trading Logo" 
+        className="rounded-full shadow-lg hover:shadow-cyan-500/50"
+        width={200}
+        height={200}
+      />
+    </Link>
+  );
+};
+
+export default NinjaLogo;
