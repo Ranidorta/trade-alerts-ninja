@@ -7,6 +7,19 @@ interface NinjaLogoProps {
 }
 
 const NinjaLogo = ({ link = "/signals", className = "" }: NinjaLogoProps) => {
+  // Se estiver sendo usado na navbar (detectado pelo tamanho da classe), não usar o Link
+  if (className.includes("w-full h-full")) {
+    return (
+      <img 
+        src="/lovable-uploads/1a486e4e-4234-474b-ba38-f49d46002127.png" 
+        alt="Ninja Trading Logo" 
+        className="rounded-full shadow-sm"
+        width="100%"
+        height="100%"
+      />
+    );
+  }
+
   return (
     <Link 
       to={link}

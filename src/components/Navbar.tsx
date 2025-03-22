@@ -1,10 +1,10 @@
-
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Menu, X, BarChart3, History, Activity, Lock, LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ThemeToggle } from "./ThemeToggle";
+import NinjaLogo from "./NinjaLogo";
 
 const Navbar = () => {
   const location = useLocation();
@@ -58,34 +58,7 @@ const Navbar = () => {
             className="text-xl font-bold text-primary flex items-center"
           >
             <div className="w-8 h-8 mr-2 flex-shrink-0">
-              <svg viewBox="0 0 100 100" className="w-full h-full">
-                <path 
-                  d="M50,10 C60,10 70,20 75,30 C80,40 75,60 65,70 C55,80 45,75 35,65 C25,55 20,45 25,35 C30,25 40,10 50,10 Z" 
-                  fill="currentColor" 
-                  className="text-primary animate-pulse-subtle"
-                />
-                <path 
-                  d="M45,35 C48,32 52,32 55,35 M40,50 C45,55 55,55 60,50 M35,45 L42,38 M58,38 L65,45" 
-                  stroke="black" 
-                  strokeWidth="2" 
-                  fill="none"
-                  className="dark:stroke-white" 
-                />
-                <path 
-                  d="M45,30 L55,30 L50,20 Z" 
-                  fill="black" 
-                  className="dark:fill-white" 
-                />
-                <circle cx="40" cy="40" r="3" fill="black" className="dark:fill-white" />
-                <circle cx="60" cy="40" r="3" fill="black" className="dark:fill-white" />
-                <path 
-                  d="M40,65 L50,75 L60,65" 
-                  stroke="black" 
-                  strokeWidth="2" 
-                  fill="none" 
-                  className="dark:stroke-white"
-                />
-              </svg>
+              <NinjaLogo className="w-full h-full" />
             </div>
             <span className="hidden sm:inline font-['Russo_One'] bg-clip-text text-transparent bg-gradient-to-r from-[#00ffff] to-[#0077ff] drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">Trade Ninja</span>
             <span className="sm:hidden font-['Russo_One'] bg-clip-text text-transparent bg-gradient-to-r from-[#00ffff] to-[#0077ff] drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">TN</span>
