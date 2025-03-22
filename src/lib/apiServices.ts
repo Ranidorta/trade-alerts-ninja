@@ -325,6 +325,45 @@ const calculateMACD = (
   return { macdLine, signalLine, histogram };
 };
 
+// Calculate Simple Moving Average
+const calculateSMA = (prices: number[], window: number): number => {
+  if (prices.length < window) {
+    return prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  }
+  return prices.slice(-window).reduce((sum, price) => sum + price, 0) / window;
+};
+
+// Calculate Bollinger Bands
+const calculateBollingerBands = (prices: number[], window: number = 20, deviations: number = 2): { 
+  middle: number;
+  upper: number;
+  lower: number;
+} => {
+  // Calculate middle band (SMA)
+  const middleBand = calculateSMA(prices, window);
+  
+  // Calculate standard deviation
+  const stdDev = Math.sqrt(
+    prices.slice(-window).reduce((sum, price) => sum + Math.pow(price - middleBand, 2), 0) / window
+  );
+  
+  // Calculate upper and lower bands
+  const upperBand = middleBand + (deviations * stdDev);
+  const lowerBand = middleBand - (deviations * stdDev);
+  
+  return { middle: middleBand, upper: upperBand, lower: lowerBand };
+};
+
+// Generate signal based on MA crossover (similar to the Python strategy)
+const generateMACrossoverSignal = (shortMa: number, longMa: number): number => {
+  if (shortMa > longMa) {
+    return 1; // Buy signal
+  } else if (shortMa < longMa) {
+    return -1; // Sell signal
+  }
+  return 0; // Neutral
+};
+
 // Calculate trading indicators (improved version aligned with Python code)
 export const calculateIndicators = (data: any[]) => {
   if (!data || data.length < 26) {
@@ -336,9 +375,9 @@ export const calculateIndicators = (data: any[]) => {
   const highPrices = data.map(candle => parseFloat(candle[2]));
   const lowPrices = data.map(candle => parseFloat(candle[3]));
   
-  // Calculate moving averages
-  const shortMa = closingPrices.slice(-5).reduce((a, b) => a + b, 0) / 5;
-  const longMa = closingPrices.slice(-15).reduce((a, b) => a + b, 0) / 15;
+  // Calculate moving averages (more align with Python code: short=50, long=200)
+  const shortMa = calculateSMA(closingPrices, 5); // Using 5 instead of 50 for more responsiveness
+  const longMa = calculateSMA(closingPrices, 15); // Using 15 instead of 200 for more responsiveness
   
   // Calculate RSI using the improved algorithm
   const rsi = calculateRSI(closingPrices);
@@ -347,12 +386,10 @@ export const calculateIndicators = (data: any[]) => {
   const macdResult = calculateMACD(closingPrices);
   
   // Calculate Bollinger Bands
-  const ma20 = closingPrices.slice(-20).reduce((a, b) => a + b, 0) / 20;
-  const stdDev = Math.sqrt(
-    closingPrices.slice(-20).reduce((sum, price) => sum + Math.pow(price - ma20, 2), 0) / 20
-  );
-  const upperBand = ma20 + (2 * stdDev);
-  const lowerBand = ma20 - (2 * stdDev);
+  const bollingerBands = calculateBollingerBands(closingPrices);
+  
+  // Generate signal based on MA crossover strategy
+  const signal = generateMACrossoverSignal(shortMa, longMa);
   
   return { 
     shortMa, 
@@ -364,9 +401,11 @@ export const calculateIndicators = (data: any[]) => {
     currentPrice: closingPrices[closingPrices.length - 1],
     highPrices,
     lowPrices,
-    upperBand,
-    lowerBand,
-    stdDev
+    upperBand: bollingerBands.upper,
+    lowerBand: bollingerBands.lower,
+    middleBand: bollingerBands.middle,
+    signal,
+    stdDev: (bollingerBands.upper - bollingerBands.middle) / 2
   };
 };
 
@@ -404,8 +443,8 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     const marketData = await fetchBybitKlines(symbol);
     if (!marketData) return null;
     
-    const indicators = calculateIndicators(marketData);
-    if (!indicators.shortMa || !indicators.longMa) return null;
+    const technicalIndicators = calculateIndicators(marketData);
+    if (!technicalIndicators.shortMa || !technicalIndicators.longMa) return null;
     
     const { 
       shortMa, 
@@ -419,15 +458,16 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       lowPrices, 
       upperBand, 
       lowerBand,
+      signal,
       stdDev
-    } = indicators;
+    } = technicalIndicators;
     
     const volatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
     const leverage = Math.min(10, Math.max(2, Math.floor(volatility * 50)));
     
-    let signal: TradingSignal | null = null;
+    let tradingSignal: TradingSignal | null = null;
     
-    // Logic aligned with the Python code
+    // Logic aligned with the Python code - using MA crossover strategy
     if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
       // LONG signal
       const entryPrice = currentPrice;
@@ -439,7 +479,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         { level: 3, price: entryPrice * 1.03, hit: false }
       ];
       
-      signal = {
+      tradingSignal = {
         id: `${symbol}-${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -454,10 +494,21 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `FORTE SINAL DE COMPRA: RSI(${rsi.toFixed(2)}) com MACD(${macd.toFixed(4)}) cruzando Signal(${macdSignal.toFixed(4)})`,
+        reason: `STRONG BUY SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) crossing Signal(${macdSignal.toFixed(4)})`,
         leverage: leverage,
         type: "LONG",
-        currentPrice: currentPrice
+        currentPrice: currentPrice,
+        technicalIndicators: {
+          rsi,
+          macd,
+          macdSignal,
+          macdHistogram,
+          shortMa,
+          longMa,
+          upperBand,
+          lowerBand,
+          signal: 1
+        }
       };
     } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
       // SHORT signal
@@ -470,7 +521,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         { level: 3, price: entryPrice * 0.97, hit: false }
       ];
       
-      signal = {
+      tradingSignal = {
         id: `${symbol}-${Date.now()}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -485,10 +536,21 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         targets: targets,
         status: "ACTIVE",
         timeframe: "5m",
-        reason: `FORTE SINAL DE VENDA: RSI(${rsi.toFixed(2)}) com MACD(${macd.toFixed(4)}) abaixo de Signal(${macdSignal.toFixed(4)})`,
+        reason: `STRONG SELL SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) below Signal(${macdSignal.toFixed(4)})`,
         leverage: leverage,
         type: "SHORT",
-        currentPrice: currentPrice
+        currentPrice: currentPrice,
+        technicalIndicators: {
+          rsi,
+          macd,
+          macdSignal,
+          macdHistogram,
+          shortMa,
+          longMa,
+          upperBand,
+          lowerBand,
+          signal: -1
+        }
       };
     } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
       // Always generate a potential signal for selected symbols, even if conditions aren't strong
@@ -503,7 +565,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           { level: 3, price: entryPrice * 1.015, hit: false }
         ];
         
-        signal = {
+        tradingSignal = {
           id: `${symbol}-${Date.now()}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -518,10 +580,21 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           targets: targets,
           status: "WAITING", // Mark as "WAITING" since conditions aren't strong
           timeframe: "5m",
-          reason: `Possível entrada de COMPRA (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
+          reason: `Possible BUY entry (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
           leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
           type: "LONG",
-          currentPrice: currentPrice
+          currentPrice: currentPrice,
+          technicalIndicators: {
+            rsi,
+            macd,
+            macdSignal,
+            macdHistogram,
+            shortMa,
+            longMa,
+            upperBand,
+            lowerBand,
+            signal: 0
+          }
         };
       } else {
         const stopLoss = entryPrice * 1.01;
@@ -531,7 +604,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           { level: 3, price: entryPrice * 0.985, hit: false }
         ];
         
-        signal = {
+        tradingSignal = {
           id: `${symbol}-${Date.now()}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -546,38 +619,50 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           targets: targets,
           status: "WAITING", // Mark as "WAITING" since conditions aren't strong
           timeframe: "5m",
-          reason: `Possível entrada de VENDA (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
+          reason: `Possible SELL entry (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
           leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
           type: "SHORT",
-          currentPrice: currentPrice
+          currentPrice: currentPrice,
+          technicalIndicators: {
+            rsi,
+            macd,
+            macdSignal,
+            macdHistogram,
+            shortMa,
+            longMa,
+            upperBand,
+            lowerBand,
+            signal: 0
+          }
         };
       }
     }
     
-    if (signal) {
+    if (tradingSignal) {
       // Send signal to Telegram with enhanced message
       const signalMessage = 
-        `🔥 SINAL DE TRADING NINJA 🔥\n\n` +
-        `${signal.type === 'LONG' ? '🟢 COMPRA' : '🔴 VENDA'} ${signal.symbol}\n\n` +
-        `⚡ Entrada: ${formatPrice(signal.entryMin)} - ${formatPrice(signal.entryMax)}\n` +
-        `🛑 Stop Loss: ${formatPrice(signal.stopLoss)}\n` +
-        `🎯 Alvos:\n` +
-        `  ✅ TP1: ${formatPrice(signal.targets[0].price)}\n` +
-        `  ✅ TP2: ${formatPrice(signal.targets[1].price)}\n` +
-        `  ✅ TP3: ${formatPrice(signal.targets[2].price)}\n\n` +
-        `💰 Alavancagem: ${signal.leverage}x\n` +
-        `⏱️ Timeframe: ${signal.timeframe}\n` +
-        `📊 Status: ${signal.status}\n\n` +
-        `📈 Indicadores:\n` +
+        `🔥 TRADING NINJA SIGNAL 🔥\n\n` +
+        `${tradingSignal.type === 'LONG' ? '🟢 BUY' : '🔴 SELL'} ${tradingSignal.symbol}\n\n` +
+        `⚡ Entry: ${formatPrice(tradingSignal.entryMin)} - ${formatPrice(tradingSignal.entryMax)}\n` +
+        `🛑 Stop Loss: ${formatPrice(tradingSignal.stopLoss)}\n` +
+        `🎯 Targets:\n` +
+        `  TP1: ${formatPrice(tradingSignal.targets[0].price)}\n` +
+        `  TP2: ${formatPrice(tradingSignal.targets[1].price)}\n` +
+        `  TP3: ${formatPrice(tradingSignal.targets[2].price)}\n\n` +
+        `💰 Leverage: ${tradingSignal.leverage}x\n` +
+        `⏱️ Timeframe: ${tradingSignal.timeframe}\n` +
+        `📊 Status: ${tradingSignal.status}\n\n` +
+        `📈 Indicators:\n` +
         `  RSI: ${rsi.toFixed(2)}\n` +
         `  MACD: ${macd.toFixed(4)}\n` +
         `  Signal: ${macdSignal.toFixed(4)}\n` +
-        `  Histogram: ${macdHistogram.toFixed(4)}`;
+        `  Histogram: ${macdHistogram.toFixed(4)}\n` +
+        `  MA Crossover: ${signal === 1 ? 'BUY' : signal === -1 ? 'SELL' : 'NEUTRAL'}`;
         
       await sendTelegramMessage(signalMessage);
     }
     
-    return signal;
+    return tradingSignal;
   } catch (error) {
     console.error(`Error generating trading signal for ${symbol}:`, error);
     return null;
@@ -600,6 +685,15 @@ export const updateSignalStatus = async (signal: TradingSignal): Promise<Trading
     const currentPrice = parseFloat(marketData[0][4]);
     updatedSignal.currentPrice = currentPrice;
     updatedSignal.updatedAt = new Date().toISOString();
+    
+    // Update technical indicators
+    const indicators = calculateIndicators(marketData);
+    if (updatedSignal.technicalIndicators) {
+      updatedSignal.technicalIndicators = {
+        ...updatedSignal.technicalIndicators,
+        ...indicators
+      };
+    }
     
     // Check if targets have been hit
     if (updatedSignal.targets) {
@@ -726,3 +820,4 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
+

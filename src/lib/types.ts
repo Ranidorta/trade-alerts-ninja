@@ -1,3 +1,4 @@
+
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -6,6 +7,18 @@ export interface PriceTarget {
   level: number;
   price: number;
   hit?: boolean;
+}
+
+export interface TechnicalIndicators {
+  rsi?: number;
+  macd?: number;
+  macdSignal?: number;
+  macdHistogram?: number;
+  shortMa?: number;
+  longMa?: number;
+  upperBand?: number;
+  lowerBand?: number;
+  signal?: number; // 1 for buy, -1 for sell, 0 for neutral
 }
 
 export interface TradingSignal {
@@ -31,6 +44,7 @@ export interface TradingSignal {
   timeframe?: string;
   reason?: string;
   type?: SignalType;
+  technicalIndicators?: TechnicalIndicators;
 }
 
 export interface Feature {

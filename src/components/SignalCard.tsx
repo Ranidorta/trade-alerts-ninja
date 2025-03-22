@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check } from "lucide-react";
+import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check, BarChart } from "lucide-react";
 import StatusBadge from "./StatusBadge";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import CryptoChart from "./CryptoChart";
 
 interface SignalCardProps {
   signal: TradingSignal;
@@ -24,6 +25,7 @@ interface SignalCardProps {
 const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [signal, setSignal] = useState(initialSignal);
+  const [showChart, setShowChart] = useState(false);
   const { toast } = useToast();
   
   const isShort = signal.type === "SHORT";
@@ -233,6 +235,80 @@ Leverage: ${signal.leverage}x
                 <div className="font-medium mt-1 truncate">{signal.currentPrice || "N/A"}</div>
               </div>
             </div>
+            
+            {signal.technicalIndicators && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Technical Indicators</div>
+                  <button 
+                    onClick={() => setShowChart(!showChart)}
+                    className="text-xs text-primary hover:underline flex items-center"
+                  >
+                    <BarChart className="h-3 w-3 mr-1" />
+                    {showChart ? 'Hide Chart' : 'Show Chart'}
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
+                  {signal.technicalIndicators.rsi && (
+                    <div className="flex justify-between">
+                      <span className="text-xs">RSI:</span>
+                      <span className={cn(
+                        "text-xs font-medium",
+                        signal.technicalIndicators.rsi > 70 ? "text-crypto-red" : 
+                        signal.technicalIndicators.rsi < 30 ? "text-crypto-green" : 
+                        "text-slate-600"
+                      )}>
+                        {signal.technicalIndicators.rsi.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {signal.technicalIndicators.macd !== undefined && (
+                    <div className="flex justify-between">
+                      <span className="text-xs">MACD:</span>
+                      <span className={cn(
+                        "text-xs font-medium",
+                        signal.technicalIndicators.macd > 0 ? "text-crypto-green" : "text-crypto-red"
+                      )}>
+                        {signal.technicalIndicators.macd.toFixed(4)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {signal.technicalIndicators.shortMa && signal.technicalIndicators.longMa && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-xs">Short MA:</span>
+                        <span className="text-xs font-medium">
+                          {signal.technicalIndicators.shortMa.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-xs">Long MA:</span>
+                        <span className="text-xs font-medium">
+                          {signal.technicalIndicators.longMa.toFixed(2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                
+                {showChart && signal.entryAvg && signal.stopLoss && signal.targets && (
+                  <div className="mt-4">
+                    <CryptoChart 
+                      symbol={signal.symbol}
+                      type={signal.type || "LONG"}
+                      entryPrice={signal.entryAvg}
+                      stopLoss={signal.stopLoss}
+                      targets={signal.targets}
+                      showIndicators={true}
+                      technicalIndicators={signal.technicalIndicators}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             
             {signal.status === "COMPLETED" && signal.profit !== undefined && (
               <div className="mt-4 pt-4 border-t">

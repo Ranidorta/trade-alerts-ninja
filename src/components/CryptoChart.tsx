@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { CryptoChartDataPoint } from "@/lib/types";
+import { CryptoChartDataPoint, TechnicalIndicators } from "@/lib/types";
 
 export interface CryptoChartProps {
   symbol: string;
@@ -13,10 +13,18 @@ export interface CryptoChartProps {
   targets: Array<{level: number, price: number, hit?: boolean}>;
   className?: string;
   refreshInterval?: number;
+  showIndicators?: boolean;
+  technicalIndicators?: TechnicalIndicators;
 }
 
-// Generate mock data points with more realistic price movement based on target hits
-const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: Array<{level: number, price: number, hit?: boolean}>, length: number = 24): CryptoChartDataPoint[] => {
+// Generate mock data points with more realistic price movement based on target hits and technical indicators
+const generateMockData = (
+  type: "LONG" | "SHORT", 
+  entryPrice: number, 
+  targets: Array<{level: number, price: number, hit?: boolean}>, 
+  indicators?: TechnicalIndicators,
+  length: number = 24
+): Array<CryptoChartDataPoint & {shortMa?: number; longMa?: number; signal?: number}> => {
   const trend = type === "LONG" ? 1 : -1;
   const volatility = entryPrice * 0.005; // 0.5% volatility
   
@@ -35,7 +43,8 @@ const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: A
     ? Math.max(...hitTargets.map(t => targets.indexOf(t)))
     : -1;
   
-  return Array.from({ length }).map((_, i) => {
+  // Create price data
+  const data = Array.from({ length }).map((_, i) => {
     // Calculate how far we've moved through the chart (0 to 1)
     const progress = i / length;
     
@@ -62,9 +71,46 @@ const generateMockData = (type: "LONG" | "SHORT", entryPrice: number, targets: A
     
     return {
       time: i,
-      price: Math.max(0, adjustedPrice)
+      price: Math.max(0, adjustedPrice),
     };
   });
+  
+  // Add moving averages if indicators exist
+  if (indicators?.shortMa && indicators?.longMa) {
+    // Generate moving averages with a slight lag
+    const shortMaData = data.map((point, i) => {
+      // First few points don't have enough history for MA
+      if (i < 5) return null;
+      
+      // Calculate simple MA from previous prices (with some noise to look realistic)
+      const prevPrices = data.slice(Math.max(0, i-5), i).map(p => p.price);
+      const ma = prevPrices.reduce((sum, p) => sum + p, 0) / prevPrices.length;
+      return ma + (Math.random() - 0.5) * entryPrice * 0.001; // Small random variation
+    });
+    
+    const longMaData = data.map((point, i) => {
+      // First several points don't have enough history for MA
+      if (i < 10) return null;
+      
+      // Calculate simple MA from previous prices
+      const prevPrices = data.slice(Math.max(0, i-10), i).map(p => p.price);
+      const ma = prevPrices.reduce((sum, p) => sum + p, 0) / prevPrices.length;
+      return ma + (Math.random() - 0.5) * entryPrice * 0.001; // Small random variation
+    });
+    
+    // Add MAs to data
+    data.forEach((point, i) => {
+      point.shortMa = shortMaData[i] || undefined;
+      point.longMa = longMaData[i] || undefined;
+      
+      // Add trading signal based on MA crossover
+      if (point.shortMa && point.longMa) {
+        point.signal = point.shortMa > point.longMa ? 1 : -1;
+      }
+    });
+  }
+  
+  return data;
 };
 
 const CryptoChart = ({ 
@@ -74,16 +120,18 @@ const CryptoChart = ({
   stopLoss, 
   targets, 
   className,
-  refreshInterval = 60000
+  refreshInterval = 60000,
+  showIndicators = false,
+  technicalIndicators
 }: CryptoChartProps) => {
-  const [data, setData] = useState<CryptoChartDataPoint[]>([]);
+  const [data, setData] = useState<Array<CryptoChartDataPoint & {shortMa?: number; longMa?: number; signal?: number}>>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
     // Simulate data loading
     setLoading(true);
     const generateData = () => {
-      const newData = generateMockData(type, entryPrice, targets);
+      const newData = generateMockData(type, entryPrice, targets, technicalIndicators);
       setData(newData);
       setLoading(false);
     };
@@ -94,16 +142,29 @@ const CryptoChart = ({
     const intervalId = setInterval(generateData, refreshInterval);
     
     return () => clearInterval(intervalId);
-  }, [type, entryPrice, targets, refreshInterval]);
+  }, [type, entryPrice, targets, refreshInterval, technicalIndicators]);
   
   // Determine chart domain based on entry, SL and targets
   const prices = [entryPrice, stopLoss, ...targets.map(t => t.price)];
+  if (showIndicators && technicalIndicators) {
+    if (technicalIndicators.upperBand) prices.push(technicalIndicators.upperBand);
+    if (technicalIndicators.lowerBand) prices.push(technicalIndicators.lowerBand);
+    if (technicalIndicators.shortMa) prices.push(technicalIndicators.shortMa);
+    if (technicalIndicators.longMa) prices.push(technicalIndicators.longMa);
+  }
+  
   const minPrice = Math.min(...prices) * 0.99;
   const maxPrice = Math.max(...prices) * 1.01;
   
   if (loading) {
     return <Skeleton className={cn("w-full h-52", className)} />;
   }
+  
+  // Format values for tooltip
+  const formatValue = (value: number) => {
+    if (value === undefined) return '-';
+    return value.toFixed(entryPrice < 1 ? 4 : 2);
+  };
   
   return (
     <div className={cn("w-full h-60 p-2", className)}>
@@ -113,7 +174,12 @@ const CryptoChart = ({
           <XAxis dataKey="time" tick={false} stroke="rgba(0,0,0,0.1)" />
           <YAxis domain={[minPrice, maxPrice]} tick={{ fontSize: 12 }} />
           <Tooltip 
-            formatter={(value: any) => [`${value.toFixed(entryPrice < 1 ? 4 : 2)}`, 'Price']}
+            formatter={(value: any, name: string) => {
+              if (name === 'price') return [formatValue(value), 'Price'];
+              if (name === 'shortMa') return [formatValue(value), 'Short MA'];
+              if (name === 'longMa') return [formatValue(value), 'Long MA'];
+              return [value, name];
+            }}
             labelFormatter={() => symbol}
           />
           
@@ -148,6 +214,49 @@ const CryptoChart = ({
             />
           ))}
           
+          {/* Technical indicators */}
+          {showIndicators && technicalIndicators && technicalIndicators.upperBand && (
+            <ReferenceLine 
+              y={technicalIndicators.upperBand} 
+              stroke="#888888" 
+              strokeDasharray="2 2" 
+              label={{ value: "Upper Band", position: "left", fill: "#888888" }} 
+            />
+          )}
+          
+          {showIndicators && technicalIndicators && technicalIndicators.lowerBand && (
+            <ReferenceLine 
+              y={technicalIndicators.lowerBand} 
+              stroke="#888888" 
+              strokeDasharray="2 2" 
+              label={{ value: "Lower Band", position: "left", fill: "#888888" }} 
+            />
+          )}
+          
+          {/* Moving average lines */}
+          {showIndicators && (
+            <>
+              <Line 
+                type="monotone" 
+                dataKey="shortMa" 
+                stroke="#FF9800" 
+                dot={false} 
+                strokeWidth={1.5} 
+                strokeDasharray="3 3"
+                connectNulls={true}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="longMa" 
+                stroke="#9C27B0" 
+                dot={false} 
+                strokeWidth={1.5} 
+                strokeDasharray="3 3"
+                connectNulls={true}
+              />
+            </>
+          )}
+          
           <Line 
             type="monotone" 
             dataKey="price" 
@@ -157,6 +266,39 @@ const CryptoChart = ({
             activeDot={{ r: 6 }} 
             animationDuration={1500}
           />
+          
+          {/* Buy/Sell signal dots */}
+          {showIndicators && data.filter(d => d.signal === 1).map((d, i) => (
+            <ReferenceLine 
+              key={`buy-${i}`}
+              x={d.time} 
+              stroke="#4CAF50" 
+              strokeWidth={0}
+              ifOverflow="hidden"
+              label={{ 
+                value: "B", 
+                position: "top",
+                fill: "#4CAF50",
+                fontSize: 10 
+              }}
+            />
+          ))}
+          
+          {showIndicators && data.filter(d => d.signal === -1).map((d, i) => (
+            <ReferenceLine 
+              key={`sell-${i}`}
+              x={d.time} 
+              stroke="#FF3361" 
+              strokeWidth={0}
+              ifOverflow="hidden"
+              label={{ 
+                value: "S", 
+                position: "bottom",
+                fill: "#FF3361",
+                fontSize: 10
+              }}
+            />
+          ))}
         </LineChart>
       </ResponsiveContainer>
     </div>
