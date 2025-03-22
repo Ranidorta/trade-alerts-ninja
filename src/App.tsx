@@ -15,7 +15,7 @@ import PerformanceDashboard from "./pages/PerformanceDashboard";
 import { ThemeProvider } from "./components/ThemeProvider";
 import "./App.css";
 
-// Importar fonte Russo One para estilo gamer
+// Import gamer theme styles
 import "./styles/gamer-theme.css";
 
 const queryClient = new QueryClient();
@@ -29,7 +29,7 @@ const App = () => (
         <BrowserRouter>
           <div className="gamer-theme">
             <Navbar />
-            <div className="pt-16 min-h-screen gamer-background">
+            <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/signals" element={<SignalsDashboard />} />

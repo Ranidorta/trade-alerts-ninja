@@ -12,6 +12,7 @@ body {
   min-height: 100vh;
 }
 
+/* Gamer theme specific animations */
 @keyframes glow {
   0% {
     box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
@@ -36,50 +37,123 @@ body {
   }
 }
 
-/* Classes utilitárias para texto neon */
+/* Gaming UI enhancements */
+.gamer-card {
+  background: rgba(20, 25, 35, 0.7);
+  border: 1px solid rgba(0, 195, 255, 0.3);
+  box-shadow: 0 0 10px rgba(0, 195, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.gamer-card:hover {
+  border-color: rgba(0, 195, 255, 0.6);
+  box-shadow: 0 0 15px rgba(0, 195, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Neon text styles */
 .text-neon-primary {
-  color: var(--neon-primary);
-  text-shadow: 0 0 5px var(--neon-primary);
+  color: #00ffff;
+  text-shadow: 0 0 5px #00ffff;
 }
 
 .text-neon-secondary {
-  color: var(--neon-secondary);
-  text-shadow: 0 0 5px var(--neon-secondary);
+  color: #bf00ff;
+  text-shadow: 0 0 5px #bf00ff;
 }
 
 .text-neon-blue {
-  color: var(--neon-blue);
-  text-shadow: 0 0 5px var(--neon-blue);
+  color: #0077ff;
+  text-shadow: 0 0 5px #0077ff;
 }
 
 .text-neon-green {
-  color: var(--neon-green);
-  text-shadow: 0 0 5px var(--neon-green);
+  color: #00ff88;
+  text-shadow: 0 0 5px #00ff88;
 }
 
 .text-neon-red {
-  color: var(--neon-red);
-  text-shadow: 0 0 5px var(--neon-red);
+  color: #ff005d;
+  text-shadow: 0 0 5px #ff005d;
 }
 
 .text-neon-yellow {
-  color: var(--neon-yellow);
-  text-shadow: 0 0 5px var(--neon-yellow);
+  color: #ffb700;
+  text-shadow: 0 0 5px #ffb700;
 }
 
-/* Sobrescrever alguns estilos do shadcn/ui para tema gamer */
-.gamer-theme .dark .bg-background {
-  background-color: var(--dark-bg);
+/* Dashboard Content Styling */
+.dashboard-container {
+  padding: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
 }
 
-.gamer-theme .button {
-  font-family: 'Orbitron', sans-serif;
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(0, 195, 255, 0.2);
 }
 
-.gamer-theme .card {
-  background-color: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  box-shadow: var(--panel-glow);
+.dashboard-title {
+  font-family: 'Russo One', sans-serif;
+  font-size: 1.75rem;
+  background: linear-gradient(to right, #00ffff, #0077ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+  letter-spacing: 0.5px;
+}
+
+/* Grid layouts for dashboards */
+.dashboard-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.dashboard-grid-large {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+}
+
+/* Card hover effects */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Button styles */
+.gamer-button {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(45deg, rgba(0, 119, 255, 0.2), rgba(0, 255, 255, 0.2));
+  border: 1px solid rgba(0, 195, 255, 0.3);
+  color: #fff;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+}
+
+.gamer-button:hover {
+  background: linear-gradient(45deg, rgba(0, 119, 255, 0.3), rgba(0, 255, 255, 0.3));
+  border-color: rgba(0, 195, 255, 0.6);
+  box-shadow: 0 0 15px rgba(0, 195, 255, 0.4);
+}
+
+.gamer-button:active {
+  transform: scale(0.98);
 }
 
 /* Crypto-specific styles */

@@ -50,7 +50,7 @@ const Navbar = () => {
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-30 bg-background border-b">
+    <header className="fixed top-0 left-0 right-0 z-30 backdrop-blur-md bg-background/80 border-b border-[#333344]">
       <div className="container flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center">
           <NavLink
@@ -62,7 +62,7 @@ const Navbar = () => {
                 <path 
                   d="M50,10 C60,10 70,20 75,30 C80,40 75,60 65,70 C55,80 45,75 35,65 C25,55 20,45 25,35 C30,25 40,10 50,10 Z" 
                   fill="currentColor" 
-                  className="text-primary"
+                  className="text-primary animate-pulse-subtle"
                 />
                 <path 
                   d="M45,35 C48,32 52,32 55,35 M40,50 C45,55 55,55 60,50 M35,45 L42,38 M58,38 L65,45" 
@@ -87,8 +87,8 @@ const Navbar = () => {
                 />
               </svg>
             </div>
-            <span className="hidden sm:inline">Trade Ninja</span>
-            <span className="sm:hidden">TN</span>
+            <span className="hidden sm:inline font-['Russo_One'] bg-clip-text text-transparent bg-gradient-to-r from-[#00ffff] to-[#0077ff] drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">Trade Ninja</span>
+            <span className="sm:hidden font-['Russo_One'] bg-clip-text text-transparent bg-gradient-to-r from-[#00ffff] to-[#0077ff] drop-shadow-[0_0_8px_rgba(0,255,255,0.5)]">TN</span>
           </NavLink>
         </div>
 
@@ -102,21 +102,22 @@ const Navbar = () => {
                 size="icon"
                 onClick={() => setIsMobileOpen(!isMobileOpen)}
                 aria-label="Toggle menu"
+                className="gamer-button"
               >
                 {isMobileOpen ? <X /> : <Menu />}
               </Button>
 
               {isMobileOpen && (
-                <div className="fixed inset-0 top-16 bg-background z-40 p-4">
+                <div className="fixed inset-0 top-16 backdrop-blur-xl bg-background/90 z-40 p-4">
                   <div className="flex flex-col space-y-2">
                     {navLinks.map((link) => (
                       <NavLink
                         key={link.path}
                         to={link.path}
                         className={({ isActive }) =>
-                          `px-4 py-3 rounded-md transition-colors flex items-center ${
+                          `px-4 py-3 rounded-md transition-all ${
                             isActive
-                              ? "bg-primary text-primary-foreground"
+                              ? "bg-gradient-to-r from-[#0077ff]/30 to-[#00ffff]/30 text-[#00ffff] border border-[#00ffff]/30 shadow-[0_0_10px_rgba(0,255,255,0.3)]"
                               : "text-foreground hover:bg-accent hover:text-accent-foreground"
                           }`
                         }
@@ -136,10 +137,10 @@ const Navbar = () => {
                   key={link.path}
                   to={link.path}
                   className={({ isActive }) =>
-                    `px-3 py-2 rounded-md text-sm transition-colors ${
+                    `px-3 py-2 rounded-md text-sm transition-all ${
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                        ? "bg-gradient-to-r from-[#0077ff]/30 to-[#00ffff]/30 text-[#00ffff] border border-[#00ffff]/30 shadow-[0_0_10px_rgba(0,255,255,0.3)]"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground hover:border hover:border-[#00ffff]/20"
                     }`
                   }
                 >
