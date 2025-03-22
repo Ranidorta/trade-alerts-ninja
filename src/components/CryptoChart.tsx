@@ -167,12 +167,17 @@ const CryptoChart = ({
   };
   
   return (
-    <div className={cn("w-full h-60 p-2", className)}>
+    <div className={cn("w-full h-60", className)}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+        <LineChart data={data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
           <XAxis dataKey="time" tick={false} stroke="rgba(0,0,0,0.1)" />
-          <YAxis domain={[minPrice, maxPrice]} tick={{ fontSize: 12 }} />
+          <YAxis 
+            domain={[minPrice, maxPrice]} 
+            tick={{ fontSize: 12 }} 
+            width={60}
+            tickFormatter={(value) => value.toFixed(entryPrice < 1 ? 2 : 0)}
+          />
           <Tooltip 
             formatter={(value: any, name: string) => {
               if (name === 'price') return [formatValue(value), 'Price'];
@@ -188,7 +193,12 @@ const CryptoChart = ({
             y={entryPrice} 
             stroke="#3361FF" 
             strokeDasharray="3 3" 
-            label={{ value: "Entry", position: "right", fill: "#3361FF" }} 
+            label={{ 
+              value: "Entry", 
+              position: "insideTopRight", 
+              fill: "#3361FF",
+              fontSize: 10
+            }} 
           />
           
           {/* Stop loss line */}
@@ -196,7 +206,12 @@ const CryptoChart = ({
             y={stopLoss} 
             stroke="#FF3361" 
             strokeDasharray="3 3" 
-            label={{ value: "SL", position: "right", fill: "#FF3361" }} 
+            label={{ 
+              value: "SL", 
+              position: "insideTopRight", 
+              fill: "#FF3361",
+              fontSize: 10
+            }} 
           />
           
           {/* Target lines */}
@@ -208,8 +223,9 @@ const CryptoChart = ({
               strokeDasharray="3 3" 
               label={{ 
                 value: `TP${target.level}${target.hit ? ' ✓' : ''}`, 
-                position: "right", 
-                fill: target.hit ? "#4CAF50" : "#7E57FF" 
+                position: "insideTopRight", 
+                fill: target.hit ? "#4CAF50" : "#7E57FF",
+                fontSize: 10
               }} 
             />
           ))}
@@ -220,7 +236,12 @@ const CryptoChart = ({
               y={technicalIndicators.upperBand} 
               stroke="#888888" 
               strokeDasharray="2 2" 
-              label={{ value: "Upper Band", position: "left", fill: "#888888" }} 
+              label={{ 
+                value: "Upper", 
+                position: "insideBottomRight", 
+                fill: "#888888",
+                fontSize: 10
+              }} 
             />
           )}
           
@@ -229,7 +250,12 @@ const CryptoChart = ({
               y={technicalIndicators.lowerBand} 
               stroke="#888888" 
               strokeDasharray="2 2" 
-              label={{ value: "Lower Band", position: "left", fill: "#888888" }} 
+              label={{ 
+                value: "Lower", 
+                position: "insideTopRight", 
+                fill: "#888888",
+                fontSize: 10 
+              }} 
             />
           )}
           
@@ -277,7 +303,7 @@ const CryptoChart = ({
               ifOverflow="hidden"
               label={{ 
                 value: "B", 
-                position: "top",
+                position: "insideTopLeft",
                 fill: "#4CAF50",
                 fontSize: 10 
               }}
@@ -293,7 +319,7 @@ const CryptoChart = ({
               ifOverflow="hidden"
               label={{ 
                 value: "S", 
-                position: "bottom",
+                position: "insideBottomLeft",
                 fill: "#FF3361",
                 fontSize: 10
               }}

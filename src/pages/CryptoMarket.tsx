@@ -157,11 +157,21 @@ const CryptoMarket = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Crypto Market</h1>
+      <h1 className="text-3xl font-bold mb-6">Crypto Market</h1>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
+      {/* Move the crypto ticker to the top as a floating banner */}
+      <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-2 overflow-hidden">
+        <CryptoTicker coins={coins || []} isLoading={isLoadingCoins} />
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Main content area - 8 columns */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Chart area */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+            <h2 className="text-xl font-semibold mb-4">
+              {selectedCoinData?.name || selectedCoin} Chart
+            </h2>
             <CryptoChart 
               symbol={selectedCoin}
               type={type}
@@ -170,9 +180,11 @@ const CryptoMarket = () => {
               targets={targets}
               showIndicators={true}
               technicalIndicators={technicalIndicators}
+              className="h-80" // Make chart taller
             />
           </div>
           
+          {/* Market Overview */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
             <MarketOverview 
               data={marketOverview}
@@ -181,7 +193,9 @@ const CryptoMarket = () => {
           </div>
         </div>
         
-        <div className="space-y-6">
+        {/* Sidebar - 4 columns */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Cryptocurrency list */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
             <h2 className="text-xl font-semibold mb-4">Top Cryptocurrencies</h2>
             {isLoadingCoins ? (
@@ -226,20 +240,31 @@ const CryptoMarket = () => {
                         })}
                       </div>
                     </div>
+                    {/* Add price change percentage here */}
+                    <div className="mt-1 flex justify-between items-center">
+                      <span className="text-xs text-gray-500">{coin.name}</span>
+                      <span 
+                        className={`text-xs ${
+                          coin.priceChangePercentage24h >= 0 
+                            ? "text-green-500" 
+                            : "text-red-500"
+                        }`}
+                      >
+                        {coin.priceChangePercentage24h > 0 ? '+' : ''}
+                        {coin.priceChangePercentage24h.toFixed(2)}%
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
           
+          {/* Crypto News */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
             <CryptoNews news={news || []} isLoading={isLoadingNews} />
           </div>
         </div>
-      </div>
-      
-      <div className="mt-6">
-        <CryptoTicker coins={coins || []} isLoading={isLoadingCoins} />
       </div>
     </div>
   );
