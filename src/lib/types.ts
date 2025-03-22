@@ -97,8 +97,11 @@ export interface MarketOverviewProps {
   isLoading: boolean;
 }
 
-// Define the expected interface for CryptoChartProps to match CryptoChart component
+// Define the expected interface for CryptoChartDataPoint to include all needed properties
 export interface CryptoChartDataPoint {
   time: number;
   price: number;
+  shortMa?: number;
+  longMa?: number;
+  signal?: number;
 }

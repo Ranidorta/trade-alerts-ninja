@@ -24,7 +24,7 @@ const generateMockData = (
   targets: Array<{level: number, price: number, hit?: boolean}>, 
   indicators?: TechnicalIndicators,
   length: number = 24
-): Array<CryptoChartDataPoint & {shortMa?: number; longMa?: number; signal?: number}> => {
+): CryptoChartDataPoint[] => {
   const trend = type === "LONG" ? 1 : -1;
   const volatility = entryPrice * 0.005; // 0.5% volatility
   
@@ -44,7 +44,7 @@ const generateMockData = (
     : -1;
   
   // Create price data
-  const data = Array.from({ length }).map((_, i) => {
+  const data: CryptoChartDataPoint[] = Array.from({ length }).map((_, i) => {
     // Calculate how far we've moved through the chart (0 to 1)
     const progress = i / length;
     
@@ -124,7 +124,7 @@ const CryptoChart = ({
   showIndicators = false,
   technicalIndicators
 }: CryptoChartProps) => {
-  const [data, setData] = useState<Array<CryptoChartDataPoint & {shortMa?: number; longMa?: number; signal?: number}>>([]);
+  const [data, setData] = useState<CryptoChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {

@@ -7,12 +7,13 @@ import CryptoTicker from "@/components/CryptoTicker";
 import CryptoChart from "@/components/CryptoChart";
 import CryptoNews from "@/components/CryptoNews";
 import { CryptoCoin, CryptoNews as CryptoNewsType, MarketOverview as MarketOverviewType } from "@/lib/types";
-import { fetchBybitKlines, fetchCryptoNews, fetchCoinGeckoGlobal } from "@/lib/apiServices";
+import { fetchBybitKlines, fetchCryptoNews, fetchCoinGeckoGlobal, calculateIndicators } from "@/lib/apiServices";
 
 const CryptoMarket = () => {
   const [selectedCoin, setSelectedCoin] = useState<string>("BTCUSDT");
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoadingChart, setIsLoadingChart] = useState<boolean>(true);
+  const [technicalIndicators, setTechnicalIndicators] = useState<any>(null);
 
   // Fetch coins data from CoinGecko
   const { data: coins, isLoading: isLoadingCoins } = useQuery({
@@ -123,15 +124,21 @@ const CryptoMarket = () => {
         }));
         
         setChartData(formattedData.reverse()); // Most recent data first
+        
+        // Calculate technical indicators
+        const indicators = calculateIndicators(data);
+        setTechnicalIndicators(indicators);
       } else {
         console.error("Failed to fetch chart data");
         toast.error(`Failed to load chart data for ${symbol}`);
         setChartData([]);
+        setTechnicalIndicators(null);
       }
     } catch (error) {
       console.error("Error loading chart data:", error);
       toast.error(`Error loading chart data for ${symbol}`);
       setChartData([]);
+      setTechnicalIndicators(null);
     } finally {
       setIsLoadingChart(false);
     }
@@ -161,6 +168,8 @@ const CryptoMarket = () => {
               entryPrice={entryPrice}
               stopLoss={stopLoss}
               targets={targets}
+              showIndicators={true}
+              technicalIndicators={technicalIndicators}
             />
           </div>
           
