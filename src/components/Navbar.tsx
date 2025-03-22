@@ -87,8 +87,8 @@ const Navbar = () => {
                 />
               </svg>
             </div>
-            <span className="hidden sm:inline">CryptoSignals</span>
-            <span className="sm:hidden">CS</span>
+            <span className="hidden sm:inline">Trade Ninja</span>
+            <span className="sm:hidden">TN</span>
           </NavLink>
         </div>
 
