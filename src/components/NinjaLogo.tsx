@@ -11,7 +11,7 @@ const NinjaLogo = ({ link = "/signals", className = "" }: NinjaLogoProps) => {
   if (className.includes("w-full h-full")) {
     return (
       <img 
-        src="/lovable-uploads/1a486e4e-4234-474b-ba38-f49d46002127.png" 
+        src="/lovable-uploads/4bbac97e-bbd5-4ba2-be60-7052032c420d.png" 
         alt="Ninja Trading Logo" 
         className="rounded-full shadow-sm"
         width="100%"
@@ -27,7 +27,7 @@ const NinjaLogo = ({ link = "/signals", className = "" }: NinjaLogoProps) => {
       aria-label="Ninja Trading Logo"
     >
       <img 
-        src="/lovable-uploads/1a486e4e-4234-474b-ba38-f49d46002127.png" 
+        src="/lovable-uploads/4bbac97e-bbd5-4ba2-be60-7052032c420d.png" 
         alt="Ninja Trading Logo" 
         className="rounded-full shadow-lg hover:shadow-cyan-500/50"
         width={200}
