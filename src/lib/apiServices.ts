@@ -777,3 +777,26 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           type: "SHORT",
           currentPrice: currentPrice,
           technicalIndicators: {
+            rsi,
+            macd,
+            macdSignal,
+            macdHistogram,
+            shortMa,
+            longMa,
+            upperBand,
+            lowerBand,
+            signal: -1,
+            atr,
+            volatility,
+            confidence
+          }
+        };
+      }
+    }
+    
+    return tradingSignal;
+  } catch (error) {
+    console.error(`Error generating trading signal for ${symbol}:`, error);
+    return null;
+  }
+};
