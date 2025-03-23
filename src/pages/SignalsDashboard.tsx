@@ -25,6 +25,12 @@ import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
 
+const AVAILABLE_SYMBOLS = [
+  "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "AVAXUSDT", 
+  "ADAUSDT", "UNIUSDT", "PNUTUSDT", "AUCTIONUSDT", "DOGEUSDT", 
+  "LINKUSDT", "MATICUSDT", "DOTUSDT", "ATOMUSDT"
+];
+
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -43,10 +49,26 @@ const SignalsDashboard = () => {
     setIsLoading(true);
     
     try {
+      const showLoadingToast = signals.length > 0;
+      
+      if (showLoadingToast) {
+        toast({
+          title: "Loading signals",
+          description: "Fetching latest trading signals...",
+        });
+      }
+      
       const realSignals = await generateAllSignals();
       if (realSignals.length > 0) {
         setSignals(realSignals);
         setFilteredSignals(realSignals);
+        
+        if (showLoadingToast) {
+          toast({
+            title: "Signals loaded",
+            description: `Found ${realSignals.length} trading signals across multiple cryptocurrencies.`,
+          });
+        }
       } else {
         toast({
           title: "No signals found",
@@ -66,10 +88,10 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast]);
+  }, [signals.length, toast]);
   
   useEffect(() => {
-    setIsLoading(false);
+    loadSignalsData();
   }, []);
   
   useEffect(() => {
@@ -143,7 +165,7 @@ const SignalsDashboard = () => {
     }
 
     setIsSearching(true);
-    let symbol = coinSearch;
+    let symbol = coinSearch.toUpperCase();
     
     if (!symbol.endsWith("USDT")) {
       symbol = `${symbol}USDT`;
@@ -321,8 +343,24 @@ const SignalsDashboard = () => {
       </div>
       
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Generate Signal for Specific Coin</h2>
+          
+          <div className="flex flex-wrap gap-2 mt-3 sm:mt-0">
+            {AVAILABLE_SYMBOLS.slice(0, 8).map(symbol => (
+              <Button 
+                key={symbol}
+                variant="outline" 
+                size="sm"
+                className="text-xs py-1 h-8"
+                onClick={() => {
+                  setCoinSearch(symbol.replace('USDT', ''));
+                }}
+              >
+                {symbol.replace('USDT', '')}
+              </Button>
+            ))}
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4">
@@ -447,6 +485,23 @@ const SignalsDashboard = () => {
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      </div>
+      
+      <div className="mb-4">
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <BarChart3 className="h-5 w-5 text-blue-500" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-blue-700">
+                Visualizando {filteredSignals.length} sinais de {signals.length} sinais totais.
+                {searchQuery && ` Filtrando por: "${searchQuery}"`}
+                {statusFilter !== "ALL" && ` Status: ${statusFilter}`}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
       
