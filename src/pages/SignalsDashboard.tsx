@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -28,7 +29,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
 import { allSignals, mockHistoricalSignals } from "@/lib/mockData";
 import { Link } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -43,7 +43,6 @@ const SignalsDashboard = () => {
   const [coinSearch, setCoinSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
-  const [signalType, setSignalType] = useState<"classic" | "fast">("classic");
   const { toast } = useToast();
   
   const loadSignalsData = useCallback(async () => {
@@ -52,6 +51,7 @@ const SignalsDashboard = () => {
     try {
       const realSignals = await generateAllSignals();
       if (realSignals.length > 0) {
+        // Update the signals in localStorage for history and performance tracking
         const updatedSignals = [...realSignals];
         localStorage.setItem('tradingSignals', JSON.stringify(updatedSignals));
         
@@ -78,7 +78,9 @@ const SignalsDashboard = () => {
     }
   }, [toast]);
   
+  // Load signals on initial component mount
   useEffect(() => {
+    // First try to load from localStorage
     const savedSignals = localStorage.getItem('tradingSignals');
     if (savedSignals) {
       try {
@@ -95,6 +97,7 @@ const SignalsDashboard = () => {
     }
   }, []);
   
+  // Auto-refresh effect
   useEffect(() => {
     if (!autoRefresh) return;
     
@@ -107,6 +110,7 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
+  // Filter signals based on search query, status filter, and sort order
   useEffect(() => {
     let result = [...signals];
     
@@ -157,8 +161,10 @@ const SignalsDashboard = () => {
   };
 
   const updateSignalsStorage = (updatedSignals: TradingSignal[]) => {
+    // Update localStorage with new signals
     localStorage.setItem('tradingSignals', JSON.stringify(updatedSignals));
     
+    // Ensure we have historical signals for completed ones
     const completedSignals = updatedSignals.filter(s => s.status === "COMPLETED");
     
     let historicalSignals: TradingSignal[] = [];
@@ -169,6 +175,7 @@ const SignalsDashboard = () => {
       console.error("Error parsing historical signals:", e);
     }
     
+    // Add newly completed signals to historical storage
     const newHistorical = [...historicalSignals];
     completedSignals.forEach(signal => {
       if (!newHistorical.some(s => s.id === signal.id)) {
@@ -176,6 +183,7 @@ const SignalsDashboard = () => {
       }
     });
     
+    // Update historical storage
     localStorage.setItem('historicalSignals', JSON.stringify(newHistorical));
   };
 
@@ -198,10 +206,10 @@ const SignalsDashboard = () => {
     try {
       toast({
         title: "Generating signal",
-        description: `Analyzing market data for ${symbol} with ${signalType.toUpperCase()} strategy...`,
+        description: `Analyzing market data for ${symbol}...`,
       });
 
-      const signal = await generateTradingSignal(symbol, signalType);
+      const signal = await generateTradingSignal(symbol);
       
       if (signal) {
         setSignals(prevSignals => {
@@ -216,7 +224,7 @@ const SignalsDashboard = () => {
           
           toast({
             title: "Signal generated",
-            description: `New ${signalType.toUpperCase()} ${signal.type} signal for ${symbol} has been added to your dashboard.`,
+            description: `New ${signal.type} signal for ${symbol} has been added to your dashboard.`,
           });
           
           const updatedSignals = [signal, ...prevSignals];
@@ -228,7 +236,7 @@ const SignalsDashboard = () => {
       } else {
         toast({
           title: "No signal generated",
-          description: `Could not generate a ${signalType.toUpperCase()} signal for ${symbol}. Market conditions may not meet criteria.`,
+          description: `Could not generate a signal for ${symbol}. Market conditions may not meet criteria.`,
           variant: "destructive"
         });
       }
@@ -236,7 +244,7 @@ const SignalsDashboard = () => {
       console.error("Error generating signal for specific coin:", error);
       toast({
         title: "Error generating signal",
-        description: `Failed to generate ${signalType.toUpperCase()} signal for ${symbol}.`,
+        description: `Failed to generate signal for ${symbol}.`,
         variant: "destructive"
       });
     } finally {
@@ -248,11 +256,11 @@ const SignalsDashboard = () => {
     setIsGenerating(true);
     toast({
       title: "Generating signals",
-      description: `Analyzing market data to find ${signalType.toUpperCase()} trading opportunities...`,
+      description: "Analyzing market data to find trading opportunities...",
     });
     
     try {
-      const newSignals = await generateAllSignals(signalType);
+      const newSignals = await generateAllSignals();
       
       if (newSignals.length > 0) {
         setSignals(prevSignals => {
@@ -262,7 +270,7 @@ const SignalsDashboard = () => {
           if (uniqueNewSignals.length > 0) {
             toast({
               title: "New signals generated",
-              description: `Found ${uniqueNewSignals.length} new ${signalType.toUpperCase()} trading opportunities`,
+              description: `Found ${uniqueNewSignals.length} new trading opportunities`,
             });
             
             const updatedSignals = [...uniqueNewSignals, ...prevSignals];
@@ -272,21 +280,21 @@ const SignalsDashboard = () => {
           
           toast({
             title: "No new signals",
-            description: `No new ${signalType.toUpperCase()} trading opportunities found at this time`,
+            description: "No new trading opportunities found at this time",
           });
           return prevSignals;
         });
       } else {
         toast({
           title: "No new signals",
-          description: `No ${signalType.toUpperCase()} trading opportunities found at this time`,
+          description: "No trading opportunities found at this time",
         });
       }
     } catch (error) {
       console.error("Error generating signals:", error);
       toast({
         title: "Error generating signals",
-        description: `An error occurred while analyzing market data for ${signalType.toUpperCase()} signals`,
+        description: "An error occurred while analyzing market data",
         variant: "destructive"
       });
     } finally {
@@ -382,90 +390,35 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      <Tabs
-        defaultValue="classic"
-        className="w-full mb-6"
-        onValueChange={(value) => setSignalType(value as "classic" | "fast")}
-      >
-        <TabsList className="grid w-full md:w-[400px] grid-cols-2 mb-4">
-          <TabsTrigger value="classic">Classic Signals</TabsTrigger>
-          <TabsTrigger value="fast">Fast Signals</TabsTrigger>
-        </TabsList>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">Generate Signal for Specific Coin</h2>
+        </div>
         
-        <TabsContent value="classic" className="mt-0">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Generate Classic Signal</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                  Robust Strategy
-                </span>
-              </div>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              Classic signals use a robust strategy based on multiple technical indicators
-              like RSI, MACD, Bollinger Bands, and moving averages. These signals provide
-              higher confidence but may be less frequent.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Enter crypto symbol (e.g., BTC, ETH)"
-                  value={coinSearch}
-                  onChange={handleCoinSearchChange}
-                  className="pr-10"
-                />
-              </div>
-              
-              <Button 
-                onClick={handleGenerateSignalForCoin} 
-                disabled={isSearching || !coinSearch}
-                className="shrink-0"
-              >
-                <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
-                {isSearching ? 'Analyzing...' : 'Generate Classic Signal'}
-              </Button>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Enter crypto symbol (e.g., BTC, ETH)"
+              value={coinSearch}
+              onChange={handleCoinSearchChange}
+              className="pr-10"
+            />
           </div>
-        </TabsContent>
+          
+          <Button 
+            onClick={handleGenerateSignalForCoin} 
+            disabled={isSearching || !coinSearch}
+            className="shrink-0"
+          >
+            <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
+            {isSearching ? 'Analyzing...' : 'Generate Signal'}
+          </Button>
+        </div>
         
-        <TabsContent value="fast" className="mt-0">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Generate Fast Signal</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                  Aggressive Strategy
-                </span>
-              </div>
-            </div>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              Fast signals use a simplified, aggressive strategy optimized for capturing 
-              quick market movements. These signals are more frequent but may have lower 
-              accuracy than classic signals.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Input
-                  placeholder="Enter crypto symbol (e.g., BTC, ETH)"
-                  value={coinSearch}
-                  onChange={handleCoinSearchChange}
-                  className="pr-10"
-                />
-              </div>
-              
-              <Button 
-                onClick={handleGenerateSignalForCoin} 
-                disabled={isSearching || !coinSearch}
-                className="shrink-0 bg-orange-600 hover:bg-orange-700"
-              >
-                <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
-                {isSearching ? 'Analyzing...' : 'Generate Fast Signal'}
-              </Button>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+        <p className="text-xs text-slate-500 mt-2">
+          Enter a cryptocurrency symbol to generate a trading signal based on current market conditions.
+        </p>
+      </div>
       
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         <div className="relative flex-1">
@@ -574,12 +527,12 @@ const SignalsDashboard = () => {
           </div>
           <h3 className="text-xl font-semibold mb-2">Generate your first signals</h3>
           <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
-            Click the "Generate Signals" button to analyze the market and find {signalType} trading opportunities, 
+            Click the "Generate Signals" button to analyze the market and find trading opportunities, 
             or search for a specific cryptocurrency above.
           </p>
           <Button onClick={handleGenerateSignals} disabled={isGenerating}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analyzing Market...' : `Generate ${signalType.charAt(0).toUpperCase() + signalType.slice(1)} Signals Now`}
+            {isGenerating ? 'Analyzing Market...' : 'Generate Signals Now'}
           </Button>
         </div>
       )}

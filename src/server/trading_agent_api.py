@@ -1,4 +1,3 @@
-
 """
 Trading Agent API with Continuous Learning
 
@@ -14,8 +13,6 @@ import os
 import joblib
 import sqlite3
 import json
-import random
-import time
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from river import linear_model, preprocessing, metrics
@@ -56,7 +53,6 @@ else:
 # Base fictional capital (can come from external config later)
 ACCOUNT_BALANCE = 10000  # example: R$10,000
 
-# ... keep existing code (create_db, save_signal_to_db, update_capital_history functions)
 
 def create_db():
     """Create SQLite database for signals if it doesn't exist."""
@@ -192,8 +188,6 @@ def process_market_data(df, symbol="BTCUSDT", strategy_name="basic"):
     """Process market data to generate and evaluate trading signals."""
     create_db()
     
-    # ... keep existing code (process_market_data implementation)
-
     # Extract features
     df = extract_features(df)
     current_capital = ACCOUNT_BALANCE
@@ -395,143 +389,6 @@ def get_strategies():
     return jsonify(strategy_manager.list_strategies())
 
 
-@app.route('/api/generate_signal', methods=['POST'])
-def generate_signal():
-    """Generate a trading signal for a specific symbol."""
-    data = request.json
-    symbol = data.get('symbol', 'BTCUSDT')
-    signal_type = data.get('signal_type', 'classic')
-    
-    try:
-        # Fetch latest market data
-        # In a real system, you would fetch from exchange or database
-        # For now, we'll use mock data
-        
-        # Generate signal based on strategy
-        strategy_name = "advanced" if signal_type == "fast" else "basic"
-        active_strategy = strategy_manager.get_strategy(strategy_name)
-        
-        # Get mock kline data for demonstration
-        df = pd.DataFrame()
-        
-        # Use realistic prices based on symbol
-        if "BTC" in symbol:
-            base_price = random.uniform(40000, 65000)
-        elif "ETH" in symbol:
-            base_price = random.uniform(2500, 3500)
-        elif "SOL" in symbol:
-            base_price = random.uniform(120, 200)
-        elif "XRP" in symbol:
-            base_price = random.uniform(0.4, 0.7)
-        elif "DOGE" in symbol:
-            base_price = random.uniform(0.07, 0.12)
-        else:
-            base_price = random.uniform(10, 100)
-            
-        prices = [base_price * (1 + random.uniform(-0.1, 0.1)) for _ in range(100)]
-        df['close'] = prices
-        df['open'] = [price * (1 + random.uniform(-0.02, 0.02)) for price in prices]
-        df['high'] = [max(o, c) * (1 + random.uniform(0, 0.02)) for o, c in zip(df['open'], df['close'])]
-        df['low'] = [min(o, c) * (1 - random.uniform(0, 0.02)) for o, c in zip(df['open'], df['close'])]
-        df['volume'] = [random.uniform(100, 10000) for _ in range(100)]
-        
-        # Extract features
-        df = feature_extractor.extract_features(df)
-        
-        # Get the most recent data point
-        latest_data = df.iloc[-1]
-        
-        # Generate signal
-        signal_direction = active_strategy.generate_signal(latest_data)
-        
-        atr = latest_data.get('atr', df['close'].iloc[-1] * 0.03)  # Default 3% ATR
-        entry_price = df['close'].iloc[-1]
-        
-        # Determine if it's a long or short signal
-        signal_type_str = "LONG" if signal_direction == 1 else "SHORT"
-        
-        # Create response
-        response = {
-            "id": f"{int(time.time())}-{random.randint(1000, 9999)}",
-            "symbol": symbol.replace("USDT", ""),
-            "pair": symbol,
-            "type": signal_type_str,
-            "entryMin": entry_price * 0.99,
-            "entryMax": entry_price * 1.01,
-            "entryAvg": entry_price,
-            "stopLoss": entry_price * (1 - 0.05) if signal_direction == 1 else entry_price * (1 + 0.05),
-            "targets": [
-                {"level": 1, "price": entry_price * (1 + 0.03) if signal_direction == 1 else entry_price * (1 - 0.03), "hit": False},
-                {"level": 2, "price": entry_price * (1 + 0.06) if signal_direction == 1 else entry_price * (1 - 0.06), "hit": False},
-                {"level": 3, "price": entry_price * (1 + 0.12) if signal_direction == 1 else entry_price * (1 - 0.12), "hit": False}
-            ],
-            "leverage": random.randint(5, 10),
-            "status": "WAITING",
-            "createdAt": datetime.now().isoformat(),
-            "updatedAt": datetime.now().isoformat(),
-            "currentPrice": entry_price,
-            "technicalIndicators": {
-                "rsi": latest_data.get('rsi', 50),
-                "macd": latest_data.get('macd', 0),
-                "macdSignal": latest_data.get('macd_signal', 0),
-                "macdHistogram": latest_data.get('macd_hist', 0),
-                "shortMa": latest_data.get('ma_short', 100),
-                "longMa": latest_data.get('ma_long', 100),
-                "atr": atr,
-                "volatility": latest_data.get('volatility', 0.03),
-                "signal": signal_direction,
-                "confidence": 0.7 + random.random() * 0.3
-            },
-            "description": "Fast signal based on momentum" if signal_type == "fast" else "Classic signal based on multiple indicators"
-        }
-        
-        return jsonify(response)
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route('/api/generate_all_signals', methods=['POST'])
-def generate_all_signals():
-    """Generate trading signals for multiple symbols."""
-    data = request.json
-    signal_type = data.get('signal_type', 'classic')
-    
-    try:
-        symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT"]
-        signals = []
-        
-        # Generate 3-5 signals
-        num_signals = random.randint(3, 5)
-        selected_symbols = symbols[:num_signals]
-        
-        for symbol in selected_symbols:
-            # Create a mock request object for generate_signal
-            mock_request = type('obj', (object,), {
-                'json': {'symbol': symbol, 'signal_type': signal_type}
-            })
-            
-            # Store the real request
-            original_request = request
-            # Replace with our mock
-            globals()['request'] = mock_request
-            
-            # Call generate_signal
-            result = generate_signal()
-            
-            # Restore the real request
-            globals()['request'] = original_request
-            
-            # Extract the JSON data
-            signal_data = json.loads(result.data)
-            
-            if not signal_data.get('error'):
-                signals.append(signal_data)
-        
-        return jsonify(signals)
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-
 if __name__ == '__main__':
     create_db()  # Ensure database exists
     app.run(debug=True, port=5000)
-

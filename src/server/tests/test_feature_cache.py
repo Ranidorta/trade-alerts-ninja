@@ -130,29 +130,3 @@ def test_parallel_processing(test_cache_dir):
     # Check results
     assert results == [i * 2 for i in items]
 
-def test_signal_type_specific_cache(sample_df, test_cache_dir):
-    """Test caching with signal type parameter."""
-    cache = FeatureCache(cache_dir=test_cache_dir)
-    
-    # Save to cache with different signal types
-    classic_df = sample_df.copy()
-    fast_df = sample_df.copy()  # Same data but different signal type
-    
-    # Save both to cache (same symbol but different signal types)
-    classic_cache_path = cache.save_to_cache(classic_df, symbol="BTCUSDT", signal_type="classic")
-    fast_cache_path = cache.save_to_cache(fast_df, symbol="BTCUSDT", signal_type="fast")
-    
-    # Check files exist and are different
-    assert os.path.exists(classic_cache_path)
-    assert os.path.exists(fast_cache_path)
-    assert classic_cache_path != fast_cache_path
-    
-    # Retrieve from cache
-    classic_cached = cache.get_from_cache(classic_df, symbol="BTCUSDT", signal_type="classic")
-    fast_cached = cache.get_from_cache(fast_df, symbol="BTCUSDT", signal_type="fast")
-    
-    # Check correct data is returned
-    assert classic_cached is not None
-    assert fast_cached is not None
-    pd.testing.assert_frame_equal(classic_df, classic_cached)
-    pd.testing.assert_frame_equal(fast_df, fast_cached)

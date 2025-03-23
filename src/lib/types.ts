@@ -1,7 +1,6 @@
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
-export type SignalStrategy = "classic" | "fast";
 
 export interface PriceTarget {
   id?: string;
@@ -52,7 +51,6 @@ export interface TradingSignal {
   technicalIndicators?: TechnicalIndicators;
   description?: string;
   riskRewardRatio?: number;
-  strategy?: SignalStrategy; // Added new field for strategy type
 }
 
 export interface Feature {
