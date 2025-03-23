@@ -18,6 +18,7 @@ import "./App.css";
 // Import gamer theme styles
 import "./styles/gamer-theme.css";
 
+// Create a client
 const queryClient = new QueryClient();
 
 const App = () => (
