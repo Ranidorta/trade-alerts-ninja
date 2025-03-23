@@ -1,4 +1,12 @@
 
+"""
+Trading Agent API with Continuous Learning
+
+This module provides a Flask API for a trading agent that uses technical indicators
+and machine learning to generate trading signals. It includes risk management,
+position sizing, and online learning capabilities.
+"""
+
 import pandas as pd
 import numpy as np
 import talib
@@ -11,6 +19,10 @@ from flask_cors import CORS
 from river import linear_model, preprocessing, metrics
 from datetime import datetime
 
+# Strategy imports
+from strategies.basic_strategy import BasicStrategy
+from strategies.strategy_manager import StrategyManager
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -19,25 +31,22 @@ MODEL_PATH = "model.pkl"
 DB_PATH = "signals.db"
 CAPITAL_HISTORY_PATH = "capital_history.json"
 
+# Initialize strategy manager
+strategy_manager = StrategyManager()
+strategy_manager.register_strategy("basic", BasicStrategy())
+
 # Load or create the online classification model
 if os.path.exists(MODEL_PATH):
     model = joblib.load(MODEL_PATH)
 else:
     model = preprocessing.StandardScaler() | linear_model.LogisticRegression()
 
-# Adjustable parameters
-RSI_THRESHOLD_BUY = 30
-RSI_THRESHOLD_SELL = 70
-ATR_MIN = 0.5
-VOLATILITY_MIN = 0.3
-RISK_REWARD_RATIO = 1.5
-RISK_PER_TRADE = 0.02  # 2% of capital per trade
-
 # Base fictional capital (can come from external config later)
 ACCOUNT_BALANCE = 10000  # example: R$10,000
 
 
 def create_db():
+    """Create SQLite database for signals if it doesn't exist."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
@@ -64,6 +73,7 @@ def create_db():
 
 
 def save_signal_to_db(data):
+    """Save a trading signal to the database."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
@@ -85,6 +95,7 @@ def save_signal_to_db(data):
 
 
 def update_capital_history(profit_loss):
+    """Update capital history with new profit/loss."""
     try:
         with open(CAPITAL_HISTORY_PATH, 'r') as f:
             history = json.load(f)
@@ -111,6 +122,7 @@ def update_capital_history(profit_loss):
 
 
 def extract_features(df):
+    """Extract technical indicators from price data."""
     df['rsi'] = talib.RSI(df['close'], timeperiod=14)
     df['ma_short'] = talib.SMA(df['close'], timeperiod=5)
     df['ma_long'] = talib.SMA(df['close'], timeperiod=20)
@@ -124,30 +136,8 @@ def extract_features(df):
     return df
 
 
-def generate_signal(row):
-    # Strategy with confluence of indicators and risk/volatility filters + MACD and BBands
-    if (
-        row['rsi'] < RSI_THRESHOLD_BUY and
-        row['ma_short'] > row['ma_long'] and
-        row['atr'] > ATR_MIN and
-        row['volatility'] > VOLATILITY_MIN and
-        row['macd'] > row['macd_signal'] and
-        row['close'] < row['bb_lower']
-    ):
-        return 1  # Buy signal
-    elif (
-        row['rsi'] > RSI_THRESHOLD_SELL and
-        row['ma_short'] < row['ma_long'] and
-        row['atr'] > ATR_MIN and
-        row['volatility'] > VOLATILITY_MIN and
-        row['macd'] < row['macd_signal'] and
-        row['close'] > row['bb_upper']
-    ):
-        return -1  # Sell signal
-    return 0
-
-
 def update_model(row, outcome):
+    """Update online learning model with trade outcome."""
     x = {
         'rsi': row['rsi'],
         'ma_diff': row['ma_short'] - row['ma_long'],
@@ -161,8 +151,9 @@ def update_model(row, outcome):
 
 
 def simulate_trade(signal, entry_price, future_price, atr):
+    """Simulate a trade to determine if it would have hit stop loss or take profit."""
     stop_loss = atr
-    take_profit = atr * RISK_REWARD_RATIO
+    take_profit = atr * strategy_manager.get_active_strategy().RISK_REWARD_RATIO
     if signal == 1:
         if future_price >= entry_price + take_profit:
             return 1, future_price
@@ -177,6 +168,7 @@ def simulate_trade(signal, entry_price, future_price, atr):
 
 
 def calculate_position_size(capital, atr, risk_pct):
+    """Calculate position size based on capital, ATR, and risk percentage."""
     risk_amount = capital * risk_pct
     if atr == 0:
         return 0
@@ -185,6 +177,7 @@ def calculate_position_size(capital, atr, risk_pct):
 
 
 def calculate_profit_loss(signal, result, entry_price, exit_price, position_size):
+    """Calculate profit or loss from a trade."""
     if signal == 1:  # Long position
         return position_size * (exit_price - entry_price) if result == 1 else -position_size * atr
     elif signal == -1:  # Short position
@@ -192,14 +185,19 @@ def calculate_profit_loss(signal, result, entry_price, exit_price, position_size
     return 0
 
 
-def process_market_data(df, symbol="BTCUSDT"):
+def process_market_data(df, symbol="BTCUSDT", strategy_name="basic"):
+    """Process market data to generate and evaluate trading signals."""
     create_db()
     df = extract_features(df)
     current_capital = ACCOUNT_BALANCE
     
+    # Use the specified strategy
+    active_strategy = strategy_manager.get_strategy(strategy_name)
+    strategy_manager.set_active_strategy(strategy_name)
+    
     for i in range(len(df) - 5):
         row = df.iloc[i]
-        signal = generate_signal(row)
+        signal = active_strategy.generate_signal(row)
         
         if signal != 0:
             future_price = df.iloc[i + 5]['close']
@@ -210,7 +208,11 @@ def process_market_data(df, symbol="BTCUSDT"):
                 update_model(row, result)
                 
                 # Calculate position size based on current capital
-                position_size = calculate_position_size(current_capital, row['atr'], RISK_PER_TRADE)
+                position_size = calculate_position_size(
+                    current_capital, 
+                    row['atr'], 
+                    active_strategy.RISK_PER_TRADE
+                )
                 
                 # Calculate profit/loss
                 profit_loss = calculate_profit_loss(signal, result, row['close'], exit_price, position_size)
@@ -240,6 +242,7 @@ def process_market_data(df, symbol="BTCUSDT"):
 # API Routes
 @app.route('/api/signals', methods=['GET'])
 def get_signals():
+    """Retrieve all signals from the database."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row  # This enables column access by name
     c = conn.cursor()
@@ -251,6 +254,7 @@ def get_signals():
 
 @app.route('/api/performance', methods=['GET'])
 def get_performance():
+    """Get performance metrics of the trading system."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -296,6 +300,7 @@ def get_performance():
 
 @app.route('/api/process', methods=['POST'])
 def process_data():
+    """Process uploaded market data and generate signals."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
     
@@ -312,7 +317,8 @@ def process_data():
         try:
             df = pd.read_csv(temp_file_path)
             symbol = request.form.get('symbol', 'BTCUSDT')
-            result = process_market_data(df, symbol)
+            strategy_name = request.form.get('strategy', 'basic')
+            result = process_market_data(df, symbol, strategy_name)
             
             # Clean up
             os.remove(temp_file_path)
@@ -320,6 +326,12 @@ def process_data():
             return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/strategies', methods=['GET'])
+def get_strategies():
+    """Get list of available strategies."""
+    return jsonify(strategy_manager.list_strategies())
 
 
 if __name__ == '__main__':
