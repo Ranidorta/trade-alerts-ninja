@@ -1,4 +1,3 @@
-
 import { TradingSignal } from "./types";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -158,16 +157,22 @@ export const fetchCryptoNews = async () => {
 };
 
 export const fetchCoinGeckoGlobal = async () => {
+  // Return the data with the proper structure expected by CryptoMarket.tsx
   return {
-    activeCryptocurrencies: 10000,
-    totalMarketCap: 2100000000000,
-    totalVolume24h: 150000000000,
-    marketCapPercentage: {
-      btc: 45,
-      eth: 18,
-    },
-    marketCapChangePercentage24hUsd: 2.5,
-    lastUpdated: new Date(),
+    data: {
+      active_cryptocurrencies: 10000,
+      total_market_cap: {
+        usd: 2100000000000
+      },
+      total_volume: {
+        usd: 150000000000
+      },
+      market_cap_percentage: {
+        btc: 45,
+        eth: 18,
+      },
+      market_cap_change_percentage_24h_usd: 2.5,
+    }
   };
 };
 
@@ -181,8 +186,16 @@ export const calculateIndicators = (data: any[]) => {
   }));
 };
 
-export const formatPercentage = (value: number): string => {
-  if (!value && value !== 0) return 'N/A';
+// Update formatPercentage to return an object with color and value
+export const formatPercentage = (value: number): { color: string; value: string } => {
+  if (!value && value !== 0) return { color: '', value: 'N/A' };
+  
   const formatted = value.toFixed(2);
-  return value > 0 ? `+${formatted}%` : `${formatted}%`;
+  const formattedValue = value > 0 ? `+${formatted}%` : `${formatted}%`;
+  const color = value > 0 ? 'text-green-500' : value < 0 ? 'text-red-500' : '';
+  
+  return {
+    color,
+    value: formattedValue
+  };
 };
