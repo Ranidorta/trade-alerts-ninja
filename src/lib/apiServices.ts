@@ -18,6 +18,16 @@ const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT", "AUCTIONUSDT", "XRPUSDT", "AV
 // List of symbols that we'll always try to generate signals for
 const ALWAYS_SIGNAL_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
+// Signal confidence threshold - based on improved Python model
+const SIGNAL_CONFIDENCE_THRESHOLD = 0.65;
+
+// Model performance tracking
+const MODEL_PERFORMANCE = {
+  accuracy: 0,
+  totalSamples: 0,
+  lastUpdated: new Date()
+};
+
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
   console.error(`Error fetching data from ${endpoint}:`, error);
@@ -217,15 +227,32 @@ export const sendTelegramMessage = async (message: string) => {
   }
 };
 
-// Get trend from candle data
+// Get trend from candle data with enhanced pattern recognition
 export const getTrendFromCandle = (candle: any[]): "BULLISH" | "BEARISH" | "NEUTRAL" => {
   if (!candle || candle.length < 5) return "NEUTRAL";
   
   const openPrice = parseFloat(candle[1]);
+  const highPrice = parseFloat(candle[2]);
+  const lowPrice = parseFloat(candle[3]);
   const closePrice = parseFloat(candle[4]);
   
-  if (closePrice > openPrice) return "BULLISH";
-  if (closePrice < openPrice) return "BEARISH";
+  // Enhanced pattern recognition (like in the Python code)
+  const bodySize = Math.abs(closePrice - openPrice);
+  const wickSize = highPrice - Math.max(openPrice, closePrice);
+  const tailSize = Math.min(openPrice, closePrice) - lowPrice;
+  
+  // Check for strong bullish/bearish patterns
+  if (closePrice > openPrice) {
+    // Bullish candle
+    if (bodySize > (highPrice - lowPrice) * 0.6) return "BULLISH"; // Strong bullish
+    if (wickSize < bodySize * 0.2 && tailSize < bodySize * 0.5) return "BULLISH"; // Bull with small wick
+    return "NEUTRAL"; // Weak bullish
+  } else if (closePrice < openPrice) {
+    // Bearish candle
+    if (bodySize > (highPrice - lowPrice) * 0.6) return "BEARISH"; // Strong bearish
+    if (tailSize < bodySize * 0.2 && wickSize < bodySize * 0.5) return "BEARISH"; // Bear with small tail
+    return "NEUTRAL"; // Weak bearish
+  }
   return "NEUTRAL";
 };
 
@@ -261,8 +288,14 @@ const calculateRSI = (prices: number[], period: number = 14): number => {
   const losses = deltas.map(delta => delta < 0 ? -delta : 0);
   
   // Calculate average gain and loss for the initial period
-  const avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
-  const avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
+  let avgGain = gains.slice(0, period).reduce((sum, gain) => sum + gain, 0) / period;
+  let avgLoss = losses.slice(0, period).reduce((sum, loss) => sum + loss, 0) / period;
+  
+  // Smooth RSI calculation for the rest of the data (like in TaLib)
+  for (let i = period; i < deltas.length; i++) {
+    avgGain = (avgGain * (period - 1) + gains[i]) / period;
+    avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+  }
   
   // Prevent division by zero
   if (avgLoss === 0) {
@@ -364,6 +397,86 @@ const generateMACrossoverSignal = (shortMa: number, longMa: number): number => {
   return 0; // Neutral
 };
 
+// Calculate ATR (Average True Range) - added from Python code
+const calculateATR = (highPrices: number[], lowPrices: number[], closePrices: number[], period: number = 14): number => {
+  if (highPrices.length < period + 1) {
+    return 0;
+  }
+  
+  // Calculate true ranges
+  const trueRanges: number[] = [];
+  
+  for (let i = 1; i < highPrices.length; i++) {
+    const prevClose = closePrices[i - 1];
+    const currentHigh = highPrices[i];
+    const currentLow = lowPrices[i];
+    
+    // True Range is the greatest of:
+    // 1. Current High - Current Low
+    // 2. |Current High - Previous Close|
+    // 3. |Current Low - Previous Close|
+    const tr1 = currentHigh - currentLow;
+    const tr2 = Math.abs(currentHigh - prevClose);
+    const tr3 = Math.abs(currentLow - prevClose);
+    
+    trueRanges.push(Math.max(tr1, tr2, tr3));
+  }
+  
+  // Calculate ATR as simple moving average of true ranges
+  const atr = trueRanges.slice(-period).reduce((sum, tr) => sum + tr, 0) / period;
+  return atr;
+};
+
+// Calculate volatility - added from Python code
+const calculateVolatility = (prices: number[], period: number = 10): number => {
+  if (prices.length < period) {
+    return 0;
+  }
+  
+  const recentPrices = prices.slice(-period);
+  const mean = recentPrices.reduce((sum, price) => sum + price, 0) / period;
+  const squaredDiffs = recentPrices.map(price => Math.pow(price - mean, 2));
+  const variance = squaredDiffs.reduce((sum, diff) => sum + diff, 0) / period;
+  
+  return Math.sqrt(variance);
+};
+
+// Generate signal confidence score - added from Python model
+const calculateSignalConfidence = (indicators: any): number => {
+  // This is a simplified version of the model prediction from the Python code
+  // In a real implementation, you'd use a proper ML model here
+  
+  const { rsi, macd, shortMa, longMa, upperBand, lowerBand, currentPrice, atr, volatility } = indicators;
+  
+  // Initialize base confidence
+  let confidence = 0.5;
+  
+  // Adjust confidence based on RSI extremes
+  if (rsi < 30) confidence += 0.1;
+  if (rsi < 20) confidence += 0.1;
+  if (rsi > 70) confidence -= 0.1;
+  if (rsi > 80) confidence -= 0.1;
+  
+  // Adjust confidence based on MACD
+  if (macd > 0) confidence += 0.05;
+  if (macd < 0) confidence -= 0.05;
+  
+  // Adjust confidence based on MA crossover
+  if (shortMa > longMa) confidence += 0.1;
+  if (shortMa < longMa) confidence -= 0.1;
+  
+  // Adjust confidence based on Bollinger Bands
+  if (currentPrice < lowerBand) confidence += 0.1;
+  if (currentPrice > upperBand) confidence -= 0.1;
+  
+  // Adjust for volatility and ATR - more volatile means less confident
+  const volatilityFactor = Math.min(0.1, volatility / 10);
+  confidence -= volatilityFactor;
+  
+  // Ensure confidence is between 0 and 1
+  return Math.max(0, Math.min(1, confidence));
+};
+
 // Calculate trading indicators (improved version aligned with Python code)
 export const calculateIndicators = (data: any[]) => {
   if (!data || data.length < 26) {
@@ -375,9 +488,9 @@ export const calculateIndicators = (data: any[]) => {
   const highPrices = data.map(candle => parseFloat(candle[2]));
   const lowPrices = data.map(candle => parseFloat(candle[3]));
   
-  // Calculate moving averages (more align with Python code: short=50, long=200)
-  const shortMa = calculateSMA(closingPrices, 5); // Using 5 instead of 50 for more responsiveness
-  const longMa = calculateSMA(closingPrices, 15); // Using 15 instead of 200 for more responsiveness
+  // Calculate moving averages (more align with Python code: short=5, long=20)
+  const shortMa = calculateSMA(closingPrices, 5); 
+  const longMa = calculateSMA(closingPrices, 20);
   
   // Calculate RSI using the improved algorithm
   const rsi = calculateRSI(closingPrices);
@@ -387,6 +500,10 @@ export const calculateIndicators = (data: any[]) => {
   
   // Calculate Bollinger Bands
   const bollingerBands = calculateBollingerBands(closingPrices);
+  
+  // Calculate ATR and volatility (added from Python code)
+  const atr = calculateATR(highPrices, lowPrices, closingPrices, 14);
+  const volatility = calculateVolatility(closingPrices, 10);
   
   // Generate signal based on MA crossover strategy
   const signal = generateMACrossoverSignal(shortMa, longMa);
@@ -405,7 +522,9 @@ export const calculateIndicators = (data: any[]) => {
     lowerBand: bollingerBands.lower,
     middleBand: bollingerBands.middle,
     signal,
-    stdDev: (bollingerBands.upper - bollingerBands.middle) / 2
+    stdDev: (bollingerBands.upper - bollingerBands.middle) / 2,
+    atr,
+    volatility
   };
 };
 
@@ -459,24 +578,39 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       upperBand, 
       lowerBand,
       signal,
-      stdDev
+      atr,
+      volatility
     } = technicalIndicators;
     
-    const volatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
-    const leverage = Math.min(10, Math.max(2, Math.floor(volatility * 50)));
+    // Calculate signal confidence (from Python model)
+    const confidence = calculateSignalConfidence(technicalIndicators);
+    
+    // Adaptive leverage based on volatility (from Python code)
+    const dynamicVolatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
+    const leverage = Math.min(10, Math.max(2, Math.floor(dynamicVolatility * 50)));
     
     let tradingSignal: TradingSignal | null = null;
     
-    // Logic aligned with the Python code - using MA crossover strategy
-    if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
-      // LONG signal
+    // Logic aligned with the Python code - using improved signal criteria
+    if (
+      rsi < 30 && 
+      shortMa > longMa && 
+      macd > 0 && 
+      currentPrice < lowerBand * 1.05 && 
+      atr > 0.00001 &&
+      volatility > 0.0003 &&
+      confidence >= SIGNAL_CONFIDENCE_THRESHOLD
+    ) {
+      // LONG signal with improved criteria
       const entryPrice = currentPrice;
-      const stopLoss = entryPrice * 0.98;
+      const stopLoss = entryPrice * (1 - (atr / entryPrice) * 2); // Dynamic stop loss based on ATR
       
+      // Dynamic targets based on volatility and ATR
+      const targetScale = Math.max(1, Math.min(3, volatility * 100));
       const targets = [
-        { level: 1, price: entryPrice * 1.01, hit: false },
-        { level: 2, price: entryPrice * 1.02, hit: false },
-        { level: 3, price: entryPrice * 1.03, hit: false }
+        { level: 1, price: entryPrice * (1 + (atr / entryPrice) * 3 * targetScale), hit: false },
+        { level: 2, price: entryPrice * (1 + (atr / entryPrice) * 5 * targetScale), hit: false },
+        { level: 3, price: entryPrice * (1 + (atr / entryPrice) * 8 * targetScale), hit: false }
       ];
       
       tradingSignal = {
@@ -487,14 +621,14 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "BUY",
         entryPrice: entryPrice,
-        entryMin: entryPrice * 0.998,
-        entryMax: entryPrice * 1.002,
+        entryMin: entryPrice * (1 - volatility),
+        entryMax: entryPrice * (1 + volatility),
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
-        status: "ACTIVE",
+        status: confidence > 0.8 ? "ACTIVE" : "WAITING",
         timeframe: "5m",
-        reason: `STRONG BUY SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) crossing Signal(${macdSignal.toFixed(4)})`,
+        reason: `BUY SIGNAL: RSI(${rsi.toFixed(2)}) MA-Cross(✓) MACD(${macd.toFixed(4)}) Confidence(${(confidence * 100).toFixed(0)}%)`,
         leverage: leverage,
         type: "LONG",
         currentPrice: currentPrice,
@@ -507,18 +641,31 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           longMa,
           upperBand,
           lowerBand,
-          signal: 1
+          signal: 1,
+          atr,
+          volatility,
+          confidence
         }
       };
-    } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
-      // SHORT signal
+    } else if (
+      rsi > 70 && 
+      shortMa < longMa && 
+      macd < 0 && 
+      currentPrice > upperBand * 0.95 &&
+      atr > 0.00001 &&
+      volatility > 0.0003 &&
+      confidence >= SIGNAL_CONFIDENCE_THRESHOLD
+    ) {
+      // SHORT signal with improved criteria
       const entryPrice = currentPrice;
-      const stopLoss = entryPrice * 1.02;
+      const stopLoss = entryPrice * (1 + (atr / entryPrice) * 2); // Dynamic stop loss based on ATR
       
+      // Dynamic targets based on volatility and ATR
+      const targetScale = Math.max(1, Math.min(3, volatility * 100));
       const targets = [
-        { level: 1, price: entryPrice * 0.99, hit: false },
-        { level: 2, price: entryPrice * 0.98, hit: false },
-        { level: 3, price: entryPrice * 0.97, hit: false }
+        { level: 1, price: entryPrice * (1 - (atr / entryPrice) * 3 * targetScale), hit: false },
+        { level: 2, price: entryPrice * (1 - (atr / entryPrice) * 5 * targetScale), hit: false },
+        { level: 3, price: entryPrice * (1 - (atr / entryPrice) * 8 * targetScale), hit: false }
       ];
       
       tradingSignal = {
@@ -529,14 +676,14 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         pair: `${symbol.replace('USDT', '')}/USDT`,
         direction: "SELL",
         entryPrice: entryPrice,
-        entryMin: entryPrice * 0.998,
-        entryMax: entryPrice * 1.002,
+        entryMin: entryPrice * (1 - volatility),
+        entryMax: entryPrice * (1 + volatility),
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
-        status: "ACTIVE",
+        status: confidence > 0.8 ? "ACTIVE" : "WAITING",
         timeframe: "5m",
-        reason: `STRONG SELL SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) below Signal(${macdSignal.toFixed(4)})`,
+        reason: `SELL SIGNAL: RSI(${rsi.toFixed(2)}) MA-Cross(✓) MACD(${macd.toFixed(4)}) Confidence(${(confidence * 100).toFixed(0)}%)`,
         leverage: leverage,
         type: "SHORT",
         currentPrice: currentPrice,
@@ -549,20 +696,23 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           longMa,
           upperBand,
           lowerBand,
-          signal: -1
+          signal: -1,
+          atr,
+          volatility,
+          confidence
         }
       };
-    } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
-      // Always generate a potential signal for selected symbols, even if conditions aren't strong
+    } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol) && confidence > 0.5) {
+      // Generate lower-confidence signals for key symbols
       const entryPrice = currentPrice;
       const isBullish = rsi > 50 || macd > 0 || shortMa > longMa;
       
       if (isBullish) {
-        const stopLoss = entryPrice * 0.99;
+        const stopLoss = entryPrice * (1 - Math.max(0.01, atr / entryPrice));
         const targets = [
-          { level: 1, price: entryPrice * 1.005, hit: false },
-          { level: 2, price: entryPrice * 1.01, hit: false },
-          { level: 3, price: entryPrice * 1.015, hit: false }
+          { level: 1, price: entryPrice * (1 + Math.max(0.005, atr / entryPrice * 2)), hit: false },
+          { level: 2, price: entryPrice * (1 + Math.max(0.01, atr / entryPrice * 4)), hit: false },
+          { level: 3, price: entryPrice * (1 + Math.max(0.015, atr / entryPrice * 6)), hit: false }
         ];
         
         tradingSignal = {
@@ -573,15 +723,15 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           pair: `${symbol.replace('USDT', '')}/USDT`,
           direction: "BUY",
           entryPrice: entryPrice,
-          entryMin: entryPrice * 0.998,
-          entryMax: entryPrice * 1.002,
+          entryMin: entryPrice * (1 - volatility/2),
+          entryMax: entryPrice * (1 + volatility/2),
           entryAvg: entryPrice,
           stopLoss: stopLoss,
           targets: targets,
-          status: "WAITING", // Mark as "WAITING" since conditions aren't strong
+          status: "WAITING",
           timeframe: "5m",
-          reason: `Possible BUY entry (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
-          leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
+          reason: `Potential BUY: RSI(${rsi.toFixed(2)}) MACD(${macd.toFixed(4)}) Confidence(${(confidence * 100).toFixed(0)}%)`,
+          leverage: Math.min(leverage, 5),
           type: "LONG",
           currentPrice: currentPrice,
           technicalIndicators: {
@@ -593,15 +743,18 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
             longMa,
             upperBand,
             lowerBand,
-            signal: 0
+            signal: 0,
+            atr,
+            volatility,
+            confidence
           }
         };
       } else {
-        const stopLoss = entryPrice * 1.01;
+        const stopLoss = entryPrice * (1 + Math.max(0.01, atr / entryPrice));
         const targets = [
-          { level: 1, price: entryPrice * 0.995, hit: false },
-          { level: 2, price: entryPrice * 0.99, hit: false },
-          { level: 3, price: entryPrice * 0.985, hit: false }
+          { level: 1, price: entryPrice * (1 - Math.max(0.005, atr / entryPrice * 2)), hit: false },
+          { level: 2, price: entryPrice * (1 - Math.max(0.01, atr / entryPrice * 4)), hit: false },
+          { level: 3, price: entryPrice * (1 - Math.max(0.015, atr / entryPrice * 6)), hit: false }
         ];
         
         tradingSignal = {
@@ -612,212 +765,16 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           pair: `${symbol.replace('USDT', '')}/USDT`,
           direction: "SELL",
           entryPrice: entryPrice,
-          entryMin: entryPrice * 0.998,
-          entryMax: entryPrice * 1.002,
+          entryMin: entryPrice * (1 - volatility/2),
+          entryMax: entryPrice * (1 + volatility/2),
           entryAvg: entryPrice,
           stopLoss: stopLoss,
           targets: targets,
-          status: "WAITING", // Mark as "WAITING" since conditions aren't strong
+          status: "WAITING",
           timeframe: "5m",
-          reason: `Possible SELL entry (RSI: ${rsi.toFixed(2)}, MACD/Signal: ${macd.toFixed(4)}/${macdSignal.toFixed(4)})`,
-          leverage: Math.min(leverage, 5), // Lower leverage for less confident signals
+          reason: `Potential SELL: RSI(${rsi.toFixed(2)}) MACD(${macd.toFixed(4)}) Confidence(${(confidence * 100).toFixed(0)}%)`,
+          leverage: Math.min(leverage, 5),
           type: "SHORT",
           currentPrice: currentPrice,
           technicalIndicators: {
             rsi,
-            macd,
-            macdSignal,
-            macdHistogram,
-            shortMa,
-            longMa,
-            upperBand,
-            lowerBand,
-            signal: 0
-          }
-        };
-      }
-    }
-    
-    if (tradingSignal) {
-      // Send signal to Telegram with enhanced message
-      const signalMessage = 
-        `🔥 TRADING NINJA SIGNAL 🔥\n\n` +
-        `${tradingSignal.type === 'LONG' ? '🟢 BUY' : '🔴 SELL'} ${tradingSignal.symbol}\n\n` +
-        `⚡ Entry: ${formatPrice(tradingSignal.entryMin)} - ${formatPrice(tradingSignal.entryMax)}\n` +
-        `🛑 Stop Loss: ${formatPrice(tradingSignal.stopLoss)}\n` +
-        `🎯 Targets:\n` +
-        `  TP1: ${formatPrice(tradingSignal.targets[0].price)}\n` +
-        `  TP2: ${formatPrice(tradingSignal.targets[1].price)}\n` +
-        `  TP3: ${formatPrice(tradingSignal.targets[2].price)}\n\n` +
-        `💰 Leverage: ${tradingSignal.leverage}x\n` +
-        `⏱️ Timeframe: ${tradingSignal.timeframe}\n` +
-        `📊 Status: ${tradingSignal.status}\n\n` +
-        `📈 Indicators:\n` +
-        `  RSI: ${rsi.toFixed(2)}\n` +
-        `  MACD: ${macd.toFixed(4)}\n` +
-        `  Signal: ${macdSignal.toFixed(4)}\n` +
-        `  Histogram: ${macdHistogram.toFixed(4)}\n` +
-        `  MA Crossover: ${signal === 1 ? 'BUY' : signal === -1 ? 'SELL' : 'NEUTRAL'}`;
-        
-      await sendTelegramMessage(signalMessage);
-    }
-    
-    return tradingSignal;
-  } catch (error) {
-    console.error(`Error generating trading signal for ${symbol}:`, error);
-    return null;
-  }
-};
-
-// Update signals with current prices and check for hit targets
-export const updateSignalStatus = async (signal: TradingSignal): Promise<TradingSignal> => {
-  try {
-    // Clone the signal to avoid mutation
-    const updatedSignal = { ...signal };
-    
-    // Fetch the latest market data
-    const marketData = await fetchBybitKlines(signal.symbol);
-    if (!marketData || !updatedSignal.targets) {
-      return updatedSignal;
-    }
-    
-    // Get the current price from the latest candle
-    const currentPrice = parseFloat(marketData[0][4]);
-    updatedSignal.currentPrice = currentPrice;
-    updatedSignal.updatedAt = new Date().toISOString();
-    
-    // Update technical indicators
-    const indicators = calculateIndicators(marketData);
-    if (updatedSignal.technicalIndicators) {
-      updatedSignal.technicalIndicators = {
-        ...updatedSignal.technicalIndicators,
-        ...indicators
-      };
-    }
-    
-    // Check if targets have been hit
-    if (updatedSignal.targets) {
-      updatedSignal.targets = checkTargetsHit(
-        updatedSignal.targets, 
-        marketData, 
-        updatedSignal.type || "LONG"
-      );
-      
-      // Check if all targets are hit
-      const allTargetsHit = updatedSignal.targets.every(target => target.hit);
-      if (allTargetsHit) {
-        updatedSignal.status = "COMPLETED";
-        updatedSignal.completedAt = new Date().toISOString();
-        
-        // Calculate approximate profit
-        if (updatedSignal.type === "LONG") {
-          const lastTarget = updatedSignal.targets[updatedSignal.targets.length - 1];
-          updatedSignal.profit = ((lastTarget.price - (updatedSignal.entryAvg || 0)) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
-        } else {
-          const lastTarget = updatedSignal.targets[updatedSignal.targets.length - 1];
-          updatedSignal.profit = (((updatedSignal.entryAvg || 0) - lastTarget.price) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
-        }
-      }
-      
-      // Check if stop loss is hit
-      if (updatedSignal.type === "LONG" && currentPrice <= updatedSignal.stopLoss) {
-        updatedSignal.status = "COMPLETED";
-        updatedSignal.completedAt = new Date().toISOString();
-        updatedSignal.profit = -((updatedSignal.entryAvg || 0) - currentPrice) / (updatedSignal.entryAvg || 1) * 100 * (updatedSignal.leverage || 1);
-      } else if (updatedSignal.type === "SHORT" && currentPrice >= updatedSignal.stopLoss) {
-        updatedSignal.status = "COMPLETED";
-        updatedSignal.completedAt = new Date().toISOString();
-        updatedSignal.profit = -((currentPrice - (updatedSignal.entryAvg || 0)) / (updatedSignal.entryAvg || 1)) * 100 * (updatedSignal.leverage || 1);
-      }
-    }
-    
-    return updatedSignal;
-  } catch (error) {
-    console.error(`Error updating signal status for ${signal.symbol}:`, error);
-    return signal;
-  }
-};
-
-// Generate signals for all monitored symbols
-export const generateAllSignals = async (): Promise<TradingSignal[]> => {
-  const signals: TradingSignal[] = [];
-  
-  for (const symbol of SYMBOLS) {
-    const signal = await generateTradingSignal(symbol);
-    if (signal) {
-      signals.push(signal);
-    }
-  }
-  
-  return signals;
-};
-
-// Convert Bybit candle data to CryptoCoin format
-export const convertBybitToCryptoCoin = async (symbol: string): Promise<CryptoCoin | null> => {
-  try {
-    const candles = await fetchBybitKlines(symbol);
-    if (!candles || candles.length === 0) return null;
-    
-    // Extract the most recent candle
-    const latestCandle = candles[0];
-    
-    // Parse candle data
-    const openPrice = parseFloat(latestCandle[1]);
-    const highPrice = parseFloat(latestCandle[2]);
-    const lowPrice = parseFloat(latestCandle[3]);
-    const closePrice = parseFloat(latestCandle[4]);
-    const volume = parseFloat(latestCandle[5]);
-    
-    // Calculate 24h change
-    const prevDayCandle = candles.find(c => {
-      const candleTime = new Date(parseInt(c[0]));
-      const now = new Date();
-      const hoursDiff = (now.getTime() - candleTime.getTime()) / (1000 * 60 * 60);
-      return hoursDiff >= 24;
-    }) || candles[candles.length - 1];
-    
-    const prevClosePrice = parseFloat(prevDayCandle[4]);
-    const priceChange = closePrice - prevClosePrice;
-    const priceChangePercent = (priceChange / prevClosePrice) * 100;
-    
-    // Generate a simple coin ID
-    const coinId = symbol.replace('USDT', '').toLowerCase();
-    
-    // Determine trend
-    const trend = getTrendFromCandle(latestCandle);
-    
-    return {
-      id: coinId,
-      symbol: symbol,
-      name: symbol.replace('USDT', ''),
-      image: `https://cryptologos.cc/logos/${coinId}-${coinId}-logo.png?v=022`, // Generic placeholder
-      currentPrice: closePrice,
-      priceChange24h: priceChange,
-      priceChangePercentage24h: priceChangePercent,
-      marketCap: closePrice * volume * 1000, // Rough estimate
-      volume24h: volume,
-      high24h: highPrice,
-      low24h: lowPrice,
-      lastUpdated: new Date(),
-      trend: trend
-    };
-  } catch (error) {
-    console.error(`Error converting Bybit data for ${symbol}:`, error);
-    return null;
-  }
-};
-
-// Get multiple crypto coins data
-export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoCoin[]> => {
-  const results: CryptoCoin[] = [];
-  
-  for (const symbol of symbols) {
-    const coin = await convertBybitToCryptoCoin(symbol);
-    if (coin) {
-      results.push(coin);
-    }
-  }
-  
-  return results;
-};
-

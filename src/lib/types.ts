@@ -19,6 +19,9 @@ export interface TechnicalIndicators {
   upperBand?: number;
   lowerBand?: number;
   signal?: number; // 1 for buy, -1 for sell, 0 for neutral
+  atr?: number; // Added from Python code
+  volatility?: number; // Added from Python code
+  confidence?: number; // Added from Python model
 }
 
 export interface TradingSignal {
