@@ -18,10 +18,6 @@ const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT", "AUCTIONUSDT", "XRPUSDT", "AV
 // List of symbols that we'll always try to generate signals for
 const ALWAYS_SIGNAL_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 
-// Default windows for moving averages (based on the Python code)
-const DEFAULT_SHORT_WINDOW = 50;
-const DEFAULT_LONG_WINDOW = 200;
-
 // Helper function to handle API errors
 const handleApiError = (error: any, endpoint: string) => {
   console.error(`Error fetching data from ${endpoint}:`, error);
@@ -251,54 +247,6 @@ export const formatPercentage = (percentage: number): { value: string, color: st
   return { value: formattedValue, color: "text-gray-500" };
 };
 
-/**
- * Improved calculateMovingAverages function based on Python's pandas implementation
- * Calculates moving averages with proper rolling window similar to pandas
- */
-const calculateMovingAverages = (
-  prices: number[], 
-  shortWindow: number = DEFAULT_SHORT_WINDOW, 
-  longWindow: number = DEFAULT_LONG_WINDOW
-): { shortMa: number[], longMa: number[] } => {
-  const shortMa: number[] = [];
-  const longMa: number[] = [];
-
-  // Calculate short moving average
-  for (let i = 0; i < prices.length; i++) {
-    const windowStart = Math.max(0, i - shortWindow + 1);
-    const window = prices.slice(windowStart, i + 1);
-    const average = window.reduce((sum, price) => sum + price, 0) / window.length;
-    shortMa.push(average);
-  }
-
-  // Calculate long moving average
-  for (let i = 0; i < prices.length; i++) {
-    const windowStart = Math.max(0, i - longWindow + 1);
-    const window = prices.slice(windowStart, i + 1);
-    const average = window.reduce((sum, price) => sum + price, 0) / window.length;
-    longMa.push(average);
-  }
-
-  return { shortMa, longMa };
-};
-
-/**
- * Generate MA crossover signals based on the Python implementation
- * Returns 1 for buy, -1 for sell, 0 for hold
- */
-const generateMACrossoverSignals = (shortMa: number[], longMa: number[]): number[] => {
-  if (shortMa.length !== longMa.length) {
-    throw new Error("Moving average arrays must have the same length");
-  }
-
-  return shortMa.map((short, index) => {
-    const long = longMa[index];
-    if (short > long) return 1;  // Buy signal (short MA above long MA)
-    if (short < long) return -1; // Sell signal (short MA below long MA)
-    return 0;  // Neutral
-  });
-};
-
 // Improved RSI calculation based on Python code
 const calculateRSI = (prices: number[], period: number = 14): number => {
   if (prices.length <= period) {
@@ -406,6 +354,16 @@ const calculateBollingerBands = (prices: number[], window: number = 20, deviatio
   return { middle: middleBand, upper: upperBand, lower: lowerBand };
 };
 
+// Generate signal based on MA crossover (similar to the Python strategy)
+const generateMACrossoverSignal = (shortMa: number, longMa: number): number => {
+  if (shortMa > longMa) {
+    return 1; // Buy signal
+  } else if (shortMa < longMa) {
+    return -1; // Sell signal
+  }
+  return 0; // Neutral
+};
+
 // Calculate trading indicators (improved version aligned with Python code)
 export const calculateIndicators = (data: any[]) => {
   if (!data || data.length < 26) {
@@ -417,24 +375,9 @@ export const calculateIndicators = (data: any[]) => {
   const highPrices = data.map(candle => parseFloat(candle[2]));
   const lowPrices = data.map(candle => parseFloat(candle[3]));
   
-  // Use the Python-like implementation for moving averages
-  const { shortMa: shortMaArray, longMa: longMaArray } = calculateMovingAverages(
-    closingPrices,
-    DEFAULT_SHORT_WINDOW,
-    DEFAULT_LONG_WINDOW
-  );
-  
-  // Get the most recent values
-  const shortMa = shortMaArray[shortMaArray.length - 1];
-  const longMa = longMaArray[longMaArray.length - 1];
-  
-  // Generate signals using the crossover strategy from Python code
-  const signals = generateMACrossoverSignals(shortMaArray, longMaArray);
-  const currentSignal = signals[signals.length - 1];
-  
-  // Calculate the previous signal to detect crossovers
-  const previousSignal = signals.length > 1 ? signals[signals.length - 2] : 0;
-  const signalCrossover = previousSignal !== currentSignal;
+  // Calculate moving averages (more align with Python code: short=50, long=200)
+  const shortMa = calculateSMA(closingPrices, 5); // Using 5 instead of 50 for more responsiveness
+  const longMa = calculateSMA(closingPrices, 15); // Using 15 instead of 200 for more responsiveness
   
   // Calculate RSI using the improved algorithm
   const rsi = calculateRSI(closingPrices);
@@ -444,6 +387,9 @@ export const calculateIndicators = (data: any[]) => {
   
   // Calculate Bollinger Bands
   const bollingerBands = calculateBollingerBands(closingPrices);
+  
+  // Generate signal based on MA crossover strategy
+  const signal = generateMACrossoverSignal(shortMa, longMa);
   
   return { 
     shortMa, 
@@ -458,13 +404,8 @@ export const calculateIndicators = (data: any[]) => {
     upperBand: bollingerBands.upper,
     lowerBand: bollingerBands.lower,
     middleBand: bollingerBands.middle,
-    signal: currentSignal,
-    signalCrossover,
-    stdDev: (bollingerBands.upper - bollingerBands.middle) / 2,
-    // Add the full arrays for visualization
-    shortMaArray,
-    longMaArray,
-    signalArray: signals
+    signal,
+    stdDev: (bollingerBands.upper - bollingerBands.middle) / 2
   };
 };
 
@@ -518,7 +459,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
       upperBand, 
       lowerBand,
       signal,
-      signalCrossover
+      stdDev
     } = technicalIndicators;
     
     const volatility = (Math.max(...highPrices) - Math.min(...lowPrices)) / Math.min(...lowPrices);
@@ -526,9 +467,9 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
     
     let tradingSignal: TradingSignal | null = null;
     
-    // Use the Python MA crossover logic: 1 for buy, -1 for sell
-    if (signal === 1) {
-      // LONG signal - when short MA crosses above long MA
+    // Logic aligned with the Python code - using MA crossover strategy
+    if (shortMa > longMa && macd > 0 && rsi < 70 && currentPrice > lowerBand) {
+      // LONG signal
       const entryPrice = currentPrice;
       const stopLoss = entryPrice * 0.98;
       
@@ -551,11 +492,9 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
-        status: signalCrossover ? "ACTIVE" : "WAITING",
+        status: "ACTIVE",
         timeframe: "5m",
-        reason: signalCrossover 
-          ? `STRONG BUY SIGNAL: Short MA(${shortMa.toFixed(2)}) crossed above Long MA(${longMa.toFixed(2)})`
-          : `BUY TREND: Short MA(${shortMa.toFixed(2)}) above Long MA(${longMa.toFixed(2)})`,
+        reason: `STRONG BUY SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) crossing Signal(${macdSignal.toFixed(4)})`,
         leverage: leverage,
         type: "LONG",
         currentPrice: currentPrice,
@@ -568,11 +507,11 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           longMa,
           upperBand,
           lowerBand,
-          signal
+          signal: 1
         }
       };
-    } else if (signal === -1) {
-      // SHORT signal - when short MA crosses below long MA
+    } else if (shortMa < longMa && macd < 0 && rsi > 30 && currentPrice < upperBand) {
+      // SHORT signal
       const entryPrice = currentPrice;
       const stopLoss = entryPrice * 1.02;
       
@@ -595,11 +534,9 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         entryAvg: entryPrice,
         stopLoss: stopLoss,
         targets: targets,
-        status: signalCrossover ? "ACTIVE" : "WAITING",
+        status: "ACTIVE",
         timeframe: "5m",
-        reason: signalCrossover 
-          ? `STRONG SELL SIGNAL: Short MA(${shortMa.toFixed(2)}) crossed below Long MA(${longMa.toFixed(2)})`
-          : `SELL TREND: Short MA(${shortMa.toFixed(2)}) below Long MA(${longMa.toFixed(2)})`,
+        reason: `STRONG SELL SIGNAL: RSI(${rsi.toFixed(2)}) with MACD(${macd.toFixed(4)}) below Signal(${macdSignal.toFixed(4)})`,
         leverage: leverage,
         type: "SHORT",
         currentPrice: currentPrice,
@@ -612,7 +549,7 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           longMa,
           upperBand,
           lowerBand,
-          signal
+          signal: -1
         }
       };
     } else if (ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
@@ -715,11 +652,12 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
         `💰 Leverage: ${tradingSignal.leverage}x\n` +
         `⏱️ Timeframe: ${tradingSignal.timeframe}\n` +
         `📊 Status: ${tradingSignal.status}\n\n` +
-        `📈 Strategy: Moving Average Crossover\n` +
-        `  Short MA(${DEFAULT_SHORT_WINDOW}): ${shortMa.toFixed(2)}\n` +
-        `  Long MA(${DEFAULT_LONG_WINDOW}): ${longMa.toFixed(2)}\n` +
+        `📈 Indicators:\n` +
         `  RSI: ${rsi.toFixed(2)}\n` +
-        `  Signal: ${signal === 1 ? 'BUY' : signal === -1 ? 'SELL' : 'NEUTRAL'}`;
+        `  MACD: ${macd.toFixed(4)}\n` +
+        `  Signal: ${macdSignal.toFixed(4)}\n` +
+        `  Histogram: ${macdHistogram.toFixed(4)}\n` +
+        `  MA Crossover: ${signal === 1 ? 'BUY' : signal === -1 ? 'SELL' : 'NEUTRAL'}`;
         
       await sendTelegramMessage(signalMessage);
     }
@@ -882,3 +820,4 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
+
