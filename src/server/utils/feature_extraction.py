@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 import talib
 from .feature_cache import FeatureCache
+import concurrent.futures
+import logging
 
 class FeatureExtractor:
     """Class to extract technical indicators from price data."""
@@ -26,20 +28,26 @@ class FeatureExtractor:
         self.use_cache = use_cache
         if use_cache:
             self.cache = FeatureCache(cache_dir, max_cache_age_days)
+        
+        # Setup logging
+        logging.basicConfig(level=logging.INFO, 
+                           format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        self.logger = logging.getLogger('FeatureExtractor')
     
-    def extract_features(self, df):
+    def extract_features(self, df, symbol=None):
         """
         Extract technical indicators from price data with optional caching.
         
         Args:
             df: DataFrame with OHLCV data
+            symbol: Symbol identifier for the data
             
         Returns:
             DataFrame: Original data with added technical indicators
         """
         # Try to get from cache if enabled
         if self.use_cache:
-            cached_df = self.cache.get_from_cache(df)
+            cached_df = self.cache.get_from_cache(df, symbol=symbol)
             if cached_df is not None:
                 return cached_df
         
@@ -57,9 +65,45 @@ class FeatureExtractor:
         
         # Save to cache if enabled
         if self.use_cache:
-            self.cache.save_to_cache(result_df)
+            self.cache.save_to_cache(result_df, symbol=symbol)
         
         return result_df
+    
+    def extract_features_batch(self, symbol_df_pairs, max_workers=None):
+        """
+        Extract features for multiple symbol-dataframe pairs in parallel.
+        
+        Args:
+            symbol_df_pairs: List of (symbol, dataframe) tuples
+            max_workers: Maximum number of worker threads
+            
+        Returns:
+            Dictionary mapping symbols to feature-enriched DataFrames
+        """
+        if not symbol_df_pairs:
+            return {}
+        
+        self.logger.info(f"Processing {len(symbol_df_pairs)} symbols in parallel")
+        
+        results = {}
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all extraction tasks
+            future_to_symbol = {
+                executor.submit(self.extract_features, df, symbol): symbol 
+                for symbol, df in symbol_df_pairs
+            }
+            
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_symbol):
+                symbol = future_to_symbol[future]
+                try:
+                    results[symbol] = future.result()
+                    self.logger.info(f"Completed feature extraction for {symbol}")
+                except Exception as e:
+                    self.logger.error(f"Error processing {symbol}: {e}")
+        
+        return results
     
     def _add_momentum_indicators(self, df):
         """Add momentum indicators to the DataFrame."""
@@ -117,3 +161,4 @@ class FeatureExtractor:
             df['volume_sma'] = talib.SMA(df['volume'], timeperiod=20)
         
         return df
+

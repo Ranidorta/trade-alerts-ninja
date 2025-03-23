@@ -88,3 +88,45 @@ def test_clean_old_cache_files(test_cache_dir):
     # Check we only have 2 files left
     cache_files = os.listdir(test_cache_dir)
     assert len(cache_files) <= 2
+
+def test_symbol_specific_cache(sample_df, test_cache_dir):
+    """Test symbol-specific caching."""
+    cache = FeatureCache(cache_dir=test_cache_dir)
+    
+    # Save to cache with different symbols
+    btc_df = sample_df.copy()
+    eth_df = sample_df.copy()  # Same data but different symbol
+    
+    # Save both to cache
+    btc_cache_path = cache.save_to_cache(btc_df, symbol="BTCUSDT")
+    eth_cache_path = cache.save_to_cache(eth_df, symbol="ETHUSDT")
+    
+    # Check files exist and are different
+    assert os.path.exists(btc_cache_path)
+    assert os.path.exists(eth_cache_path)
+    assert btc_cache_path != eth_cache_path
+    
+    # Retrieve from cache
+    btc_cached = cache.get_from_cache(btc_df, symbol="BTCUSDT")
+    eth_cached = cache.get_from_cache(eth_df, symbol="ETHUSDT")
+    
+    # Check correct data is returned
+    assert btc_cached is not None
+    assert eth_cached is not None
+    pd.testing.assert_frame_equal(btc_df, btc_cached)
+    pd.testing.assert_frame_equal(eth_df, eth_cached)
+
+def test_parallel_processing(test_cache_dir):
+    """Test parallel processing functionality."""
+    cache = FeatureCache(cache_dir=test_cache_dir)
+    
+    # Create test data
+    def process_item(item):
+        return item * 2
+    
+    items = list(range(10))
+    results = cache.parallel_process(items, process_item)
+    
+    # Check results
+    assert results == [i * 2 for i in items]
+
