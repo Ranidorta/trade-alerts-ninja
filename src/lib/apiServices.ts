@@ -777,3 +777,66 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           type: "SHORT",
           currentPrice: currentPrice,
           technicalIndicators: {
+            rsi,
+            macd,
+            macdSignal,
+            macdHistogram,
+            shortMa,
+            longMa,
+            upperBand,
+            lowerBand,
+            signal: 0,
+            atr,
+            volatility,
+            confidence
+          }
+        };
+      }
+    }
+    
+    return tradingSignal;
+  } catch (error) {
+    console.error(`Error generating signal for ${symbol}:`, error);
+    return null;
+  }
+};
+
+// Generate trading signals for all monitored symbols
+export const generateAllSignals = async (): Promise<TradingSignal[]> => {
+  try {
+    const signals: TradingSignal[] = [];
+    
+    // First try to generate signals for the prioritized symbols
+    for (const symbol of ALWAYS_SIGNAL_SYMBOLS) {
+      try {
+        const signal = await generateTradingSignal(symbol);
+        if (signal) {
+          signals.push(signal);
+        }
+      } catch (error) {
+        console.error(`Error generating signal for ${symbol}:`, error);
+        // Continue with other symbols even if one fails
+      }
+    }
+    
+    // Then try other symbols not included in the ALWAYS_SIGNAL_SYMBOLS list
+    for (const symbol of SYMBOLS) {
+      if (!ALWAYS_SIGNAL_SYMBOLS.includes(symbol)) {
+        try {
+          const signal = await generateTradingSignal(symbol);
+          if (signal) {
+            signals.push(signal);
+          }
+        } catch (error) {
+          console.error(`Error generating signal for ${symbol}:`, error);
+          // Continue with other symbols even if one fails
+        }
+      }
+    }
+    
+    return signals;
+  } catch (error) {
+    console.error("Error generating all signals:", error);
+    return [];
+  }
+};
