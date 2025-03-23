@@ -1,3 +1,4 @@
+
 import { TradingSignal } from "./types";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -128,4 +129,60 @@ export const fetchMarketData = async (symbol: string, timeframe = '1h', limit = 
     console.error("Error fetching market data:", error);
     return [];
   }
+};
+
+// Add the missing exports that other files are importing
+export const fetchBybitKlines = async (symbol: string, interval = '1h', limit = 100) => {
+  return fetchMarketData(symbol, interval, limit);
+};
+
+export const fetchCryptoNews = async () => {
+  return [
+    {
+      title: "Bitcoin Surges to New All-Time High",
+      description: "Bitcoin reaches new heights as institutional adoption grows.",
+      url: "#",
+      publishedAt: new Date().toISOString(),
+      source: { name: "Crypto News" },
+      urlToImage: "https://via.placeholder.com/150"
+    },
+    {
+      title: "Ethereum 2.0 Upgrade Progress",
+      description: "The Ethereum network continues its transition to proof-of-stake.",
+      url: "#",
+      publishedAt: new Date().toISOString(),
+      source: { name: "Ethereum Times" },
+      urlToImage: "https://via.placeholder.com/150"
+    }
+  ];
+};
+
+export const fetchCoinGeckoGlobal = async () => {
+  return {
+    activeCryptocurrencies: 10000,
+    totalMarketCap: 2100000000000,
+    totalVolume24h: 150000000000,
+    marketCapPercentage: {
+      btc: 45,
+      eth: 18,
+    },
+    marketCapChangePercentage24hUsd: 2.5,
+    lastUpdated: new Date(),
+  };
+};
+
+export const calculateIndicators = (data: any[]) => {
+  // Mock implementation to calculate technical indicators
+  return data.map(item => ({
+    ...item,
+    shortMa: item.price * (1 + Math.random() * 0.1),
+    longMa: item.price * (1 - Math.random() * 0.1),
+    signal: Math.random() > 0.5 ? 1 : -1
+  }));
+};
+
+export const formatPercentage = (value: number): string => {
+  if (!value && value !== 0) return 'N/A';
+  const formatted = value.toFixed(2);
+  return value > 0 ? `+${formatted}%` : `${formatted}%`;
 };
