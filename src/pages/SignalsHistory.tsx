@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { TradingSignal } from "@/lib/types";
+import { TradingSignalRecord, fetchSignalHistory } from "@/lib/tradingSignalService";
 import SignalCard from "@/components/SignalCard";
 import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,15 +10,74 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import TradingSignalInsights from "@/components/TradingSignalInsights";
+import { Progress } from "@/components/ui/progress";
+
+// Map API trading signal record to app TradingSignal format
+const mapSignalRecordToTradingSignal = (record: TradingSignalRecord): TradingSignal => {
+  return {
+    id: String(record.id),
+    symbol: record.symbol,
+    pair: record.symbol,
+    type: record.signal === 1 ? "LONG" : "SHORT",
+    status: "COMPLETED",
+    createdAt: record.timestamp,
+    completedAt: record.timestamp,
+    entryAvg: record.entry_price,
+    stopLoss: record.entry_price - record.atr * (record.signal === 1 ? 1 : -1),
+    targets: [
+      {
+        id: "1",
+        price: record.exit_price,
+        percentage: 100,
+        hit: true
+      }
+    ],
+    timeframe: "4h",
+    profit: record.profit_loss / record.position_size * 100, // Convert absolute P/L to percentage
+    description: `${record.signal === 1 ? 'Long' : 'Short'} position with position size ${record.position_size.toFixed(2)}`,
+    riskRewardRatio: 1.5
+  };
+};
 
 const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [activeTab, setActiveTab] = useState("all");
   const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Load signals from localStorage on component mount
-  useEffect(() => {
+  // Load signals from API
+  const loadSignalsFromAPI = async () => {
+    setIsLoading(true);
+    try {
+      const signalRecords = await fetchSignalHistory();
+      const mappedSignals = signalRecords.map(mapSignalRecordToTradingSignal);
+      
+      if (mappedSignals.length > 0) {
+        setSignals(mappedSignals);
+      } else {
+        toast({
+          title: "No signals found",
+          description: "No trading signals found in the database.",
+        });
+      }
+    } catch (error) {
+      console.error("Error loading signals from API:", error);
+      toast({
+        title: "Error loading signals",
+        description: "Failed to load signals from the API.",
+        variant: "destructive"
+      });
+      
+      // Fallback to localStorage
+      loadFromLocalStorage();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Fallback: Load signals from localStorage
+  const loadFromLocalStorage = () => {
     // Try to get historical signals first
     const savedHistorical = localStorage.getItem('historicalSignals');
     if (savedHistorical) {
@@ -33,7 +93,7 @@ const SignalsHistory = () => {
       // If no historical signals, try to get completed signals from active signals
       loadCompletedFromActive();
     }
-  }, []);
+  };
 
   // Load completed signals from active signals (fallback)
   const loadCompletedFromActive = () => {
@@ -58,6 +118,11 @@ const SignalsHistory = () => {
       }
     }
   };
+  
+  // Initial load
+  useEffect(() => {
+    loadSignalsFromAPI();
+  }, []);
 
   // Calculate summary statistics
   const summary = useMemo(() => {
@@ -88,7 +153,7 @@ const SignalsHistory = () => {
   }, [signals, activeTab]);
 
   const handleRefresh = () => {
-    loadCompletedFromActive();
+    loadSignalsFromAPI();
     toast({
       title: "History Refreshed",
       description: "Signal history has been updated with the latest data"
@@ -113,9 +178,14 @@ const SignalsHistory = () => {
               Performance Dashboard
             </Link>
           </Button>
-          <Button variant="outline" onClick={handleRefresh} className="flex items-center">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh History
+          <Button 
+            variant="outline" 
+            onClick={handleRefresh} 
+            className="flex items-center"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? 'Loading...' : 'Refresh History'}
           </Button>
           <Card className="shadow-sm">
             <CardContent className="p-3 flex items-center">
@@ -131,6 +201,17 @@ const SignalsHistory = () => {
           </Card>
         </div>
       </div>
+
+      {isLoading && (
+        <Card className="mb-6">
+          <CardContent className="py-6">
+            <div className="space-y-2">
+              <p className="text-center text-sm text-muted-foreground">Loading signal history...</p>
+              <Progress value={65} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
