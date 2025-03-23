@@ -1,187 +1,203 @@
 
 """
-Feature Cache Utility
+Feature Cache Module
 
-This module provides caching functionality for feature extraction from financial data,
-using an intelligent caching system to avoid redundant calculations.
+This module provides functionality to cache DataFrame features to disk
+and retrieve them when needed to avoid redundant calculations.
+It includes optimizations for multi-asset processing and signal-type specific caching.
 """
 
 import os
 import pandas as pd
 import hashlib
-import glob
-import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import concurrent.futures
 import logging
+import numpy as np
 
 class FeatureCache:
-    """Class to manage caching of feature extraction results."""
+    """
+    A class for caching processed DataFrames to disk and retrieving them.
+    Optimized for multi-asset and multi-signal type processing.
+    """
     
-    def __init__(self, cache_dir="cache", max_cache_age_days=7, max_cache_files=100, 
-                 use_sampling=True, sample_size=10000):
+    def __init__(self, cache_dir="cache", max_cache_age_days=7, max_cache_files=1000):
         """
-        Initialize the feature cache manager.
+        Initialize the feature cache.
         
         Args:
             cache_dir: Directory to store cache files
             max_cache_age_days: Maximum age of cache files in days
             max_cache_files: Maximum number of cache files to keep
-            use_sampling: Whether to use sampling for hashing large DataFrames
-            sample_size: Number of rows to sample when hashing large DataFrames
         """
         self.cache_dir = cache_dir
         self.max_cache_age_days = max_cache_age_days
         self.max_cache_files = max_cache_files
-        self.use_sampling = use_sampling
-        self.sample_size = sample_size
         
+        # Create cache directory if it doesn't exist
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+            
         # Setup logging
         logging.basicConfig(level=logging.INFO, 
                            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         self.logger = logging.getLogger('FeatureCache')
         
-        # Create cache directory and subdirectories
-        if not os.path.exists(cache_dir):
-            os.makedirs(cache_dir)
+        # Clean old cache files on startup
+        self.clean_old_cache_files()
     
-    def hash_dataframe(self, df, columns=None, symbol=None):
+    def hash_dataframe(self, df, columns=None, max_rows=10000):
         """
-        Create a hash of the DataFrame content.
+        Create a hash of a DataFrame for caching purposes.
         
         Args:
-            df: DataFrame to hash
-            columns: Specific columns to include in the hash
-            symbol: Symbol identifier for the data
+            df: The DataFrame to hash
+            columns: Optional list of columns to include in the hash
+            max_rows: Maximum number of rows to sample for large DataFrames
             
         Returns:
-            str: MD5 hash of the DataFrame
+            String: MD5 hash of the DataFrame
         """
-        if columns:
-            df_to_hash = df[columns].copy()
+        # For large DataFrames, use sampling to speed up hashing
+        if len(df) > max_rows:
+            # Use a deterministic sampling method
+            np.random.seed(42)
+            sample_indices = sorted(np.random.choice(len(df), max_rows, replace=False))
+            df_sample = df.iloc[sample_indices]
         else:
-            df_to_hash = df.copy()
-        
-        # Add symbol to hash input if provided
-        hash_input = None
-        
-        # Use a faster method for large DataFrames
-        if self.use_sampling and len(df_to_hash) > self.sample_size:
-            # Take a sample of rows for hashing to improve performance
-            sample = df_to_hash.sample(n=self.sample_size, random_state=42)
-            hash_input = pd.util.hash_pandas_object(sample).values
-        else:
-            hash_input = pd.util.hash_pandas_object(df_to_hash).values
-        
-        # Combine with symbol if available
-        if symbol:
-            symbol_hash = symbol.encode('utf-8')
-            combined_hash = bytearray(hash_input) + symbol_hash
-            return hashlib.md5(combined_hash).hexdigest()
-        
-        return hashlib.md5(hash_input).hexdigest()
+            df_sample = df
+            
+        # Limit to specific columns if requested
+        if columns is not None:
+            df_sample = df_sample[columns].copy()
+            
+        # Create hash
+        df_hash = hashlib.md5(pd.util.hash_pandas_object(df_sample).values).hexdigest()
+        return df_hash
     
-    def get_cache_path(self, cache_key, symbol=None, prefix="features"):
-        """Get the full path for a cache file."""
-        if symbol:
-            return os.path.join(self.cache_dir, f"{prefix}_{symbol}_{cache_key}.parquet")
-        return os.path.join(self.cache_dir, f"{prefix}_{cache_key}.parquet")
-    
-    def get_from_cache(self, df, columns_to_hash=None, symbol=None):
+    def get_cache_path(self, cache_key=None, df=None, symbol=None, signal_type=None):
         """
-        Try to get cached features for a DataFrame.
+        Get the path for a cache file.
         
         Args:
-            df: Input DataFrame
-            columns_to_hash: Columns to use for the hash
-            symbol: Symbol identifier for the data
+            cache_key: Optional custom cache key
+            df: DataFrame to hash if no cache_key provided
+            symbol: Optional symbol identifier
+            signal_type: Optional signal type identifier
             
         Returns:
-            DataFrame or None: Cached DataFrame if it exists, None otherwise
+            String: Path to the cache file
         """
-        if columns_to_hash is None:
-            columns_to_hash = ['open', 'high', 'low', 'close']
+        # Generate key if not provided
+        if cache_key is None and df is not None:
+            cache_key = self.hash_dataframe(df)
             
-        cache_key = self.hash_dataframe(df, columns_to_hash, symbol)
-        cache_path = self.get_cache_path(cache_key, symbol)
+        # Prefix with symbol if provided
+        if symbol:
+            cache_key = f"{symbol}_{cache_key}"
+            
+        # Append signal type if provided
+        if signal_type:
+            cache_key = f"{cache_key}_{signal_type}"
+            
+        return os.path.join(self.cache_dir, f"{cache_key}.parquet")
+    
+    def get_from_cache(self, df, symbol=None, signal_type=None):
+        """
+        Try to get a DataFrame from cache.
+        
+        Args:
+            df: DataFrame to hash and look up in cache
+            symbol: Optional symbol identifier
+            signal_type: Optional signal type identifier
+            
+        Returns:
+            DataFrame or None: The cached DataFrame if found, otherwise None
+        """
+        cache_path = self.get_cache_path(df=df, symbol=symbol, signal_type=signal_type)
         
         if os.path.exists(cache_path):
             try:
-                self.logger.debug(f"Cache hit for {symbol if symbol else 'unknown'}")
+                self.logger.debug(f"Cache hit: {cache_path}")
                 return pd.read_parquet(cache_path)
             except Exception as e:
-                self.logger.warning(f"Error reading cache: {e}")
+                self.logger.warning(f"Error reading cache file {cache_path}: {e}")
                 return None
-        
-        self.logger.debug(f"Cache miss for {symbol if symbol else 'unknown'}")
-        return None
+        else:
+            self.logger.debug(f"Cache miss: {cache_path}")
+            return None
     
-    def save_to_cache(self, df, cache_key=None, columns_to_hash=None, symbol=None):
+    def save_to_cache(self, df, cache_key=None, symbol=None, signal_type=None):
         """
-        Save DataFrame to cache.
+        Save a DataFrame to cache.
         
         Args:
-            df: DataFrame to cache
-            cache_key: Optional pre-computed cache key
-            columns_to_hash: Columns to use for the hash
-            symbol: Symbol identifier for the data
+            df: DataFrame to save
+            cache_key: Optional custom cache key
+            symbol: Optional symbol identifier
+            signal_type: Optional signal type identifier
             
         Returns:
-            str: Path where the cache was saved
+            String: Path where the DataFrame was saved
         """
-        # Clean old cache files if needed before saving new ones
-        self.clean_old_cache_files()
+        cache_path = self.get_cache_path(cache_key, df, symbol, signal_type)
         
-        if cache_key is None:
-            if columns_to_hash is None:
-                columns_to_hash = ['open', 'high', 'low', 'close']
-            cache_key = self.hash_dataframe(df, columns_to_hash, symbol)
-        
-        cache_path = self.get_cache_path(cache_key, symbol)
-        df.to_parquet(cache_path)
-        self.logger.debug(f"Saved to cache: {cache_path}")
-        return cache_path
+        try:
+            # Create parent directories if they don't exist
+            os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+            
+            # Save to parquet format
+            df.to_parquet(cache_path, index=True)
+            self.logger.debug(f"Saved to cache: {cache_path}")
+            
+            return cache_path
+        except Exception as e:
+            self.logger.error(f"Error saving to cache {cache_path}: {e}")
+            return None
     
     def clean_old_cache_files(self):
         """
-        Remove old cache files to maintain storage limits.
-        - Removes files older than max_cache_age_days
-        - Keeps only the newest max_cache_files files
+        Remove cache files that are older than max_cache_age_days
+        or if there are more files than max_cache_files.
         """
-        now = time.time()
-        max_age_seconds = self.max_cache_age_days * 24 * 60 * 60
-        
-        # Get all cache files
-        cache_files = glob.glob(os.path.join(self.cache_dir, "*.parquet"))
-        
-        # Remove old files
-        for file_path in cache_files:
-            if os.path.exists(file_path):
-                file_age = now - os.path.getmtime(file_path)
-                if file_age > max_age_seconds:
-                    try:
-                        os.remove(file_path)
-                        self.logger.debug(f"Removed old cache file: {file_path}")
-                    except Exception as e:
-                        self.logger.warning(f"Error removing cache file: {e}")
-        
-        # Check if we still have too many files
-        cache_files = glob.glob(os.path.join(self.cache_dir, "*.parquet"))
-        if len(cache_files) > self.max_cache_files:
-            # Sort by modification time (newest first)
-            cache_files.sort(key=os.path.getmtime, reverse=True)
+        if not os.path.exists(self.cache_dir):
+            return
             
-            # Remove oldest files
-            for file_path in cache_files[self.max_cache_files:]:
-                try:
-                    os.remove(file_path)
-                    self.logger.debug(f"Removed excess cache file: {file_path}")
-                except Exception as e:
-                    self.logger.warning(f"Error removing cache file: {e}")
+        # Get all cache files with their modification time
+        cache_files = []
+        for filename in os.listdir(self.cache_dir):
+            if filename.endswith('.parquet'):
+                filepath = os.path.join(self.cache_dir, filename)
+                mtime = os.path.getmtime(filepath)
+                cache_files.append((filepath, mtime))
+        
+        # Sort by modification time (oldest first)
+        cache_files.sort(key=lambda x: x[1])
+        
+        # Remove files that are too old
+        cutoff_time = (datetime.now() - timedelta(days=self.max_cache_age_days)).timestamp()
+        old_files = [f for f, t in cache_files if t < cutoff_time]
+        for filepath in old_files:
+            try:
+                os.remove(filepath)
+                self.logger.info(f"Removed old cache file: {filepath}")
+            except Exception as e:
+                self.logger.error(f"Error removing cache file {filepath}: {e}")
+        
+        # If we still have too many files, remove the oldest ones
+        if len(cache_files) > self.max_cache_files:
+            excess_count = len(cache_files) - self.max_cache_files
+            for filepath, _ in cache_files[:excess_count]:
+                if filepath not in old_files:  # Don't try to remove files we already removed
+                    try:
+                        os.remove(filepath)
+                        self.logger.info(f"Removed excess cache file: {filepath}")
+                    except Exception as e:
+                        self.logger.error(f"Error removing cache file {filepath}: {e}")
     
     def parallel_process(self, items, process_func, max_workers=None):
         """
-        Process items in parallel using ThreadPoolExecutor.
+        Process items in parallel using a thread pool.
         
         Args:
             items: List of items to process
@@ -189,9 +205,23 @@ class FeatureCache:
             max_workers: Maximum number of worker threads
             
         Returns:
-            List of results from processing each item
+            List: Results of processing each item
         """
+        results = []
+        
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(process_func, items))
+            # Submit all tasks
+            future_to_item = {executor.submit(process_func, item): item for item in items}
+            
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_item):
+                item = future_to_item[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    self.logger.error(f"Error processing item {item}: {e}")
+                    # Append None for failed items to maintain order
+                    results.append(None)
+        
         return results
-
