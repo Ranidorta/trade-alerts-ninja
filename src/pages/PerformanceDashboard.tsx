@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { TradingSignal, SignalStatus } from "@/lib/types";
-import { mockSignals, mockHistoricalSignals } from "@/lib/mockData";
+
+import { useState } from "react";
+import { SignalStatus } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -30,137 +30,130 @@ import {
   Legend,
 } from "recharts";
 import { ArrowUpRight, ArrowDownRight, DollarSign, Percent, TrendingUp, TrendingDown } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchPerformanceMetrics, fetchSignals } from "@/lib/signalsApi";
+import { useToast } from "@/components/ui/use-toast";
 
 const PerformanceDashboard = () => {
-  const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
-  const [performanceData, setPerformanceData] = useState({
-    totalProfit: 0,
+  const { toast } = useToast();
+
+  // Fetch performance metrics
+  const { data: performanceData = {
+    totalSignals: 0,
+    winningTrades: 0,
+    losingTrades: 0,
     winRate: 0,
-    avgProfit: 0,
-    totalTrades: 0,
-    completedTrades: 0,
-    activeTrades: 0,
-    longTrades: 0,
-    shortTrades: 0,
+    symbolsData: [],
+    signalTypesData: []
+  }, isLoading: metricsLoading } = useQuery({
+    queryKey: ['performance'],
+    queryFn: fetchPerformanceMetrics,
+    onError: () => {
+      toast({
+        title: "Error fetching performance data",
+        description: "Could not load performance metrics. Please try again later.",
+        variant: "destructive",
+      });
+    }
   });
+
+  // Fetch signals for detailed analysis
+  const { data: signals = [], isLoading: signalsLoading } = useQuery({
+    queryKey: ['signals', 'performance'],
+    queryFn: () => fetchSignals({ days: 90 }),
+    onError: () => {
+      toast({
+        title: "Error fetching signals",
+        description: "Could not load signal data. Please try again later.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const isLoading = metricsLoading || signalsLoading;
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  useEffect(() => {
-    const allSignals = [...mockSignals, ...mockHistoricalSignals];
-    setSignals(allSignals);
+  // Calculate profit percentage based on signal result (1 = win, 0 = loss)
+  const calculateProfit = (signal: any) => {
+    if (signal.result === 1) {
+      return 3; // Assuming 3% profit on winning trades
+    } else if (signal.result === 0) {
+      return -1.5; // Assuming 1.5% loss on losing trades
+    }
+    return 0;
+  };
 
-    const completed = allSignals.filter(
-      (signal) => signal.status === "COMPLETED"
-    );
-    const active = allSignals.filter((signal) => signal.status === "ACTIVE");
-    const totalProfit = completed.reduce(
-      (sum, signal) => sum + (signal.profit || 0),
-      0
-    );
-    const winningTrades = completed.filter((signal) => (signal.profit || 0) > 0);
-    const longTrades = allSignals.filter(
-      (signal) => signal.type === "LONG"
-    ).length;
-
-    setPerformanceData({
-      totalProfit,
-      winRate: (winningTrades.length / completed.length) * 100,
-      avgProfit: totalProfit / completed.length,
-      totalTrades: allSignals.length,
-      completedTrades: completed.length,
-      activeTrades: active.length,
-      longTrades,
-      shortTrades: allSignals.length - longTrades,
-    });
-
-    document.querySelectorAll('[data-value]').forEach(el => {
-      const value = parseFloat(el.getAttribute('data-value') || '0');
-      el.classList.add(value >= 0 ? 'fill-green-500' : 'fill-red-500');
-      const rectangle = el.closest('.recharts-bar-rectangle');
-      if (rectangle && rectangle instanceof HTMLElement) {
-        if (value >= 0) {
-          rectangle.style.setProperty('--bar-color', '#10b981');
-        } else {
-          rectangle.style.setProperty('--bar-color', '#ef4444');
-        }
-      }
-    });
-  }, []);
-
+  // Prepare data for monthly performance chart
   const prepareMonthlyPerformanceData = () => {
-    const completedSignals = signals.filter(
-      (signal) => signal.status === "COMPLETED" && signal.completedAt
-    );
+    const completedSignals = signals.filter(signal => signal.status === "COMPLETED");
     const monthlyData: Record<string, { month: string; profit: number }> = {};
 
     completedSignals.forEach((signal) => {
-      if (signal.completedAt) {
-        const date = new Date(signal.completedAt);
-        const monthYear = `${date.toLocaleString("default", {
-          month: "short",
-        })} ${date.getFullYear()}`;
+      const date = new Date(signal.createdAt);
+      const monthYear = `${date.toLocaleString("default", {
+        month: "short",
+      })} ${date.getFullYear()}`;
 
-        if (!monthlyData[monthYear]) {
-          monthlyData[monthYear] = { month: monthYear, profit: 0 };
-        }
-
-        monthlyData[monthYear].profit += signal.profit || 0;
+      if (!monthlyData[monthYear]) {
+        monthlyData[monthYear] = { month: monthYear, profit: 0 };
       }
+
+      monthlyData[monthYear].profit += calculateProfit(signal);
     });
 
     return Object.values(monthlyData);
   };
 
+  // Prepare data for trade type distribution
   const prepareTradeTypeData = () => {
+    const longTrades = signals.filter(signal => signal.direction === "BUY").length;
+    const shortTrades = signals.filter(signal => signal.direction === "SELL").length;
+
     return [
       {
         name: "Long",
-        value: performanceData.longTrades,
+        value: longTrades,
         color: "#10b981",
       },
       {
         name: "Short",
-        value: performanceData.shortTrades,
+        value: shortTrades,
         color: "#ef4444",
       },
     ];
   };
 
+  // Prepare data for win/loss ratio
   const prepareWinLossData = () => {
-    const completed = signals.filter(
-      (signal) => signal.status === "COMPLETED" && signal.profit !== undefined
-    );
-    const winning = completed.filter((signal) => (signal.profit || 0) > 0);
-    const losing = completed.filter((signal) => (signal.profit || 0) <= 0);
-
     return [
       {
         name: "Winning",
-        value: winning.length,
+        value: performanceData.winningTrades,
         color: "#10b981",
       },
       {
         name: "Losing",
-        value: losing.length,
+        value: performanceData.losingTrades,
         color: "#ef4444",
       },
     ];
   };
 
+  // Prepare data for recent trade history
   const prepareTradeHistoryData = () => {
     return signals
-      .filter((signal) => signal.status === "COMPLETED" && signal.profit !== undefined)
+      .filter(signal => signal.status === "COMPLETED")
+      .slice(0, 10)
       .map((signal, index) => ({
         name: `Trade ${index + 1}`,
-        profit: signal.profit,
+        profit: calculateProfit(signal),
         symbol: signal.symbol,
-      }))
-      .slice(-10);
+      }));
   };
 
   const monthlyPerformanceData = prepareMonthlyPerformanceData();
@@ -168,38 +161,53 @@ const PerformanceDashboard = () => {
   const winLossData = prepareWinLossData();
   const tradeHistoryData = prepareTradeHistoryData();
 
-  const getFillColor = (entry: any) => {
-    return entry.profit >= 0 ? "#10b981" : "#ef4444";
-  };
+  // Calculate overall performance
+  const totalProfit = signals
+    .filter(signal => signal.status === "COMPLETED")
+    .reduce((sum, signal) => sum + calculateProfit(signal), 0);
+
+  const avgProfit = performanceData.totalSignals > 0 
+    ? totalProfit / performanceData.totalSignals 
+    : 0;
+    
+  const activeTrades = signals.filter(signal => signal.status === "ACTIVE").length;
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8 flex justify-center items-center h-[80vh]">
+        <p className="text-xl text-muted-foreground">Carregando dados de performance...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Performance Dashboard</h1>
+      <h1 className="text-3xl font-bold mb-6">Dashboard de Performance</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Total Profit</CardDescription>
+            <CardDescription>Lucro Total</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
-              {performanceData.totalProfit.toFixed(2)}%
+              {totalProfit.toFixed(2)}%
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground flex items-center">
-              {performanceData.totalProfit > 0 ? (
+              {totalProfit > 0 ? (
                 <ArrowUpRight className="mr-1 h-4 w-4 text-green-500" />
               ) : (
                 <ArrowDownRight className="mr-1 h-4 w-4 text-red-500" />
               )}
-              From {performanceData.completedTrades} completed trades
+              De {performanceData.totalSignals} operações concluídas
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Win Rate</CardDescription>
+            <CardDescription>Taxa de Acerto</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <Percent className="mr-2 h-5 w-5 text-muted-foreground" />
               {performanceData.winRate.toFixed(1)}%
@@ -207,41 +215,41 @@ const PerformanceDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground">
-              Based on {performanceData.completedTrades} completed trades
+              Baseado em {performanceData.totalSignals} operações concluídas
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Average Profit</CardDescription>
+            <CardDescription>Lucro Médio</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <DollarSign className="mr-2 h-5 w-5 text-muted-foreground" />
-              {performanceData.avgProfit.toFixed(2)}%
+              {avgProfit.toFixed(2)}%
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground flex items-center">
-              {performanceData.avgProfit > 0 ? (
+              {avgProfit > 0 ? (
                 <ArrowUpRight className="mr-1 h-4 w-4 text-green-500" />
               ) : (
                 <ArrowDownRight className="mr-1 h-4 w-4 text-red-500" />
               )}
-              Per completed trade
+              Por operação concluída
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Active Trades</CardDescription>
+            <CardDescription>Operações Ativas</CardDescription>
             <CardTitle className="text-2xl">
-              {performanceData.activeTrades}
+              {activeTrades}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs text-muted-foreground">
-              Out of {performanceData.totalTrades} total trades
+              De um total de {signals.length} operações
             </div>
           </CardContent>
         </Card>
@@ -249,18 +257,18 @@ const PerformanceDashboard = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
         <TabsList className="mb-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly Performance</TabsTrigger>
-          <TabsTrigger value="trades">Trade History</TabsTrigger>
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="monthly">Performance Mensal</TabsTrigger>
+          <TabsTrigger value="trades">Histórico de Operações</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>Trade Types</CardTitle>
+                <CardTitle>Tipos de Operação</CardTitle>
                 <CardDescription>
-                  Distribution of long vs short trades
+                  Distribuição entre operações de compra e venda
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -295,9 +303,9 @@ const PerformanceDashboard = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Win/Loss Ratio</CardTitle>
+                <CardTitle>Ganhos/Perdas</CardTitle>
                 <CardDescription>
-                  Distribution of winning vs losing trades
+                  Distribuição entre operações ganhadoras e perdedoras
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -333,9 +341,9 @@ const PerformanceDashboard = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Recent Trade Performance</CardTitle>
+              <CardTitle>Performance de Operações Recentes</CardTitle>
               <CardDescription>
-                Profit/loss from last 10 completed trades
+                Lucro/perda das últimas 10 operações concluídas
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -348,9 +356,8 @@ const PerformanceDashboard = () => {
                     <Tooltip />
                     <Bar
                       dataKey="profit"
-                      name="Profit (%)"
-                      fill="#10b981"
-                      className="fill-[var(--bar-color)]"
+                      name="Lucro (%)"
+                      fill={(entry) => entry.profit >= 0 ? "#10b981" : "#ef4444"}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -362,9 +369,9 @@ const PerformanceDashboard = () => {
         <TabsContent value="monthly">
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Performance</CardTitle>
+              <CardTitle>Performance Mensal</CardTitle>
               <CardDescription>
-                Profit/loss aggregated by month
+                Lucro/perda agregado por mês
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -377,9 +384,8 @@ const PerformanceDashboard = () => {
                     <Tooltip />
                     <Bar
                       dataKey="profit"
-                      name="Profit (%)"
-                      fill="#10b981"
-                      className="fill-[var(--bar-color)]"
+                      name="Lucro (%)"
+                      fill={(entry) => entry.profit >= 0 ? "#10b981" : "#ef4444"}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -391,9 +397,9 @@ const PerformanceDashboard = () => {
         <TabsContent value="trades">
           <Card>
             <CardHeader>
-              <CardTitle>Trade History</CardTitle>
+              <CardTitle>Histórico de Operações</CardTitle>
               <CardDescription>
-                Detailed view of all completed trades
+                Visualização detalhada de todas as operações concluídas
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -401,58 +407,54 @@ const PerformanceDashboard = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left py-3 px-4">Symbol</th>
-                      <th className="text-left py-3 px-4">Type</th>
-                      <th className="text-left py-3 px-4">Entry</th>
-                      <th className="text-left py-3 px-4">Exit</th>
-                      <th className="text-left py-3 px-4">Date</th>
-                      <th className="text-right py-3 px-4">Profit</th>
+                      <th className="text-left py-3 px-4">Símbolo</th>
+                      <th className="text-left py-3 px-4">Tipo</th>
+                      <th className="text-left py-3 px-4">Preço de Entrada</th>
+                      <th className="text-left py-3 px-4">Resultado</th>
+                      <th className="text-left py-3 px-4">Data</th>
+                      <th className="text-right py-3 px-4">Lucro</th>
                     </tr>
                   </thead>
                   <tbody>
                     {signals
-                      .filter(
-                        (signal) =>
-                          signal.status === "COMPLETED" &&
-                          signal.profit !== undefined
-                      )
+                      .filter(signal => signal.status === "COMPLETED")
                       .map((signal) => (
                         <tr key={signal.id} className="border-b">
                           <td className="py-3 px-4">{signal.symbol}</td>
                           <td className="py-3 px-4">
                             <span
                               className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                signal.type === "LONG"
+                                signal.direction === "BUY"
                                   ? "bg-green-100 text-green-800"
                                   : "bg-red-100 text-red-800"
                               }`}
                             >
-                              {signal.type === "LONG" ? (
+                              {signal.direction === "BUY" ? (
                                 <TrendingUp className="mr-1 h-3 w-3" />
                               ) : (
                                 <TrendingDown className="mr-1 h-3 w-3" />
                               )}
-                              {signal.type}
+                              {signal.direction === "BUY" ? "COMPRA" : "VENDA"}
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            {signal.entryAvg?.toFixed(2) || "-"}
+                            {signal.entryPrice?.toFixed(2) || "-"}
                           </td>
                           <td className="py-3 px-4">
-                            {signal.targets?.find((t) => t.hit)?.price.toFixed(2) || "-"}
+                            {signal.result === 1 ? "GANHO" : "PERDA"}
                           </td>
                           <td className="py-3 px-4">
-                            {signal.completedAt ? formatDate(signal.completedAt) : "-"}
+                            {formatDate(signal.createdAt)}
                           </td>
                           <td
                             className={`py-3 px-4 text-right font-medium ${
-                              (signal.profit || 0) >= 0
+                              calculateProfit(signal) >= 0
                                 ? "text-green-600"
                                 : "text-red-600"
                             }`}
                           >
-                            {(signal.profit || 0) >= 0 ? "+" : ""}
-                            {signal.profit?.toFixed(2)}%
+                            {calculateProfit(signal) >= 0 ? "+" : ""}
+                            {calculateProfit(signal).toFixed(2)}%
                           </td>
                         </tr>
                       ))}

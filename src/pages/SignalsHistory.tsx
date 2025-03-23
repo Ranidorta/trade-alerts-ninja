@@ -1,20 +1,35 @@
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
-import { mockHistoricalSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
 import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSignals } from "@/lib/signalsApi";
+import { useToast } from "@/components/ui/use-toast";
 
 const SignalsHistory = () => {
-  const [signals] = useState<TradingSignal[]>(mockHistoricalSignals);
   const [activeTab, setActiveTab] = useState("all");
+  const { toast } = useToast();
+  
+  // Fetch signals from API
+  const { data: signals = [], isLoading, error } = useQuery({
+    queryKey: ['signals', 'history'],
+    queryFn: () => fetchSignals({ days: 30 }),
+    onError: () => {
+      toast({
+        title: "Error fetching signals",
+        description: "Could not load signals history. Please try again later.",
+        variant: "destructive",
+      });
+    }
+  });
 
   // Calculate summary statistics
-  const summary = useMemo(() => {
+  const summary = React.useMemo(() => {
     const profitSignals = signals.filter(signal => signal.profit !== undefined && signal.profit > 0);
     const lossSignals = signals.filter(signal => signal.profit !== undefined && signal.profit < 0);
     
@@ -43,8 +58,8 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Signals History</h1>
-          <p className="text-muted-foreground">View past signals and performance</p>
+          <h1 className="text-3xl font-bold mb-2">Histórico de Sinais</h1>
+          <p className="text-muted-foreground">Visualize os sinais passados e performance</p>
         </div>
         <div className="flex mt-4 md:mt-0 space-x-2">
           <Button variant="outline" asChild className="flex items-center">
@@ -56,13 +71,13 @@ const SignalsHistory = () => {
           <Card className="shadow-sm">
             <CardContent className="p-3 flex items-center">
               <Calendar className="h-4 w-4 mr-2 text-primary" />
-              <span className="text-sm">Filter by date</span>
+              <span className="text-sm">Filtrar por data</span>
             </CardContent>
           </Card>
           <Card className="shadow-sm">
             <CardContent className="p-3 flex items-center">
               <SortDesc className="h-4 w-4 mr-2 text-primary" />
-              <span className="text-sm">Sort by</span>
+              <span className="text-sm">Ordenar por</span>
             </CardContent>
           </Card>
         </div>
@@ -72,11 +87,11 @@ const SignalsHistory = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Card className="bg-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Total Signals</CardTitle>
+            <CardTitle className="text-base font-medium">Total de Sinais</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.totalSignals}</p>
-            <p className="text-sm text-muted-foreground">Completed signals</p>
+            <p className="text-sm text-muted-foreground">Sinais completados</p>
           </CardContent>
         </Card>
         
@@ -84,12 +99,12 @@ const SignalsHistory = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium flex items-center">
               <TrendingUp className="h-4 w-4 mr-2 text-crypto-green" />
-              Profitable Signals
+              Sinais Lucrativos
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-crypto-green">{summary.profitSignals}</p>
-            <p className="text-sm text-muted-foreground">Total profit: +{summary.totalProfit}%</p>
+            <p className="text-sm text-muted-foreground">Lucro total: +{summary.totalProfit}%</p>
           </CardContent>
         </Card>
         
@@ -97,39 +112,53 @@ const SignalsHistory = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-medium flex items-center">
               <TrendingDown className="h-4 w-4 mr-2 text-crypto-red" />
-              Loss Signals
+              Sinais com Perda
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-crypto-red">{summary.lossSignals}</p>
-            <p className="text-sm text-muted-foreground">Total loss: {summary.totalLoss}%</p>
+            <p className="text-sm text-muted-foreground">Perda total: {summary.totalLoss}%</p>
           </CardContent>
         </Card>
         
         <Card className="bg-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Win Rate</CardTitle>
+            <CardTitle className="text-base font-medium">Taxa de Acerto</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{summary.winRate}%</p>
-            <p className="text-sm text-muted-foreground">Success rate</p>
+            <p className="text-sm text-muted-foreground">Taxa de sucesso</p>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-8">
         <TabsList>
-          <TabsTrigger value="all">All Signals</TabsTrigger>
-          <TabsTrigger value="profit">Profit</TabsTrigger>
-          <TabsTrigger value="loss">Loss</TabsTrigger>
+          <TabsTrigger value="all">Todos os Sinais</TabsTrigger>
+          <TabsTrigger value="profit">Lucro</TabsTrigger>
+          <TabsTrigger value="loss">Perda</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSignals.map((signal) => (
-          <SignalCard key={signal.id} signal={signal} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-lg text-muted-foreground">Carregando sinais...</p>
+        </div>
+      ) : error ? (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
+        </div>
+      ) : filteredSignals.length === 0 ? (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-lg text-muted-foreground">Nenhum sinal encontrado para os filtros aplicados.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredSignals.map((signal) => (
+            <SignalCard key={signal.id} signal={signal} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

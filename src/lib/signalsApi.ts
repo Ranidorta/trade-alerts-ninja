@@ -32,11 +32,11 @@ export const fetchSignals = async (params?: {
     }
     
     const data = await response.json();
+    console.log("Signals fetched:", data);
     return data as TradingSignal[];
   } catch (error) {
     console.error("Error fetching signals:", error);
-    // Return mock data as fallback if API is unavailable
-    return [];
+    throw error;
   }
 };
 
@@ -52,18 +52,12 @@ export const fetchPerformanceMetrics = async () => {
       throw new Error(`API error: ${response.status}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log("Performance metrics fetched:", data);
+    return data;
   } catch (error) {
     console.error("Error fetching performance metrics:", error);
-    // Return basic structure as fallback
-    return {
-      totalSignals: 0,
-      winningTrades: 0,
-      losingTrades: 0,
-      winRate: 0,
-      symbolsData: [],
-      signalTypesData: []
-    };
+    throw error;
   }
 };
 
@@ -79,9 +73,11 @@ export const fetchSymbols = async (): Promise<string[]> => {
       throw new Error(`API error: ${response.status}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log("Symbols fetched:", data);
+    return data;
   } catch (error) {
     console.error("Error fetching symbols:", error);
-    return [];
+    throw error;
   }
 };
