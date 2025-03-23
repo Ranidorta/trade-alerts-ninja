@@ -1,4 +1,3 @@
-
 """
 Trading Agent API with Continuous Learning
 
@@ -21,7 +20,12 @@ from datetime import datetime
 
 # Strategy imports
 from strategies.basic_strategy import BasicStrategy
+from strategies.advanced_strategy import AdvancedStrategy
 from strategies.strategy_manager import StrategyManager
+
+# Utility imports
+from utils.feature_cache import FeatureCache
+from utils.feature_extraction import FeatureExtractor
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -30,10 +34,15 @@ CORS(app)  # Enable CORS for all routes
 MODEL_PATH = "model.pkl"
 DB_PATH = "signals.db"
 CAPITAL_HISTORY_PATH = "capital_history.json"
+CACHE_DIR = "cache"
+
+# Initialize feature extraction and caching
+feature_extractor = FeatureExtractor(use_cache=True, cache_dir=CACHE_DIR)
 
 # Initialize strategy manager
 strategy_manager = StrategyManager()
 strategy_manager.register_strategy("basic", BasicStrategy())
+strategy_manager.register_strategy("advanced", AdvancedStrategy())
 
 # Load or create the online classification model
 if os.path.exists(MODEL_PATH):
@@ -123,17 +132,7 @@ def update_capital_history(profit_loss):
 
 def extract_features(df):
     """Extract technical indicators from price data."""
-    df['rsi'] = talib.RSI(df['close'], timeperiod=14)
-    df['ma_short'] = talib.SMA(df['close'], timeperiod=5)
-    df['ma_long'] = talib.SMA(df['close'], timeperiod=20)
-    df['atr'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
-    df['volatility'] = df['close'].rolling(10).std()
-    df['macd'], df['macd_signal'], _ = talib.MACD(df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-    upper, middle, lower = talib.BBANDS(df['close'], timeperiod=20)
-    df['bb_upper'] = upper
-    df['bb_lower'] = lower
-    df = df.dropna()
-    return df
+    return feature_extractor.extract_features(df)
 
 
 def update_model(row, outcome):
@@ -188,6 +187,8 @@ def calculate_profit_loss(signal, result, entry_price, exit_price, position_size
 def process_market_data(df, symbol="BTCUSDT", strategy_name="basic"):
     """Process market data to generate and evaluate trading signals."""
     create_db()
+    
+    # Extract features
     df = extract_features(df)
     current_capital = ACCOUNT_BALANCE
     
@@ -195,46 +196,100 @@ def process_market_data(df, symbol="BTCUSDT", strategy_name="basic"):
     active_strategy = strategy_manager.get_strategy(strategy_name)
     strategy_manager.set_active_strategy(strategy_name)
     
-    for i in range(len(df) - 5):
-        row = df.iloc[i]
-        signal = active_strategy.generate_signal(row)
+    # Add future price column (shifted by 5 periods)
+    df['future_price'] = df['close'].shift(-5)
+    
+    # Check if we're using the advanced strategy which supports vectorization
+    if isinstance(active_strategy, AdvancedStrategy):
+        # Generate signals using vectorized method
+        df['signal'] = active_strategy.generate_signals_vectorized(df)
         
-        if signal != 0:
-            future_price = df.iloc[i + 5]['close']
-            result, exit_price = simulate_trade(signal, row['close'], future_price, row['atr'])
+        # Filter out rows with no signal or NaN future price
+        df = df[(df['signal'] != 0) & df['future_price'].notna()].copy()
+        
+        if not df.empty:
+            # Simulate trades using vectorized method
+            df['result'] = active_strategy.simulate_trades_vectorized(df)
             
-            if result is not None:
-                # Update the online learning model
-                update_model(row, result)
+            # Calculate position sizes
+            df['position_size'] = active_strategy.calculate_position_sizes_vectorized(
+                current_capital, df['atr'].values
+            )
+            
+            # Process results
+            for i, row in df.iterrows():
+                if pd.notna(row['result']):
+                    # Update the model with the outcome
+                    update_model(row, row['result'])
+                    
+                    # Calculate profit/loss for this trade
+                    if row['signal'] == 1:  # Long
+                        exit_price = row['future_price'] if row['result'] == 1 else (row['close'] - row['atr'])
+                        profit_loss = row['position_size'] * (exit_price - row['close'])
+                    else:  # Short
+                        exit_price = row['future_price'] if row['result'] == 1 else (row['close'] + row['atr'])
+                        profit_loss = row['position_size'] * (row['close'] - exit_price)
+                    
+                    # Update capital
+                    current_capital += profit_loss
+                    
+                    # Save signal to database
+                    signal_data = {
+                        'timestamp': row.get('time', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                        'symbol': symbol,
+                        'signal': row['signal'],
+                        'result': row['result'],
+                        'entry_price': row['close'],
+                        'exit_price': exit_price,
+                        'atr': row['atr'],
+                        'position_size': row['position_size'],
+                        'profit_loss': profit_loss
+                    }
+                    
+                    save_signal_to_db(signal_data)
+                    update_capital_history(profit_loss)
+    else:
+        # Use original non-vectorized method for basic strategy
+        for i in range(len(df) - 5):
+            row = df.iloc[i]
+            signal = active_strategy.generate_signal(row)
+            
+            if signal != 0:
+                future_price = df.iloc[i + 5]['close']
+                result, exit_price = simulate_trade(signal, row['close'], future_price, row['atr'])
                 
-                # Calculate position size based on current capital
-                position_size = calculate_position_size(
-                    current_capital, 
-                    row['atr'], 
-                    active_strategy.RISK_PER_TRADE
-                )
-                
-                # Calculate profit/loss
-                profit_loss = calculate_profit_loss(signal, result, row['close'], exit_price, position_size)
-                
-                # Update capital
-                current_capital += profit_loss
-                
-                # Save signal to database
-                signal_data = {
-                    'timestamp': row.get('time', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                    'symbol': symbol,
-                    'signal': signal,
-                    'result': result,
-                    'entry_price': row['close'],
-                    'exit_price': exit_price,
-                    'atr': row['atr'],
-                    'position_size': position_size,
-                    'profit_loss': profit_loss
-                }
-                
-                save_signal_to_db(signal_data)
-                update_capital_history(profit_loss)
+                if result is not None:
+                    # Update the online learning model
+                    update_model(row, result)
+                    
+                    # Calculate position size based on current capital
+                    position_size = calculate_position_size(
+                        current_capital, 
+                        row['atr'], 
+                        active_strategy.RISK_PER_TRADE
+                    )
+                    
+                    # Calculate profit/loss
+                    profit_loss = calculate_profit_loss(signal, result, row['close'], exit_price, position_size)
+                    
+                    # Update capital
+                    current_capital += profit_loss
+                    
+                    # Save signal to database
+                    signal_data = {
+                        'timestamp': row.get('time', datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                        'symbol': symbol,
+                        'signal': signal,
+                        'result': result,
+                        'entry_price': row['close'],
+                        'exit_price': exit_price,
+                        'atr': row['atr'],
+                        'position_size': position_size,
+                        'profit_loss': profit_loss
+                    }
+                    
+                    save_signal_to_db(signal_data)
+                    update_capital_history(profit_loss)
                 
     return {"message": "Processing completed successfully", "final_capital": current_capital}
 
