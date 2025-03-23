@@ -331,8 +331,8 @@ function getMockCryptoNews(): CryptoNews[] {
   ];
 }
 
-// Functions for mock data when Python backend is unavailable
-async function fetchBybitKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<any[]> {
+// Export the fetchBybitKlines function so it can be imported in CryptoMarket.tsx
+export async function fetchBybitKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<any[]> {
   try {
     // In a real integration, we would fetch from Bybit API
     const mockData = [];
@@ -397,7 +397,7 @@ export async function fetchCoinGeckoGlobal(): Promise<any> {
   }
 }
 
-function calculateIndicators(klineData: any[]): any {
+export function calculateIndicators(klineData: any[]): any {
   try {
     // In a real app, we would calculate actual indicators or call the Python backend
     return {
