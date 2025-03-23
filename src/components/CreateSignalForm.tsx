@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { SignalType } from "@/lib/types";
+import { SignalType, SignalStrategy } from "@/lib/types";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,11 +32,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 
 // Form validation schema
 const formSchema = z.object({
   type: z.enum(["LONG", "SHORT"]),
+  strategy: z.enum(["classic", "fast"]),
   symbol: z.string().min(1, "Symbol is required"),
   pair: z.string().min(1, "Trading pair is required"),
   entryMin: z.coerce.number().positive("Entry price must be positive"),
@@ -53,6 +55,7 @@ type FormValues = z.infer<typeof formSchema> & {
 // Initial form values
 const defaultValues: FormValues = {
   type: "LONG",
+  strategy: "classic",
   symbol: "",
   pair: "",
   entryMin: 0,
@@ -78,6 +81,7 @@ const CreateSignalForm = ({ onSuccess }: CreateSignalFormProps) => {
   
   const { watch, setValue } = form;
   const type = watch("type");
+  const strategy = watch("strategy");
   
   // Handle target changes
   const handleTargetChange = (index: number, value: string) => {
@@ -152,7 +156,7 @@ const CreateSignalForm = ({ onSuccess }: CreateSignalFormProps) => {
     // In a real app, you'd send this to your API
     console.log("Signal created:", signalData);
     
-    toast.success("Signal created successfully!");
+    toast.success(`${signalData.strategy.charAt(0).toUpperCase() + signalData.strategy.slice(1)} signal created successfully!`);
     form.reset(defaultValues);
     setTargets([{ price: 0 }, { price: 0 }, { price: 0 }]);
     
@@ -229,6 +233,42 @@ const CreateSignalForm = ({ onSuccess }: CreateSignalFormProps) => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Signal Strategy */}
+              <FormField
+                control={form.control}
+                name="strategy"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Signal Strategy</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="classic" />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            Classic (High confidence, multiple indicators)
+                          </FormLabel>
+                        </FormItem>
+                        <FormItem className="flex items-center space-x-3 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value="fast" />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer">
+                            Fast (Quick entries, momentum-based)
+                          </FormLabel>
+                        </FormItem>
+                      </RadioGroup>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -377,9 +417,12 @@ const CreateSignalForm = ({ onSuccess }: CreateSignalFormProps) => {
               )}
             />
             
-            <Button type="submit" className="w-full">
+            <Button 
+              type="submit" 
+              className={`w-full ${strategy === "fast" ? "bg-orange-600 hover:bg-orange-700" : ""}`}
+            >
               <Check className="mr-2 h-4 w-4" />
-              Create Signal
+              Create {strategy.charAt(0).toUpperCase() + strategy.slice(1)} Signal
             </Button>
           </form>
         </Form>
