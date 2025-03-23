@@ -1,8 +1,6 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
-import TradingSignalInsights from "@/components/TradingSignalInsights";
 import { 
   ArrowUpDown, 
   BarChart3, 
@@ -10,7 +8,6 @@ import {
   Bell,
   RefreshCw,
   Zap,
-  PieChart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +24,6 @@ import { useToast } from "@/hooks/use-toast";
 import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
-import { allSignals, mockHistoricalSignals } from "@/lib/mockData";
-import { Link } from "react-router-dom";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -42,7 +37,6 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [coinSearch, setCoinSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
   const { toast } = useToast();
   
   const loadSignalsData = useCallback(async () => {
@@ -51,10 +45,6 @@ const SignalsDashboard = () => {
     try {
       const realSignals = await generateAllSignals();
       if (realSignals.length > 0) {
-        // Update the signals in localStorage for history and performance tracking
-        const updatedSignals = [...realSignals];
-        localStorage.setItem('tradingSignals', JSON.stringify(updatedSignals));
-        
         setSignals(realSignals);
         setFilteredSignals(realSignals);
       } else {
@@ -78,26 +68,10 @@ const SignalsDashboard = () => {
     }
   }, [toast]);
   
-  // Load signals on initial component mount
   useEffect(() => {
-    // First try to load from localStorage
-    const savedSignals = localStorage.getItem('tradingSignals');
-    if (savedSignals) {
-      try {
-        const parsedSignals = JSON.parse(savedSignals);
-        setSignals(parsedSignals);
-        setFilteredSignals(parsedSignals);
-        setIsLoading(false);
-      } catch (e) {
-        console.error("Error parsing saved signals:", e);
-        setIsLoading(false);
-      }
-    } else {
-      setIsLoading(false);
-    }
+    setIsLoading(false);
   }, []);
   
-  // Auto-refresh effect
   useEffect(() => {
     if (!autoRefresh) return;
     
@@ -110,7 +84,6 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
-  // Filter signals based on search query, status filter, and sort order
   useEffect(() => {
     let result = [...signals];
     
@@ -160,33 +133,6 @@ const SignalsDashboard = () => {
     setCoinSearch(e.target.value.toUpperCase());
   };
 
-  const updateSignalsStorage = (updatedSignals: TradingSignal[]) => {
-    // Update localStorage with new signals
-    localStorage.setItem('tradingSignals', JSON.stringify(updatedSignals));
-    
-    // Ensure we have historical signals for completed ones
-    const completedSignals = updatedSignals.filter(s => s.status === "COMPLETED");
-    
-    let historicalSignals: TradingSignal[] = [];
-    try {
-      const savedHistorical = localStorage.getItem('historicalSignals');
-      historicalSignals = savedHistorical ? JSON.parse(savedHistorical) : [];
-    } catch (e) {
-      console.error("Error parsing historical signals:", e);
-    }
-    
-    // Add newly completed signals to historical storage
-    const newHistorical = [...historicalSignals];
-    completedSignals.forEach(signal => {
-      if (!newHistorical.some(s => s.id === signal.id)) {
-        newHistorical.push(signal);
-      }
-    });
-    
-    // Update historical storage
-    localStorage.setItem('historicalSignals', JSON.stringify(newHistorical));
-  };
-
   const handleGenerateSignalForCoin = async () => {
     if (!coinSearch) {
       toast({
@@ -227,9 +173,7 @@ const SignalsDashboard = () => {
             description: `New ${signal.type} signal for ${symbol} has been added to your dashboard.`,
           });
           
-          const updatedSignals = [signal, ...prevSignals];
-          updateSignalsStorage(updatedSignals);
-          return updatedSignals;
+          return [signal, ...prevSignals];
         });
         
         setCoinSearch("");
@@ -272,10 +216,7 @@ const SignalsDashboard = () => {
               title: "New signals generated",
               description: `Found ${uniqueNewSignals.length} new trading opportunities`,
             });
-            
-            const updatedSignals = [...uniqueNewSignals, ...prevSignals];
-            updateSignalsStorage(updatedSignals);
-            return updatedSignals;
+            return [...uniqueNewSignals, ...prevSignals];
           }
           
           toast({
@@ -341,10 +282,6 @@ const SignalsDashboard = () => {
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
-
-  const handleSignalClick = (signal: TradingSignal) => {
-    setSelectedSignal(signal);
-  };
   
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -379,13 +316,6 @@ const SignalsDashboard = () => {
           <Button onClick={handleSubscribe} variant="outline">
             <Bell className="mr-2 h-4 w-4" />
             Subscribe to Alerts
-          </Button>
-
-          <Button variant="outline" asChild>
-            <Link to="/history">
-              <PieChart className="mr-2 h-4 w-4" />
-              Signal History
-            </Link>
           </Button>
         </div>
       </div>
@@ -536,24 +466,17 @@ const SignalsDashboard = () => {
           </Button>
         </div>
       )}
-
-      {selectedSignal && (
-        <div className="mb-6">
-          <TradingSignalInsights signal={selectedSignal} />
-        </div>
-      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {isLoading ? (
           renderSkeletons()
         ) : filteredSignals.length > 0 ? (
           filteredSignals.map(signal => (
-            <div key={signal.id} onClick={() => handleSignalClick(signal)}>
-              <SignalCard 
-                signal={signal} 
-                refreshInterval={30000} // Update target status every 30 seconds
-              />
-            </div>
+            <SignalCard 
+              key={signal.id} 
+              signal={signal} 
+              refreshInterval={30000} // Update target status every 30 seconds
+            />
           ))
         ) : signals.length > 0 ? (
           <div className="col-span-full py-12 text-center">
