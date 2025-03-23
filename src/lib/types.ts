@@ -1,12 +1,13 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
 
 export interface PriceTarget {
+  id?: string;
   level: number;
   price: number;
   hit?: boolean;
+  percentage?: number;
 }
 
 export interface TechnicalIndicators {
@@ -100,7 +101,6 @@ export interface MarketOverviewProps {
   isLoading: boolean;
 }
 
-// Define the expected interface for CryptoChartDataPoint to include all needed properties
 export interface CryptoChartDataPoint {
   time: number;
   price: number;

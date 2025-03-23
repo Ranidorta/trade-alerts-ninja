@@ -26,7 +26,7 @@ const mapSignalRecordToTradingSignal = (record: TradingSignalRecord): TradingSig
     stopLoss: record.entry_price - record.atr * (record.signal === 1 ? 1 : -1),
     targets: [
       {
-        id: "1",
+        level: 1,
         price: record.exit_price,
         percentage: 100,
         hit: true
