@@ -1,4 +1,3 @@
-
 body {
   margin: 0;
   padding: 0;
@@ -184,4 +183,19 @@ body {
 .ticker-content {
   display: inline-flex;
   animation: ticker 30s linear infinite;
+}
+
+/* Custom styling for Recharts bars to color based on data values */
+.recharts-bar-custom-color path[fill="#10b981"] {
+  fill: var(--positive-color, #10b981);
+}
+
+.recharts-bar-rectangle.negative-value path {
+  fill: var(--negative-color, #ef4444) !important;
+}
+
+/* Add custom JS to dynamically update chart elements */
+:root {
+  --positive-color: #10b981;
+  --negative-color: #ef4444;
 }

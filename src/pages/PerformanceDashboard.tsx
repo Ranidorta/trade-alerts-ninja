@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { SignalStatus } from "@/lib/types";
 import {
@@ -38,7 +37,7 @@ const PerformanceDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { toast } = useToast();
 
-  // Fetch performance metrics
+  // Fetch performance metrics with fixed error handling
   const { data: performanceData = {
     totalSignals: 0,
     winningTrades: 0,
@@ -49,36 +48,41 @@ const PerformanceDashboard = () => {
   }, isLoading: metricsLoading } = useQuery({
     queryKey: ['performance'],
     queryFn: fetchPerformanceMetrics,
-    onError: () => {
-      toast({
-        title: "Error fetching performance data",
-        description: "Could not load performance metrics. Please try again later.",
-        variant: "destructive",
-      });
+    meta: {
+      onError: () => {
+        toast({
+          title: "Error fetching performance data",
+          description: "Could not load performance metrics. Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
-  // Fetch signals for detailed analysis
+  // Fetch signals for detailed analysis with fixed error handling
   const { data: signals = [], isLoading: signalsLoading } = useQuery({
     queryKey: ['signals', 'performance'],
     queryFn: () => fetchSignals({ days: 90 }),
-    onError: () => {
-      toast({
-        title: "Error fetching signals",
-        description: "Could not load signal data. Please try again later.",
-        variant: "destructive",
-      });
+    meta: {
+      onError: () => {
+        toast({
+          title: "Error fetching signals",
+          description: "Could not load signal data. Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   });
 
   const isLoading = metricsLoading || signalsLoading;
 
+  // Format date helper function
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  // Calculate profit percentage based on signal result (1 = win, 0 = loss)
+  // Calculate profit percentage based on signal result
   const calculateProfit = (signal: any) => {
     if (signal.result === 1) {
       return 3; // Assuming 3% profit on winning trades
@@ -179,6 +183,11 @@ const PerformanceDashboard = () => {
       </div>
     );
   }
+
+  // Custom function to determine the fill color for bars
+  const getBarFill = (value: number) => {
+    return value >= 0 ? "#10b981" : "#ef4444";
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -357,7 +366,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Lucro (%)"
-                      fill={(entry) => entry.profit >= 0 ? "#10b981" : "#ef4444"}
+                      fill="#10b981"
+                      className="recharts-bar-custom-color"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -385,7 +395,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Lucro (%)"
-                      fill={(entry) => entry.profit >= 0 ? "#10b981" : "#ef4444"}
+                      fill="#10b981"
+                      className="recharts-bar-custom-color"
                     />
                   </BarChart>
                 </ResponsiveContainer>

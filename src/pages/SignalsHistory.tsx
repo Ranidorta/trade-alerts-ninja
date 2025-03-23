@@ -15,16 +15,18 @@ const SignalsHistory = () => {
   const [activeTab, setActiveTab] = useState("all");
   const { toast } = useToast();
   
-  // Fetch signals from API
+  // Fetch signals from API with fixed onError handling
   const { data: signals = [], isLoading, error } = useQuery({
     queryKey: ['signals', 'history'],
     queryFn: () => fetchSignals({ days: 30 }),
-    onError: () => {
-      toast({
-        title: "Error fetching signals",
-        description: "Could not load signals history. Please try again later.",
-        variant: "destructive",
-      });
+    meta: {
+      onError: () => {
+        toast({
+          title: "Error fetching signals",
+          description: "Could not load signals history. Please try again later.",
+          variant: "destructive",
+        });
+      }
     }
   });
 

@@ -32,8 +32,19 @@ export const fetchSignals = async (params?: {
     }
     
     const data = await response.json();
-    console.log("Signals fetched:", data);
-    return data as TradingSignal[];
+    
+    // Map the API response to match our TradingSignal interface
+    // This ensures we have proper values for 'result' if it's missing
+    const mappedData = data.map((signal: any) => ({
+      ...signal,
+      // If signal doesn't have a result property but has a profit,
+      // we can determine result from profit
+      result: signal.result !== undefined ? signal.result : 
+              (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined)
+    }));
+    
+    console.log("Signals fetched:", mappedData);
+    return mappedData as TradingSignal[];
   } catch (error) {
     console.error("Error fetching signals:", error);
     throw error;
