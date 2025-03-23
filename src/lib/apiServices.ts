@@ -777,4 +777,3 @@ export const generateTradingSignal = async (symbol: string): Promise<TradingSign
           type: "SHORT",
           currentPrice: currentPrice,
           technicalIndicators: {
-            rsi,
