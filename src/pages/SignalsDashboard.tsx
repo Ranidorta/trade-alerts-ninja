@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -8,6 +9,7 @@ import {
   Bell,
   RefreshCw,
   Zap,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +45,7 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [coinSearch, setCoinSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
   const { toast } = useToast();
   
   const loadSignalsData = useCallback(async () => {
@@ -58,15 +61,26 @@ const SignalsDashboard = () => {
         });
       }
       
+      // Gerar sinais para todas as moedas disponíveis
       const realSignals = await generateAllSignals();
+      
       if (realSignals.length > 0) {
-        setSignals(realSignals);
-        setFilteredSignals(realSignals);
+        // Ordenar os sinais por data de criação (mais recentes primeiro)
+        const sortedSignals = [...realSignals].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        
+        setSignals(sortedSignals);
+        setFilteredSignals(sortedSignals);
+        
+        // Extrair símbolos únicos dos sinais
+        const uniqueSymbols = Array.from(new Set(sortedSignals.map(signal => signal.symbol)));
+        setSelectedSymbols(uniqueSymbols);
         
         if (showLoadingToast) {
           toast({
             title: "Signals loaded",
-            description: `Found ${realSignals.length} trading signals across multiple cryptocurrencies.`,
+            description: `Found ${realSignals.length} trading signals across ${uniqueSymbols.length} cryptocurrencies.`,
           });
         }
       } else {
@@ -159,7 +173,7 @@ const SignalsDashboard = () => {
     if (!coinSearch) {
       toast({
         title: "Please enter a symbol",
-        description: "Enter a cryptocurrency symbol to generate signals (e.g., BTCUSDT, ETHUSDT)",
+        description: "Enter a cryptocurrency symbol to generate signals (e.g., BTC, ETH)",
       });
       return;
     }
@@ -199,6 +213,11 @@ const SignalsDashboard = () => {
         });
         
         setCoinSearch("");
+        
+        // Adicionar à lista de símbolos selecionados se não existir
+        if (!selectedSymbols.includes(symbol)) {
+          setSelectedSymbols(prev => [...prev, symbol]);
+        }
       } else {
         toast({
           title: "No signal generated",
@@ -215,6 +234,63 @@ const SignalsDashboard = () => {
       });
     } finally {
       setIsSearching(false);
+    }
+  };
+  
+  const handleGenerateSignalsForAll = async () => {
+    setIsGenerating(true);
+    const availableSymbols = AVAILABLE_SYMBOLS.slice(0, 6); // Limitar para melhor performance
+    
+    toast({
+      title: "Generating signals for multiple coins",
+      description: `Analyzing market data for ${availableSymbols.length} cryptocurrencies...`,
+    });
+    
+    try {
+      let newSignalCount = 0;
+      const allNewSignals: TradingSignal[] = [];
+      
+      for (const symbol of availableSymbols) {
+        const signal = await generateTradingSignal(symbol);
+        if (signal) {
+          const exists = signals.some(s => s.id === signal.id);
+          if (!exists) {
+            allNewSignals.push(signal);
+            newSignalCount++;
+          }
+        }
+      }
+      
+      if (allNewSignals.length > 0) {
+        setSignals(prevSignals => {
+          const updatedSignals = [...allNewSignals, ...prevSignals];
+          // Atualizar símbolos selecionados
+          const uniqueSymbols = Array.from(new Set(updatedSignals.map(signal => signal.symbol)));
+          setSelectedSymbols(uniqueSymbols);
+          
+          return updatedSignals;
+        });
+        
+        toast({
+          title: "New signals generated",
+          description: `Found ${newSignalCount} new trading opportunities across ${allNewSignals.length} cryptocurrencies`,
+        });
+      } else {
+        toast({
+          title: "No new signals",
+          description: "No new trading opportunities found at this time",
+        });
+      }
+    } catch (error) {
+      console.error("Error generating signals:", error);
+      toast({
+        title: "Error generating signals",
+        description: "An error occurred while analyzing market data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+      setLastUpdated(new Date());
     }
   };
   
@@ -238,7 +314,13 @@ const SignalsDashboard = () => {
               title: "New signals generated",
               description: `Found ${uniqueNewSignals.length} new trading opportunities`,
             });
-            return [...uniqueNewSignals, ...prevSignals];
+            
+            // Atualizar símbolos selecionados
+            const allSignals = [...uniqueNewSignals, ...prevSignals];
+            const uniqueSymbols = Array.from(new Set(allSignals.map(signal => signal.symbol)));
+            setSelectedSymbols(uniqueSymbols);
+            
+            return allSignals;
           }
           
           toast({
@@ -326,14 +408,34 @@ const SignalsDashboard = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
-          <Button 
-            onClick={handleGenerateSignals} 
-            variant="default"
-            disabled={isGenerating}
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analyzing Market...' : 'Generate Signals'}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="default">
+                <Zap className="mr-2 h-4 w-4" />
+                Generate Signals
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Generate Trading Signals</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={handleGenerateSignals}
+                  disabled={isGenerating}
+                >
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                  Generate All Signals
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleGenerateSignalsForAll}
+                  disabled={isGenerating}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Generate Top Coins Signals
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           
           <Button onClick={handleSubscribe} variant="outline">
             <Bell className="mr-2 h-4 w-4" />
@@ -387,6 +489,32 @@ const SignalsDashboard = () => {
           Enter a cryptocurrency symbol to generate a trading signal based on current market conditions.
         </p>
       </div>
+      
+      {selectedSymbols.length > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+          <h3 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Available Coins with Signals</h3>
+          <div className="flex flex-wrap gap-2">
+            {selectedSymbols.map(symbol => (
+              <Button
+                key={symbol}
+                variant="outline"
+                size="sm"
+                className={`text-xs ${
+                  searchQuery.includes(symbol.replace('USDT', '')) 
+                    ? 'bg-blue-100 border-blue-300' 
+                    : ''
+                }`}
+                onClick={() => setSearchQuery(symbol.replace('USDT', ''))}
+              >
+                {symbol.replace('USDT', '')}
+                <span className="ml-1 text-xs opacity-60">
+                  ({signals.filter(s => s.symbol === symbol).length})
+                </span>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         <div className="relative flex-1">
