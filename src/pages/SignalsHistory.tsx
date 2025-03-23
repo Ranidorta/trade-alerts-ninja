@@ -1,17 +1,63 @@
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { TradingSignal } from "@/lib/types";
-import { mockHistoricalSignals } from "@/lib/mockData";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import TradingSignalInsights from "@/components/TradingSignalInsights";
 
 const SignalsHistory = () => {
-  const [signals] = useState<TradingSignal[]>(mockHistoricalSignals);
+  const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [activeTab, setActiveTab] = useState("all");
+  const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
+  const { toast } = useToast();
+
+  // Load signals from localStorage on component mount
+  useEffect(() => {
+    // Try to get historical signals first
+    const savedHistorical = localStorage.getItem('historicalSignals');
+    if (savedHistorical) {
+      try {
+        const historicalSignals = JSON.parse(savedHistorical);
+        setSignals(historicalSignals);
+      } catch (e) {
+        console.error("Error parsing historical signals:", e);
+        // Fallback to completed signals from active signals
+        loadCompletedFromActive();
+      }
+    } else {
+      // If no historical signals, try to get completed signals from active signals
+      loadCompletedFromActive();
+    }
+  }, []);
+
+  // Load completed signals from active signals (fallback)
+  const loadCompletedFromActive = () => {
+    const savedActive = localStorage.getItem('tradingSignals');
+    if (savedActive) {
+      try {
+        const activeSignals = JSON.parse(savedActive);
+        const completedSignals = activeSignals.filter((signal: TradingSignal) => 
+          signal.status === "COMPLETED"
+        );
+        
+        if (completedSignals.length > 0) {
+          setSignals(completedSignals);
+        }
+      } catch (e) {
+        console.error("Error parsing active signals:", e);
+        toast({
+          title: "Error loading historical data",
+          description: "Could not load signal history. Using sample data instead.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
 
   // Calculate summary statistics
   const summary = useMemo(() => {
@@ -32,12 +78,26 @@ const SignalsHistory = () => {
   }, [signals]);
 
   // Filter signals based on active tab
-  const filteredSignals = signals.filter(signal => {
-    if (activeTab === "all") return true;
-    if (activeTab === "profit") return signal.profit !== undefined && signal.profit > 0;
-    if (activeTab === "loss") return signal.profit !== undefined && signal.profit < 0;
-    return true;
-  });
+  const filteredSignals = useMemo(() => {
+    return signals.filter(signal => {
+      if (activeTab === "all") return true;
+      if (activeTab === "profit") return signal.profit !== undefined && signal.profit > 0;
+      if (activeTab === "loss") return signal.profit !== undefined && signal.profit < 0;
+      return true;
+    });
+  }, [signals, activeTab]);
+
+  const handleRefresh = () => {
+    loadCompletedFromActive();
+    toast({
+      title: "History Refreshed",
+      description: "Signal history has been updated with the latest data"
+    });
+  };
+
+  const handleSignalClick = (signal: TradingSignal) => {
+    setSelectedSignal(signal);
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -50,8 +110,12 @@ const SignalsHistory = () => {
           <Button variant="outline" asChild className="flex items-center">
             <Link to="/performance">
               <LineChart className="mr-2 h-4 w-4" />
-              Ver Dashboard Completo
+              Performance Dashboard
             </Link>
+          </Button>
+          <Button variant="outline" onClick={handleRefresh} className="flex items-center">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh History
           </Button>
           <Card className="shadow-sm">
             <CardContent className="p-3 flex items-center">
@@ -117,6 +181,12 @@ const SignalsHistory = () => {
         </Card>
       </div>
 
+      {selectedSignal && (
+        <div className="mb-6">
+          <TradingSignalInsights signal={selectedSignal} />
+        </div>
+      )}
+
       <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-8">
         <TabsList>
           <TabsTrigger value="all">All Signals</TabsTrigger>
@@ -126,9 +196,28 @@ const SignalsHistory = () => {
       </Tabs>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSignals.map((signal) => (
-          <SignalCard key={signal.id} signal={signal} />
-        ))}
+        {filteredSignals.length > 0 ? (
+          filteredSignals.map((signal) => (
+            <div key={signal.id} onClick={() => handleSignalClick(signal)}>
+              <SignalCard key={signal.id} signal={signal} />
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full py-12 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+              <LineChart className="h-8 w-8 text-slate-400" />
+            </div>
+            <h3 className="text-xl font-medium mb-2">No historical signals yet</h3>
+            <p className="text-slate-500 max-w-md mx-auto mb-4">
+              Generate signals and complete trades to build your trading history and performance metrics.
+            </p>
+            <Button asChild>
+              <Link to="/signals">
+                Generate Signals
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
