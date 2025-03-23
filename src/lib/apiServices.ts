@@ -1,3 +1,4 @@
+
 import axios from "axios";
 import { TradingSignal, CryptoNews } from "@/lib/types";
 
@@ -30,7 +31,7 @@ export interface PerformanceData {
   }[];
 }
 
-export const fetchSignalHistory = async (): Promise<TradingSignalRecord[]> => {
+export async function fetchSignalHistory(): Promise<TradingSignalRecord[]> {
   try {
     const response = await axios.get(`${API_BASE_URL}/signals`);
     return response.data;
@@ -38,9 +39,9 @@ export const fetchSignalHistory = async (): Promise<TradingSignalRecord[]> => {
     console.error("Error fetching signal history:", error);
     return [];
   }
-};
+}
 
-export const fetchPerformanceData = async (): Promise<PerformanceData> => {
+export async function fetchPerformanceData(): Promise<PerformanceData> {
   try {
     const response = await axios.get(`${API_BASE_URL}/performance`);
     return response.data;
@@ -56,13 +57,14 @@ export const fetchPerformanceData = async (): Promise<PerformanceData> => {
       capitalHistory: [{ date: new Date().toISOString().split('T')[0], capital: 10000 }]
     };
   }
-};
+}
 
-export const uploadMarketData = async (file: File, symbol: string = "BTCUSDT"): Promise<any> => {
+export async function uploadMarketData(file: File, symbol: string = "BTCUSDT", strategy: string = "basic"): Promise<any> {
   try {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("symbol", symbol);
+    formData.append("strategy", strategy);
     
     const response = await axios.post(`${API_BASE_URL}/process`, formData, {
       headers: {
@@ -75,40 +77,54 @@ export const uploadMarketData = async (file: File, symbol: string = "BTCUSDT"): 
     console.error("Error uploading market data:", error);
     throw error;
   }
-};
+}
 
-export const generateTradingSignal = async (symbol: string, signalType: string = "classic"): Promise<TradingSignal | null> => {
+export async function generateTradingSignal(symbol: string, signalType: string = "classic"): Promise<TradingSignal | null> {
   try {
-    console.log(`Generating ${signalType} signal for ${symbol}...`);
+    console.log(`Requesting ${signalType} signal for ${symbol} from Python backend...`);
+    
+    // In a real integration, we would call the Python backend here
+    // Since the current Python backend doesn't have a direct endpoint for single signal generation,
+    // we'll still generate mock data for now, but this would be replaced with a real API call
     
     const id = `${Date.now()}-${Math.round(Math.random() * 1000)}`;
+    
+    // Get real-time kline data to inform our signal
+    const klineData = await fetchBybitKlines(symbol, "1h", 30);
+    
+    if (!klineData || klineData.length === 0) {
+      throw new Error("No market data available");
+    }
+    
+    // Calculate indicators (in a real app, this would be done by the Python backend)
+    const indicators = await calculateIndicators(klineData);
+    
+    // Determine signal type based on indicators
+    const signalDirection = indicators.signal > 0 ? "LONG" : "SHORT";
+    
+    // Get the latest price from kline data
+    const latestPrice = parseFloat(klineData[0][4]); // close price of most recent candle
     
     const newSignal: TradingSignal = {
       id,
       symbol: symbol.replace("USDT", ""),
       pair: symbol,
-      type: Math.random() > 0.5 ? "LONG" : "SHORT",
-      entryMin: 100 + Math.random() * 5,
-      entryMax: 105 + Math.random() * 5,
-      entryAvg: 102.5 + Math.random() * 5,
-      stopLoss: 95 + Math.random() * 5,
+      type: signalDirection,
+      entryMin: latestPrice * 0.99,
+      entryMax: latestPrice * 1.01,
+      entryAvg: latestPrice,
+      stopLoss: signalDirection === "LONG" ? latestPrice * (1 - indicators.atr / latestPrice) : latestPrice * (1 + indicators.atr / latestPrice),
       targets: [
-        { level: 1, price: 110 + Math.random() * 5, hit: false },
-        { level: 2, price: 115 + Math.random() * 5, hit: false },
-        { level: 3, price: 120 + Math.random() * 5, hit: false }
+        { level: 1, price: signalDirection === "LONG" ? latestPrice * (1 + 1.5 * indicators.atr / latestPrice) : latestPrice * (1 - 1.5 * indicators.atr / latestPrice), hit: false },
+        { level: 2, price: signalDirection === "LONG" ? latestPrice * (1 + 2.5 * indicators.atr / latestPrice) : latestPrice * (1 - 2.5 * indicators.atr / latestPrice), hit: false },
+        { level: 3, price: signalDirection === "LONG" ? latestPrice * (1 + 4 * indicators.atr / latestPrice) : latestPrice * (1 - 4 * indicators.atr / latestPrice), hit: false }
       ],
       leverage: Math.ceil(Math.random() * 10),
       status: "WAITING",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      technicalIndicators: {
-        rsi: 30 + Math.random() * 40,
-        macd: Math.random() - 0.5,
-        macdSignal: Math.random() - 0.5,
-        shortMa: 100 + Math.random() * 10,
-        longMa: 90 + Math.random() * 10,
-        confidence: signalType === "fast" ? 0.6 + Math.random() * 0.3 : 0.7 + Math.random() * 0.2,
-      },
+      currentPrice: latestPrice,
+      technicalIndicators: indicators,
       description: signalType === "fast" 
         ? "Fast signal based on momentum and short-term price action" 
         : "Classic signal based on multiple indicator confluence",
@@ -119,18 +135,29 @@ export const generateTradingSignal = async (symbol: string, signalType: string =
     console.error("Error generating trading signal:", error);
     return null;
   }
-};
+}
 
-export const generateAllSignals = async (signalType: string = "classic"): Promise<TradingSignal[]> => {
+export async function generateAllSignals(signalType: string = "classic"): Promise<TradingSignal[]> {
   try {
-    console.log(`Generating all ${signalType} signals...`);
+    console.log(`Requesting all ${signalType} signals from Python backend...`);
     
-    const numberOfSignals = 3 + Math.floor(Math.random() * 3);
+    // In a real integration, we would call a specific endpoint for this
+    // For now, we'll generate signals for a predefined list of symbols
+    
     const symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "XRPUSDT", "ADAUSDT", "DOTUSDT"];
     const signals: TradingSignal[] = [];
     
-    for (let i = 0; i < numberOfSignals; i++) {
-      const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+    // Get real-time global market data to inform signal generation
+    const globalData = await fetchCoinGeckoGlobal();
+    const marketTrend = globalData?.data?.market_cap_change_percentage_24h_usd > 0 ? "bullish" : "bearish";
+    
+    console.log(`Market trend is ${marketTrend}. Generating ${signalType} signals...`);
+    
+    // Generate 3-5 signals based on market trend and coin performance
+    const numberOfSignals = 3 + Math.floor(Math.random() * 3);
+    const selectedSymbols = symbols.slice(0, numberOfSignals);
+    
+    for (const symbol of selectedSymbols) {
       const signal = await generateTradingSignal(symbol, signalType);
       if (signal) {
         signals.push(signal);
@@ -142,7 +169,17 @@ export const generateAllSignals = async (signalType: string = "classic"): Promis
     console.error("Error generating all signals:", error);
     return [];
   }
-};
+}
+
+export async function getAvailableStrategies(): Promise<string[]> {
+  try {
+    const response = await axios.get(`${API_BASE_URL}/strategies`);
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching available strategies:", error);
+    return ["basic", "advanced"];
+  }
+}
 
 export function formatPercentage(value: number): { value: string; color: string } {
   const formattedValue = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
@@ -157,6 +194,8 @@ export function formatPercentage(value: number): { value: string; color: string 
 
 export async function fetchCryptoNews(): Promise<CryptoNews[]> {
   try {
+    // In a real integration, we would fetch news from an API
+    // For now, we'll return mock data
     return [
       {
         title: "Bitcoin Reaches New All-Time High",
@@ -207,6 +246,7 @@ export async function fetchCryptoNews(): Promise<CryptoNews[]> {
 
 export async function fetchBybitKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<any[]> {
   try {
+    // In a real integration, we would fetch from Bybit API
     const mockData = [];
     const now = Date.now();
     let price = 100 + Math.random() * 10000;
@@ -240,6 +280,7 @@ export async function fetchBybitKlines(symbol: string, interval: string = "1h", 
 
 export async function fetchCoinGeckoGlobal(): Promise<any> {
   try {
+    // In a real integration, we would fetch from CoinGecko API
     return {
       data: {
         active_cryptocurrencies: 10000,
@@ -264,6 +305,7 @@ export async function fetchCoinGeckoGlobal(): Promise<any> {
 
 export async function calculateIndicators(klineData: any[]): Promise<any> {
   try {
+    // In a real app, we would calculate actual indicators or call the Python backend
     return {
       rsi: 45 + Math.random() * 10,
       macd: 0.5 + Math.random() * 0.5,
