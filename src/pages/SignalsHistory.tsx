@@ -21,6 +21,7 @@ const mapSignalRecordToTradingSignal = (record: TradingSignalRecord): TradingSig
     type: record.signal === 1 ? "LONG" : "SHORT",
     status: "COMPLETED",
     createdAt: record.timestamp,
+    updatedAt: record.timestamp,
     completedAt: record.timestamp,
     entryAvg: record.entry_price,
     stopLoss: record.entry_price - record.atr * (record.signal === 1 ? 1 : -1),
@@ -34,8 +35,9 @@ const mapSignalRecordToTradingSignal = (record: TradingSignalRecord): TradingSig
     ],
     timeframe: "4h",
     profit: record.profit_loss / record.position_size * 100, // Convert absolute P/L to percentage
-    description: `${record.signal === 1 ? 'Long' : 'Short'} position with position size ${record.position_size.toFixed(2)}`,
-    riskRewardRatio: 1.5
+    notes: `${record.signal === 1 ? 'Long' : 'Short'} position with position size ${record.position_size.toFixed(2)}`,
+    riskRewardRatio: 1.5,
+    leverage: 1 // Default leverage
   };
 };
 

@@ -49,6 +49,8 @@ export interface TradingSignal {
   reason?: string;
   type?: SignalType;
   technicalIndicators?: TechnicalIndicators;
+  description?: string;
+  riskRewardRatio?: number;
 }
 
 export interface Feature {
