@@ -1,4 +1,3 @@
-
 import axios from "axios";
 import { TradingSignal, CryptoNews } from "@/lib/types";
 
@@ -78,17 +77,12 @@ export const uploadMarketData = async (file: File, symbol: string = "BTCUSDT"): 
   }
 };
 
-// Let's update the interface for our signal generation functions to include signal type
 export const generateTradingSignal = async (symbol: string, signalType: string = "classic"): Promise<TradingSignal | null> => {
   try {
-    // Here you would make an API call to your backend
-    // For now we'll create mock data
     console.log(`Generating ${signalType} signal for ${symbol}...`);
     
-    // Generate a unique ID
     const id = `${Date.now()}-${Math.round(Math.random() * 1000)}`;
     
-    // Create a new signal
     const newSignal: TradingSignal = {
       id,
       symbol: symbol.replace("USDT", ""),
@@ -113,7 +107,6 @@ export const generateTradingSignal = async (symbol: string, signalType: string =
         macdSignal: Math.random() - 0.5,
         shortMa: 100 + Math.random() * 10,
         longMa: 90 + Math.random() * 10,
-        // Fast signals might have different indicator values
         confidence: signalType === "fast" ? 0.6 + Math.random() * 0.3 : 0.7 + Math.random() * 0.2,
       },
       description: signalType === "fast" 
@@ -130,8 +123,6 @@ export const generateTradingSignal = async (symbol: string, signalType: string =
 
 export const generateAllSignals = async (signalType: string = "classic"): Promise<TradingSignal[]> => {
   try {
-    // Here you would make an API call to your backend
-    // For now we'll generate mock data
     console.log(`Generating all ${signalType} signals...`);
     
     const numberOfSignals = 3 + Math.floor(Math.random() * 3);
@@ -153,10 +144,7 @@ export const generateAllSignals = async (signalType: string = "classic"): Promis
   }
 };
 
-// Adding missing functions that are imported by components
-
-// Function for formatting percentages for display
-export const formatPercentage = (value: number): { value: string; color: string } => {
+export function formatPercentage(value: number): { value: string; color: string } {
   const formattedValue = `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
   const color = value > 0 
     ? "text-green-500" 
@@ -165,13 +153,10 @@ export const formatPercentage = (value: number): { value: string; color: string 
       : "text-gray-500";
   
   return { value: formattedValue, color };
-};
+}
 
-// Function to fetch crypto news
-export const fetchCryptoNews = async (): Promise<CryptoNews[]> => {
+export async function fetchCryptoNews(): Promise<CryptoNews[]> {
   try {
-    // In a real app, you would fetch from a news API
-    // For now, we'll return mock data
     return [
       {
         title: "Bitcoin Reaches New All-Time High",
@@ -218,13 +203,10 @@ export const fetchCryptoNews = async (): Promise<CryptoNews[]> => {
     console.error("Error fetching crypto news:", error);
     return [];
   }
-};
+}
 
-// Function to fetch Bybit klines (candlestick data)
-export const fetchBybitKlines = async (symbol: string, interval: string = "1h", limit: number = 100): Promise<any[]> => {
+export async function fetchBybitKlines(symbol: string, interval: string = "1h", limit: number = 100): Promise<any[]> {
   try {
-    // In a real app, you would fetch from Bybit API
-    // For now, we'll return mock data
     const mockData = [];
     const now = Date.now();
     let price = 100 + Math.random() * 10000;
@@ -254,13 +236,10 @@ export const fetchBybitKlines = async (symbol: string, interval: string = "1h", 
     console.error("Error fetching Bybit klines:", error);
     return [];
   }
-};
+}
 
-// Function to fetch global market data from CoinGecko
-export const fetchCoinGeckoGlobal = async (): Promise<any> => {
+export async function fetchCoinGeckoGlobal(): Promise<any> {
   try {
-    // In a real app, you would fetch from CoinGecko API
-    // For now, we'll return mock data
     return {
       data: {
         active_cryptocurrencies: 10000,
@@ -281,13 +260,10 @@ export const fetchCoinGeckoGlobal = async (): Promise<any> => {
     console.error("Error fetching CoinGecko global data:", error);
     return null;
   }
-};
+}
 
-// Function to calculate technical indicators from price data
-export const calculateIndicators = (klineData: any[]): any => {
+export async function calculateIndicators(klineData: any[]): Promise<any> {
   try {
-    // In a real app, you would calculate actual indicators
-    // For now, we'll return mock indicator data
     return {
       rsi: 45 + Math.random() * 10,
       macd: 0.5 + Math.random() * 0.5,
@@ -306,4 +282,4 @@ export const calculateIndicators = (klineData: any[]): any => {
     console.error("Error calculating indicators:", error);
     return {};
   }
-};
+}
