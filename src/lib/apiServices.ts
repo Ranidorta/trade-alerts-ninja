@@ -1,4 +1,3 @@
-
 import axios from "axios";
 import { TradingSignal, CryptoNews } from "@/lib/types";
 
@@ -367,7 +366,7 @@ async function fetchBybitKlines(symbol: string, interval: string = "1h", limit: 
   }
 }
 
-async function fetchCoinGeckoGlobal(): Promise<any> {
+export async function fetchCoinGeckoGlobal(): Promise<any> {
   try {
     // Try to fetch real data from CoinGecko
     const apiUrl = `https://api.coingecko.com/api/v3/global?x_cg_api_key=${COINGECKO_API_KEY}`;
