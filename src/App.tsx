@@ -4,7 +4,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useState } from "react";
 import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
@@ -19,43 +18,33 @@ import "./App.css";
 // Import gamer theme styles
 import "./styles/gamer-theme.css";
 
-const App = () => {
-  // Initialize QueryClient inside the component using useState
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: 1,
-        refetchOnWindowFocus: false,
-      },
-    },
-  }));
+const queryClient = new QueryClient();
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark">
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <div className="gamer-theme">
-              <Navbar />
-              <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/signals" element={<SignalsDashboard />} />
-                  <Route path="/history" element={<SignalsHistory />} />
-                  <Route path="/market" element={<CryptoMarket />} />
-                  <Route path="/performance" element={<PerformanceDashboard />} />
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </div>
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider defaultTheme="dark">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <div className="gamer-theme">
+            <Navbar />
+            <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/signals" element={<SignalsDashboard />} />
+                <Route path="/history" element={<SignalsHistory />} />
+                <Route path="/market" element={<CryptoMarket />} />
+                <Route path="/performance" element={<PerformanceDashboard />} />
+                <Route path="/admin" element={<Admin />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
             </div>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  );
-};
+          </div>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
 
 export default App;

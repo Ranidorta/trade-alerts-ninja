@@ -129,8 +129,6 @@ Entry: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})
 SL: ${signal.stopLoss}
 ${signal.targets ? signal.targets.map((t, i) => `TP${i+1}: ${t.price}`).join('\n') : ''}
 Leverage: ${signal.leverage}x
-${signal.signalGenerator ? `Signal Type: ${signal.signalGenerator}` : ''}
-${signal.technicalIndicators?.positionSize ? `Position Size: ${signal.technicalIndicators.positionSize}` : ''}
     `.trim();
     
     navigator.clipboard.writeText(details);
@@ -157,11 +155,6 @@ ${signal.technicalIndicators?.positionSize ? `Position Size: ${signal.technicalI
               <span className="ml-2 font-semibold text-slate-800 dark:text-slate-200">
                 {signal.symbol} ({signal.pair})
               </span>
-              {signal.signalGenerator && (
-                <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                  {signal.signalGenerator}
-                </span>
-              )}
             </CardTitle>
           </div>
           <StatusBadge status={signal.status} />
@@ -241,20 +234,6 @@ ${signal.technicalIndicators?.positionSize ? `Position Size: ${signal.technicalI
                 <div className="text-xs text-slate-500 dark:text-slate-400">Current Price</div>
                 <div className="font-medium mt-1 truncate">{signal.currentPrice || "N/A"}</div>
               </div>
-              
-              {signal.technicalIndicators?.positionSize && (
-                <div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Position Size</div>
-                  <div className="font-medium mt-1">{signal.technicalIndicators.positionSize}</div>
-                </div>
-              )}
-              
-              {signal.technicalIndicators?.atr && (
-                <div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">ATR</div>
-                  <div className="font-medium mt-1">{signal.technicalIndicators.atr.toFixed(4)}</div>
-                </div>
-              )}
             </div>
             
             {signal.technicalIndicators && (

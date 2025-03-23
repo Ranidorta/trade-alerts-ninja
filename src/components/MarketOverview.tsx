@@ -1,6 +1,6 @@
 
 import React from "react";
-import { TrendingUp, TrendingDown, Clock, BarChart2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, DollarSign, BarChart2 } from "lucide-react";
 import { MarketOverview as MarketOverviewType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercentage } from "@/lib/apiServices";
