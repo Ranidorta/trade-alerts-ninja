@@ -36,7 +36,7 @@ export interface TradingSignal {
   leverage: number;
   status: SignalStatus;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
   completedAt?: string;
   profit?: number;
   notes?: string;
@@ -47,6 +47,15 @@ export interface TradingSignal {
   technicalIndicators?: TechnicalIndicators;
   result?: number; // Added result property
   strategy?: string; // Added strategy property
+  performance?: StrategyPerformance; // Added performance metrics
+}
+
+export interface StrategyPerformance {
+  winRate?: number;
+  sharpeRatio?: number;
+  maxDrawdown?: number;
+  totalTrades?: number;
+  avgProfit?: number;
 }
 
 export interface Feature {
@@ -112,4 +121,52 @@ export interface UserProfile {
   email: string;
   name?: string;
   isAuthenticated: boolean;
+}
+
+export interface PerformanceMetrics {
+  totalSignals: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  symbolsData: SymbolPerformance[];
+  signalTypesData: StrategyTypePerformance[];
+  strategyData: StrategyTypePerformance[];
+  dailyData: DailyPerformance[];
+  strategyPerformance?: StrategyDetailedPerformance[];
+}
+
+export interface SymbolPerformance {
+  symbol: string;
+  count: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+}
+
+export interface StrategyTypePerformance {
+  strategy: string;
+  count: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  profit?: number;
+  avgTradeProfit?: number;
+}
+
+export interface StrategyDetailedPerformance {
+  strategy: string;
+  total_signals: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  profit: number;
+  sharpe_ratio?: number;
+  max_drawdown?: number;
+}
+
+export interface DailyPerformance {
+  date: string;
+  total: number;
+  wins: number;
+  losses: number;
 }

@@ -18,6 +18,12 @@ import functools
 import firebase_admin
 from firebase_admin import credentials, auth
 
+# Import our local modules
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from strategies.bollinger_bands import strategy_bollinger_bands
+from backtesting.performance import generate_performance_report
+
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -214,6 +220,15 @@ def get_signals():
         else:
             signal['strategy'] = signal.get('signal_type', 'UNKNOWN')
             
+        # Add performance metrics if available
+        if 'sharpe_ratio' in signal or 'max_drawdown' in signal:
+            signal['performance'] = {
+                'sharpeRatio': signal.get('sharpe_ratio'),
+                'maxDrawdown': signal.get('max_drawdown'),
+                'winRate': None,  # Will be calculated from performance endpoint
+                'totalTrades': None
+            }
+            
         # Estimate targets based on entry price and result
         signal['targets'] = [
             {"level": 1, "price": signal['entry_price'] * 1.03, "hit": signal['result'] == 1}
@@ -241,7 +256,7 @@ def get_strategies():
     # Se não tiver estratégias ainda, retorna as estratégias padrão
     if not strategies:
         # Adicionando as novas estratégias implementadas
-        strategies = ["CLASSIC", "FAST", "RSI_MACD", "BREAKOUT_ATR", "TREND_ADX"]
+        strategies = ["CLASSIC", "FAST", "RSI_MACD", "BREAKOUT_ATR", "TREND_ADX", "BOLLINGER_BANDS"]
         
     conn.close()
     
@@ -313,7 +328,9 @@ def get_performance():
             END as strategy,
             COUNT(*) as count,
             SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
+            SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses,
+            AVG(sharpe_ratio) as sharpe_ratio,
+            AVG(max_drawdown) as max_drawdown
         FROM signals
         WHERE {base_query}
         GROUP BY strategy
@@ -363,7 +380,9 @@ def get_performance():
             winning_signals as wins,
             losing_signals as losses,
             win_rate as winRate,
-            avg_profit as profit
+            avg_profit as profit,
+            sharpe_ratio,
+            max_drawdown
         FROM strategy_performance
         ORDER BY win_rate DESC
     """
@@ -384,8 +403,40 @@ def get_performance():
         "dailyData": daily_data
     })
 
-# ...restante dos endpoints mantém a mesma estrutura, adicionando optional_auth ou require_auth
-# ... keep existing code (for strategy/performance, symbols, raw_data endpoints) but add the optional_auth decorator
+@app.route('/api/symbols', methods=['GET'])
+@optional_auth
+def get_symbols():
+    """Get all unique symbols with signal counts"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT DISTINCT symbol, COUNT(*) as count
+        FROM signals
+        GROUP BY symbol
+        ORDER BY count DESC
+    """)
+    
+    symbols = [row['symbol'] for row in cursor.fetchall()]
+    conn.close()
+    
+    return jsonify(symbols)
+
+@app.route('/api/raw_data/<symbol>', methods=['GET'])
+@optional_auth
+def get_raw_data(symbol):
+    """Get raw candle data for a symbol"""
+    filepath = os.path.join(RAW_DATA_DIR, f"{symbol}.json")
+    
+    if not os.path.exists(filepath):
+        return jsonify({"error": "Data not found"}), 404
+        
+    try:
+        with open(filepath, 'r') as file:
+            data = json.load(file)
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/user/profile', methods=['GET'])
 @require_auth
@@ -402,11 +453,101 @@ def get_user_profile():
         "isAuthenticated": True
     })
 
-# ...restante dos endpoints
-# ... keep existing code (for if __name__ == "__main__", etc)
+@app.route('/api/strategy/<strategy_name>/performance', methods=['GET'])
+@optional_auth
+def get_strategy_detail_performance(strategy_name):
+    """Get detailed performance metrics for a specific strategy"""
+    days = request.args.get('days', default=30, type=int)
+    date_threshold = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get strategy performance from the strategy_performance table
+    cursor.execute('''
+        SELECT * FROM strategy_performance
+        WHERE strategy_name = ?
+    ''', [strategy_name])
+    
+    performance = cursor.fetchone()
+    
+    # Get signals for this strategy
+    query = '''
+        SELECT * FROM signals
+        WHERE strategy_name = ? AND timestamp > ?
+    '''
+    params = [strategy_name, date_threshold]
+    
+    # Add user filter if authenticated
+    if g.user_id:
+        query += " AND (user_id IS NULL OR user_id = ?)"
+        params.append(g.user_id)
+    
+    cursor.execute(query, params)
+    signals = cursor.fetchall()
+    
+    # Calculate additional metrics based on signals
+    daily_performance = {}
+    symbols_performance = {}
+    
+    for signal in signals:
+        # Daily performance
+        date = signal['timestamp'].split('T')[0]
+        if date not in daily_performance:
+            daily_performance[date] = {'wins': 0, 'losses': 0, 'total': 0}
+        
+        daily_performance[date]['total'] += 1
+        if signal['result'] == 1:
+            daily_performance[date]['wins'] += 1
+        elif signal['result'] == 0:
+            daily_performance[date]['losses'] += 1
+            
+        # Symbol performance
+        symbol = signal['symbol']
+        if symbol not in symbols_performance:
+            symbols_performance[symbol] = {'wins': 0, 'losses': 0, 'total': 0}
+            
+        symbols_performance[symbol]['total'] += 1
+        if signal['result'] == 1:
+            symbols_performance[symbol]['wins'] += 1
+        elif signal['result'] == 0:
+            symbols_performance[symbol]['losses'] += 1
+    
+    # Convert to lists for the response
+    daily_data = [
+        {'date': date, **stats} 
+        for date, stats in daily_performance.items()
+    ]
+    
+    symbols_data = [
+        {
+            'symbol': symbol, 
+            'count': stats['total'], 
+            'wins': stats['wins'], 
+            'losses': stats['losses'],
+            'winRate': round((stats['wins'] / stats['total'] * 100), 2) if stats['total'] > 0 else 0
+        } 
+        for symbol, stats in symbols_performance.items()
+    ]
+    
+    # Sort data
+    daily_data.sort(key=lambda x: x['date'])
+    symbols_data.sort(key=lambda x: x['count'], reverse=True)
+    
+    conn.close()
+    
+    # Prepare the response
+    response = {
+        "strategy": strategy_name,
+        "totalSignals": len(signals),
+        "performance": performance,
+        "dailyData": daily_data,
+        "symbolsData": symbols_data
+    }
+    
+    return jsonify(response)
 
-# Update save_signal_to_db to include user_id
-def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, user_id=None):
+def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, user_id=None, sharpe_ratio=None, max_drawdown=None):
     """Salva um sinal no banco de dados com nome da estratégia e ID do usuário."""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -418,16 +559,22 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         columns = [column[1] for column in cursor.fetchall()]
         if "user_id" not in columns:
             cursor.execute("ALTER TABLE signals ADD COLUMN user_id TEXT")
+            
+        # Verificar e criar colunas de performance se não existirem
+        if "sharpe_ratio" not in columns:
+            cursor.execute("ALTER TABLE signals ADD COLUMN sharpe_ratio REAL")
+        if "max_drawdown" not in columns:
+            cursor.execute("ALTER TABLE signals ADD COLUMN max_drawdown REAL")
         
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
-            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id))
+            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown))
         
         # Atualiza tabela de performance da estratégia
-        update_strategy_performance(cursor, strategy_name, result)
+        update_strategy_performance(cursor, strategy_name, result, sharpe_ratio, max_drawdown)
         
         conn.commit()
         conn.close()
@@ -435,6 +582,66 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
     except Exception as e:
         print(f"Erro ao salvar sinal no banco: {str(e)}")
         return False
+
+def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None, max_drawdown=None):
+    """Atualiza estatísticas de performance de uma estratégia com métricas avançadas."""
+    try:
+        # Verifica se a estratégia já existe na tabela
+        cursor.execute('SELECT * FROM strategy_performance WHERE strategy_name = ?', (strategy_name,))
+        exists = cursor.fetchone()
+        
+        if exists:
+            # Atualiza estatísticas existentes
+            if result == 1:  # Sinal vencedor
+                cursor.execute('''
+                    UPDATE strategy_performance SET 
+                    total_signals = total_signals + 1,
+                    winning_signals = winning_signals + 1,
+                    last_updated = ?
+                    WHERE strategy_name = ?
+                ''', (datetime.utcnow().isoformat(), strategy_name))
+            elif result == 0:  # Sinal perdedor
+                cursor.execute('''
+                    UPDATE strategy_performance SET 
+                    total_signals = total_signals + 1,
+                    losing_signals = losing_signals + 1,
+                    last_updated = ?
+                    WHERE strategy_name = ?
+                ''', (datetime.utcnow().isoformat(), strategy_name))
+        else:
+            # Insere nova estratégia
+            winning = 1 if result == 1 else 0
+            losing = 1 if result == 0 else 0
+            cursor.execute('''
+                INSERT INTO strategy_performance 
+                (strategy_name, total_signals, winning_signals, losing_signals, last_updated)
+                VALUES (?, 1, ?, ?, ?)
+            ''', (strategy_name, winning, losing, datetime.utcnow().isoformat()))
+        
+        # Atualiza a taxa de vitória e lucro médio
+        cursor.execute('''
+            UPDATE strategy_performance SET
+            win_rate = CASE WHEN total_signals > 0 THEN (winning_signals * 100.0 / total_signals) ELSE 0 END
+            WHERE strategy_name = ?
+        ''', (strategy_name,))
+        
+        # Atualiza Sharpe Ratio e Max Drawdown se fornecidos
+        if sharpe_ratio is not None:
+            cursor.execute('''
+                UPDATE strategy_performance SET
+                sharpe_ratio = ?
+                WHERE strategy_name = ?
+            ''', (sharpe_ratio, strategy_name))
+            
+        if max_drawdown is not None:
+            cursor.execute('''
+                UPDATE strategy_performance SET
+                max_drawdown = ?
+                WHERE strategy_name = ?
+            ''', (max_drawdown, strategy_name))
+        
+    except Exception as e:
+        print(f"Erro ao atualizar performance da estratégia {strategy_name}: {str(e)}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

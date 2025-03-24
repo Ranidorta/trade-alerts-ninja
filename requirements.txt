@@ -1,0 +1,25 @@
+
+# Core dependencies
+numpy>=1.24.0
+pandas>=1.5.3
+SQLAlchemy>=2.0.0
+requests>=2.31.0
+flask>=2.2.3
+flask-cors>=3.0.10
+python-dotenv>=1.0.0
+joblib>=1.3.0
+
+# Technical Analysis
+ta-lib>=0.4.26
+river>=0.14.0
+
+# Firebase integration
+firebase-admin>=6.2.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=3.0.0
+pytest-mock>=3.10.0
+
+# Optimization and performance
+numba>=0.56.4
