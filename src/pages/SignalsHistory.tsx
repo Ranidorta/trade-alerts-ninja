@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
@@ -229,7 +230,7 @@ const SignalsHistory = () => {
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-1 text-xs">
-                  {currentStrategyDetails.indicators.map((indicator) => (
+                  {currentStrategyDetails.indicators.map((indicator: string) => (
                     <span 
                       key={indicator} 
                       className="px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-medium">
@@ -271,7 +272,7 @@ const SignalsHistory = () => {
                     <div className="flex flex-wrap gap-2">
                       {Object.entries(currentStrategyDetails.parameters).map(([key, value]) => (
                         <span key={key} className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-700">
-                          {key}: <span className="font-medium">{value}</span>
+                          {key}: <span className="font-medium">{String(value)}</span>
                         </span>
                       ))}
                     </div>
@@ -286,7 +287,7 @@ const SignalsHistory = () => {
                 <div>
                   <div className="font-medium mb-1 text-green-600">Vantagens</div>
                   <ul className="list-disc list-inside text-slate-700">
-                    {currentStrategyDetails.pros.map((pro, index) => (
+                    {currentStrategyDetails.pros.map((pro: string, index: number) => (
                       <li key={index}>{pro}</li>
                     ))}
                   </ul>
@@ -294,7 +295,7 @@ const SignalsHistory = () => {
                 <div>
                   <div className="font-medium mb-1 text-red-600">Desvantagens</div>
                   <ul className="list-disc list-inside text-slate-700">
-                    {currentStrategyDetails.cons.map((con, index) => (
+                    {currentStrategyDetails.cons.map((con: string, index: number) => (
                       <li key={index}>{con}</li>
                     ))}
                   </ul>
