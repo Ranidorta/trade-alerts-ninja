@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -8,6 +9,8 @@ import {
   Bell,
   RefreshCw,
   Zap,
+  Settings,
+  Tags
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +25,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
+import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
+import { useQuery } from "@tanstack/react-query";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue, 
+} from "@/components/ui/select";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -37,27 +49,53 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [coinSearch, setCoinSearch] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [strategyFilter, setStrategyFilter] = useState<string>("ALL");
   const { toast } = useToast();
+  
+  // Fetch available strategies
+  const { data: strategies = [] } = useQuery({
+    queryKey: ['strategies'],
+    queryFn: fetchStrategies,
+    meta: {
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          console.error("Error fetching strategies:", error);
+          toast({
+            title: "Erro ao carregar estratégias",
+            description: "Não foi possível carregar a lista de estratégias disponíveis.",
+            variant: "destructive"
+          });
+        }
+      }
+    }
+  });
   
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      const realSignals = await generateAllSignals();
-      if (realSignals.length > 0) {
-        setSignals(realSignals);
-        setFilteredSignals(realSignals);
+      // Use the new fetchSignals with strategy filter if selected
+      const params: any = { days: 30 };
+      if (strategyFilter !== "ALL") {
+        params.strategy = strategyFilter;
+      }
+      
+      const fetchedSignals = await fetchSignals(params);
+      
+      if (fetchedSignals.length > 0) {
+        setSignals(fetchedSignals);
+        setFilteredSignals(fetchedSignals);
       } else {
         toast({
-          title: "No signals found",
-          description: "No trading signals were found from Bybit API.",
+          title: "Nenhum sinal encontrado",
+          description: "Nenhum sinal de trading foi encontrado com os filtros atuais.",
         });
       }
     } catch (error) {
       console.error("Error loading signals:", error);
       toast({
-        title: "Error loading signals",
-        description: "Failed to load signals from Bybit API.",
+        title: "Erro ao carregar sinais",
+        description: "Falha ao carregar sinais da API.",
         variant: "destructive"
       });
       setSignals([]);
@@ -66,11 +104,11 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast]);
+  }, [toast, strategyFilter]);
   
   useEffect(() => {
-    setIsLoading(false);
-  }, []);
+    loadSignalsData();
+  }, [loadSignalsData, strategyFilter]);
   
   useEffect(() => {
     if (!autoRefresh) return;
@@ -94,8 +132,8 @@ const SignalsDashboard = () => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(signal => 
-        signal.symbol.toLowerCase().includes(query) ||
-        signal.pair.toLowerCase().includes(query)
+        signal.symbol?.toLowerCase().includes(query) ||
+        signal.pair?.toLowerCase().includes(query)
       );
     }
     
@@ -124,8 +162,8 @@ const SignalsDashboard = () => {
   
   const handleSubscribe = () => {
     toast({
-      title: "Subscribed to notifications",
-      description: "You'll receive alerts when new signals are posted",
+      title: "Inscrito para notificações",
+      description: "Você receberá alertas quando novos sinais forem postados",
     });
   };
   
@@ -136,8 +174,8 @@ const SignalsDashboard = () => {
   const handleGenerateSignalForCoin = async () => {
     if (!coinSearch) {
       toast({
-        title: "Please enter a symbol",
-        description: "Enter a cryptocurrency symbol to generate signals (e.g., BTCUSDT, ETHUSDT)",
+        title: "Por favor, digite um símbolo",
+        description: "Digite um símbolo de criptomoeda para gerar sinais (ex: BTCUSDT, ETHUSDT)",
       });
       return;
     }
@@ -151,8 +189,8 @@ const SignalsDashboard = () => {
 
     try {
       toast({
-        title: "Generating signal",
-        description: `Analyzing market data for ${symbol}...`,
+        title: "Gerando sinal",
+        description: `Analisando dados de mercado para ${symbol}...`,
       });
 
       const signal = await generateTradingSignal(symbol);
@@ -162,15 +200,15 @@ const SignalsDashboard = () => {
           const exists = prevSignals.some(s => s.id === signal.id);
           if (exists) {
             toast({
-              title: "Signal already exists",
-              description: `A signal for ${symbol} already exists in your dashboard.`,
+              title: "Sinal já existe",
+              description: `Um sinal para ${symbol} já existe no seu dashboard.`,
             });
             return prevSignals;
           }
           
           toast({
-            title: "Signal generated",
-            description: `New ${signal.type} signal for ${symbol} has been added to your dashboard.`,
+            title: "Sinal gerado",
+            description: `Novo sinal ${signal.type} para ${symbol} foi adicionado ao seu dashboard.`,
           });
           
           return [signal, ...prevSignals];
@@ -179,16 +217,16 @@ const SignalsDashboard = () => {
         setCoinSearch("");
       } else {
         toast({
-          title: "No signal generated",
-          description: `Could not generate a signal for ${symbol}. Market conditions may not meet criteria.`,
+          title: "Nenhum sinal gerado",
+          description: `Não foi possível gerar um sinal para ${symbol}. As condições de mercado podem não atender aos critérios.`,
           variant: "destructive"
         });
       }
     } catch (error) {
       console.error("Error generating signal for specific coin:", error);
       toast({
-        title: "Error generating signal",
-        description: `Failed to generate signal for ${symbol}.`,
+        title: "Erro ao gerar sinal",
+        description: `Falha ao gerar sinal para ${symbol}.`,
         variant: "destructive"
       });
     } finally {
@@ -199,8 +237,8 @@ const SignalsDashboard = () => {
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
-      title: "Generating signals",
-      description: "Analyzing market data to find trading opportunities...",
+      title: "Gerando sinais",
+      description: "Analisando dados de mercado para encontrar oportunidades de trading...",
     });
     
     try {
@@ -213,29 +251,29 @@ const SignalsDashboard = () => {
           
           if (uniqueNewSignals.length > 0) {
             toast({
-              title: "New signals generated",
-              description: `Found ${uniqueNewSignals.length} new trading opportunities`,
+              title: "Novos sinais gerados",
+              description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`,
             });
             return [...uniqueNewSignals, ...prevSignals];
           }
           
           toast({
-            title: "No new signals",
-            description: "No new trading opportunities found at this time",
+            title: "Nenhum novo sinal",
+            description: "Nenhuma nova oportunidade de trading encontrada no momento",
           });
           return prevSignals;
         });
       } else {
         toast({
-          title: "No new signals",
-          description: "No trading opportunities found at this time",
+          title: "Nenhum novo sinal",
+          description: "Nenhuma oportunidade de trading encontrada no momento",
         });
       }
     } catch (error) {
       console.error("Error generating signals:", error);
       toast({
-        title: "Error generating signals",
-        description: "An error occurred while analyzing market data",
+        title: "Erro ao gerar sinais",
+        description: "Ocorreu um erro ao analisar dados de mercado",
         variant: "destructive"
       });
     } finally {
@@ -247,17 +285,27 @@ const SignalsDashboard = () => {
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
-      title: `Auto-refresh ${!autoRefresh ? 'enabled' : 'disabled'}`,
-      description: `Signal data will ${!autoRefresh ? 'now' : 'no longer'} update automatically`,
+      title: `Atualização automática ${!autoRefresh ? 'ativada' : 'desativada'}`,
+      description: `Os dados dos sinais ${!autoRefresh ? 'agora serão atualizados' : 'não serão mais atualizados'} automaticamente`,
     });
   };
   
   const handleManualRefresh = () => {
     toast({
-      title: "Refreshing signals",
-      description: "Updating signal data...",
+      title: "Atualizando sinais",
+      description: "Atualizando dados dos sinais...",
     });
     loadSignalsData();
+  };
+  
+  const handleStrategyChange = (value: string) => {
+    setStrategyFilter(value);
+    toast({
+      title: "Filtro de estratégia alterado",
+      description: value === "ALL" 
+        ? "Mostrando sinais de todas as estratégias" 
+        : `Filtrando sinais da estratégia ${value}`,
+    });
   };
   
   const renderSkeletons = () => {
@@ -287,17 +335,17 @@ const SignalsDashboard = () => {
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Trading Signals</h1>
+          <h1 className="text-3xl font-bold mb-2">Sinais de Trading</h1>
           <p className="text-slate-600 dark:text-slate-300">
-            Current active trading opportunities
+            Oportunidades de trading ativas atuais
           </p>
           <div className="mt-2 flex items-center gap-2">
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
-              Using Bybit API Data
+              Usando Dados da API Bybit
             </span>
             {signals.length > 0 && (
               <span className="text-xs text-slate-500">
-                Last updated: {formatLastUpdated()}
+                Última atualização: {formatLastUpdated()}
               </span>
             )}
           </div>
@@ -310,25 +358,25 @@ const SignalsDashboard = () => {
             disabled={isGenerating}
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analyzing Market...' : 'Generate Signals'}
+            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais'}
           </Button>
           
           <Button onClick={handleSubscribe} variant="outline">
             <Bell className="mr-2 h-4 w-4" />
-            Subscribe to Alerts
+            Receber Alertas
           </Button>
         </div>
       </div>
       
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Generate Signal for Specific Coin</h2>
+          <h2 className="text-xl font-semibold">Gerar Sinal para Moeda Específica</h2>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Input
-              placeholder="Enter crypto symbol (e.g., BTC, ETH)"
+              placeholder="Digite o símbolo da cripto (ex: BTC, ETH)"
               value={coinSearch}
               onChange={handleCoinSearchChange}
               className="pr-10"
@@ -341,12 +389,12 @@ const SignalsDashboard = () => {
             className="shrink-0"
           >
             <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
-            {isSearching ? 'Analyzing...' : 'Generate Signal'}
+            {isSearching ? 'Analisando...' : 'Gerar Sinal'}
           </Button>
         </div>
         
         <p className="text-xs text-slate-500 mt-2">
-          Enter a cryptocurrency symbol to generate a trading signal based on current market conditions.
+          Digite um símbolo de criptomoeda para gerar um sinal de trading com base nas condições atuais de mercado.
         </p>
       </div>
       
@@ -354,20 +402,35 @@ const SignalsDashboard = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
           <Input
-            placeholder="Search by symbol or pair..."
+            placeholder="Buscar por símbolo ou par..."
             className="pl-10"
             value={searchQuery}
             onChange={handleSearchChange}
           />
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Select value={strategyFilter} onValueChange={handleStrategyChange}>
+            <SelectTrigger className="w-[180px]">
+              <Tags className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Estratégia" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas Estratégias</SelectItem>
+              {strategies.map((strategy: string) => (
+                <SelectItem key={strategy} value={strategy}>
+                  {strategy}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           <Button 
             onClick={toggleAutoRefresh} 
             variant={autoRefresh ? "default" : "outline"}
             size="icon"
             className="w-10 h-10"
-            title={autoRefresh ? "Auto-refresh enabled" : "Auto-refresh disabled"}
+            title={autoRefresh ? "Atualização automática ativada" : "Atualização automática desativada"}
           >
             <RefreshCw className={`h-4 w-4 ${autoRefresh ? 'animate-spin' : ''}`} />
           </Button>
@@ -377,7 +440,7 @@ const SignalsDashboard = () => {
             variant="outline"
             size="icon"
             className="w-10 h-10"
-            title="Refresh signals now"
+            title="Atualizar sinais agora"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -386,36 +449,36 @@ const SignalsDashboard = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
                 <BarChart3 className="mr-2 h-4 w-4" />
-                {statusFilter === "ALL" ? "All Status" : statusFilter}
+                {statusFilter === "ALL" ? "Todos Status" : statusFilter}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+              <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   className={statusFilter === "ALL" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleStatusFilter("ALL")}
                 >
-                  All Status
+                  Todos Status
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className={statusFilter === "ACTIVE" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleStatusFilter("ACTIVE")}
                 >
-                  Active
+                  Ativos
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className={statusFilter === "WAITING" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleStatusFilter("WAITING")}
                 >
-                  Waiting
+                  Aguardando
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className={statusFilter === "COMPLETED" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleStatusFilter("COMPLETED")}
                 >
-                  Completed
+                  Completados
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -425,24 +488,24 @@ const SignalsDashboard = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
                 <ArrowUpDown className="mr-2 h-4 w-4" />
-                Sort
+                Ordenar
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Sort Signals</DropdownMenuLabel>
+              <DropdownMenuLabel>Ordenar Sinais</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   className={sortBy === "newest" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleSort("newest")}
                 >
-                  Newest First
+                  Mais Recentes
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className={sortBy === "oldest" ? "bg-slate-100 dark:bg-slate-800" : ""}
                   onClick={() => handleSort("oldest")}
                 >
-                  Oldest First
+                  Mais Antigos
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -455,14 +518,14 @@ const SignalsDashboard = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
             <Zap className="h-8 w-8" />
           </div>
-          <h3 className="text-xl font-semibold mb-2">Generate your first signals</h3>
+          <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
           <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
-            Click the "Generate Signals" button to analyze the market and find trading opportunities, 
-            or search for a specific cryptocurrency above.
+            Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading, 
+            ou pesquise por uma criptomoeda específica acima.
           </p>
           <Button onClick={handleGenerateSignals} disabled={isGenerating}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analyzing Market...' : 'Generate Signals Now'}
+            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
           </Button>
         </div>
       )}
@@ -483,11 +546,13 @@ const SignalsDashboard = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
               <Search className="h-6 w-6 text-slate-400" />
             </div>
-            <h3 className="text-xl font-medium mb-2">No signals found</h3>
+            <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
             <p className="text-slate-500 max-w-md mx-auto">
               {searchQuery ? 
-                `No signals matching "${searchQuery}" were found. Try a different search term.` : 
-                "There are no signals with the selected filter. Try changing your filters or generate new signals."}
+                `Nenhum sinal correspondente a "${searchQuery}" foi encontrado. Tente um termo de pesquisa diferente.` : 
+                strategyFilter !== "ALL" ?
+                `Nenhum sinal encontrado para a estratégia "${strategyFilter}". Tente outra estratégia.` :
+                "Não há sinais com o filtro selecionado. Tente alterar seus filtros ou gerar novos sinais."}
             </p>
           </div>
         ) : null}

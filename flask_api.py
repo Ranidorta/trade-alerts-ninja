@@ -68,6 +68,7 @@ def get_signals():
     """Get all signals with optional filtering"""
     symbol = request.args.get('symbol')
     signal_type = request.args.get('type')
+    strategy = request.args.get('strategy')  # New parameter for strategy filtering
     days = request.args.get('days', default=7, type=int)
     
     # Calculate date threshold
@@ -88,6 +89,10 @@ def get_signals():
         query += " AND signal_type = ?"
         params.append(signal_type)
     
+    if strategy:
+        query += " AND strategy_name = ?"
+        params.append(strategy)
+    
     query += " ORDER BY timestamp DESC"
     
     cursor.execute(query, params)
@@ -105,6 +110,8 @@ def get_signals():
         signal['type'] = "LONG" if signal['signal'] == 1 else "SHORT"
         signal['entryPrice'] = signal['entry_price']
         signal['leverage'] = 1  # Default leverage
+        # Include strategy information
+        signal['strategy'] = signal.get('strategy_name', signal.get('signal_type', 'UNKNOWN'))
         # Estimate targets based on entry price and result
         signal['targets'] = [
             {"level": 1, "price": signal['entry_price'] * 1.03, "hit": signal['result'] == 1}
@@ -113,37 +120,71 @@ def get_signals():
     
     return jsonify(signals)
 
+@app.route('/api/strategies', methods=['GET'])
+def get_strategies():
+    """Get all unique strategy names"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Try to get strategy_name first, fall back to signal_type if needed
+    cursor.execute("""
+        SELECT DISTINCT 
+            CASE 
+                WHEN strategy_name IS NOT NULL AND strategy_name != '' 
+                THEN strategy_name 
+                ELSE signal_type 
+            END as strategy
+        FROM signals
+    """)
+    
+    strategies = [row['strategy'] for row in cursor.fetchall()]
+    conn.close()
+    
+    return jsonify(strategies)
+
 @app.route('/api/performance', methods=['GET'])
 def get_performance():
     """Get performance metrics"""
     days = request.args.get('days', default=30, type=int)
+    strategy = request.args.get('strategy')  # Optional strategy filter
     date_threshold = (datetime.utcnow() - timedelta(days=days)).isoformat()
     
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get performance statistics with time filter
-    cursor.execute("""
+    # Base query with time filter
+    base_query = "timestamp > ?"
+    params = [date_threshold]
+    
+    # Add strategy filter if provided
+    if strategy:
+        base_query += " AND strategy_name = ?"
+        params.append(strategy)
+    
+    # Get performance statistics with filters
+    query = f"""
         SELECT 
             COUNT(*) as total_signals,
             SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as winning_trades,
             SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losing_trades,
             COUNT(DISTINCT symbol) as symbols_count
         FROM signals
-        WHERE timestamp > ?
-    """, [date_threshold])
+        WHERE {base_query}
+    """
+    cursor.execute(query, params)
     stats = cursor.fetchone()
     
     # Get signals by symbol
-    cursor.execute("""
+    query = f"""
         SELECT symbol, COUNT(*) as count,
                SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
                SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
         FROM signals
-        WHERE timestamp > ?
+        WHERE {base_query}
         GROUP BY symbol
         ORDER BY count DESC
-    """, [date_threshold])
+    """
+    cursor.execute(query, params)
     symbols = cursor.fetchall()
     
     # Add win rate to each symbol
@@ -151,34 +192,42 @@ def get_performance():
         total = symbol['wins'] + symbol['losses']
         symbol['winRate'] = round((symbol['wins'] / total * 100), 2) if total > 0 else 0
     
-    # Get signals by type
-    cursor.execute("""
-        SELECT signal_type, COUNT(*) as count,
-               SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
-               SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
+    # Get signals by strategy
+    query = f"""
+        SELECT 
+            CASE 
+                WHEN strategy_name IS NOT NULL AND strategy_name != '' 
+                THEN strategy_name 
+                ELSE signal_type 
+            END as strategy,
+            COUNT(*) as count,
+            SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
         FROM signals
-        WHERE timestamp > ?
-        GROUP BY signal_type
-    """, [date_threshold])
-    types = cursor.fetchall()
+        WHERE {base_query}
+        GROUP BY strategy
+    """
+    cursor.execute(query, params)
+    strategies = cursor.fetchall()
     
-    # Add win rate to each type
-    for signal_type in types:
-        total = signal_type['wins'] + signal_type['losses']
-        signal_type['winRate'] = round((signal_type['wins'] / total * 100), 2) if total > 0 else 0
+    # Add win rate to each strategy
+    for strat in strategies:
+        total = strat['wins'] + strat['losses']
+        strat['winRate'] = round((strat['wins'] / total * 100), 2) if total > 0 else 0
     
     # Get signals over time (daily aggregation)
-    cursor.execute("""
+    query = f"""
         SELECT 
             date(timestamp) as date,
             COUNT(*) as total,
             SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
             SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
         FROM signals
-        WHERE timestamp > ?
+        WHERE {base_query}
         GROUP BY date(timestamp)
         ORDER BY date
-    """, [date_threshold])
+    """
+    cursor.execute(query, params)
     daily_data = cursor.fetchall()
     
     # Calculate win rate
@@ -193,7 +242,8 @@ def get_performance():
         "losingTrades": stats['losing_trades'],
         "winRate": round(win_rate, 2),
         "symbolsData": symbols,
-        "signalTypesData": types,
+        "signalTypesData": strategies,
+        "strategyData": strategies,  # Adding explicit strategy data
         "dailyData": daily_data
     })
 

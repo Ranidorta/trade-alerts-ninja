@@ -13,6 +13,7 @@ const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
 export const fetchSignals = async (params?: {
   symbol?: string;
   type?: string;
+  strategy?: string;
   days?: number;
 }): Promise<TradingSignal[]> => {
   try {
@@ -20,6 +21,7 @@ export const fetchSignals = async (params?: {
     const queryParams = new URLSearchParams();
     if (params?.symbol) queryParams.append("symbol", params.symbol);
     if (params?.type) queryParams.append("type", params.type);
+    if (params?.strategy) queryParams.append("strategy", params.strategy);
     if (params?.days) queryParams.append("days", params.days.toString());
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
@@ -40,7 +42,9 @@ export const fetchSignals = async (params?: {
       // If signal doesn't have a result property but has a profit,
       // we can determine result from profit
       result: signal.result !== undefined ? signal.result : 
-              (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined)
+              (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined),
+      // Make sure strategy is included in the mapped data
+      strategy: signal.strategy_name || signal.signal_type
     }));
     
     console.log("Signals fetched:", mappedData);
@@ -94,6 +98,27 @@ export const fetchSymbols = async (): Promise<string[]> => {
     return data;
   } catch (error) {
     console.error("Error fetching symbols:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches available strategies
+ * @returns Promise with list of strategies
+ */
+export const fetchStrategies = async (): Promise<string[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/strategies`);
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("Strategies fetched:", data);
+    return data;
+  } catch (error) {
+    console.error("Error fetching strategies:", error);
     throw error;
   }
 };

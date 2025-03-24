@@ -2,30 +2,64 @@
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart, Tags } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSignals } from "@/lib/signalsApi";
+import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
 import { useToast } from "@/components/ui/use-toast";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 const SignalsHistory = () => {
   const [activeTab, setActiveTab] = useState("all");
+  const [strategyFilter, setStrategyFilter] = useState<string>("ALL");
   const { toast } = useToast();
   
-  // Fetch signals from API with fixed onError handling
-  const { data: signals = [], isLoading, error } = useQuery({
-    queryKey: ['signals', 'history'],
-    queryFn: () => fetchSignals({ days: 30 }),
+  // Fetch available strategies
+  const { data: strategies = [] } = useQuery({
+    queryKey: ['strategies'],
+    queryFn: fetchStrategies,
     meta: {
-      onError: () => {
-        toast({
-          title: "Error fetching signals",
-          description: "Could not load signals history. Please try again later.",
-          variant: "destructive",
-        });
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          console.error("Error fetching strategies:", error);
+          toast({
+            title: "Erro ao carregar estratégias",
+            description: "Não foi possível carregar a lista de estratégias disponíveis.",
+            variant: "destructive"
+          });
+        }
+      }
+    }
+  });
+  
+  // Fetch signals from API with strategy filtering
+  const { data: signals = [], isLoading, error } = useQuery({
+    queryKey: ['signals', 'history', strategyFilter],
+    queryFn: () => {
+      const params: any = { days: 30 };
+      if (strategyFilter !== "ALL") {
+        params.strategy = strategyFilter;
+      }
+      return fetchSignals(params);
+    },
+    meta: {
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          toast({
+            title: "Erro ao carregar sinais",
+            description: "Não foi possível carregar o histórico de sinais. Tente novamente mais tarde.",
+            variant: "destructive",
+          });
+        }
       }
     }
   });
@@ -56,6 +90,17 @@ const SignalsHistory = () => {
     return true;
   });
 
+  // Handle strategy filter change
+  const handleStrategyChange = (value: string) => {
+    setStrategyFilter(value);
+    toast({
+      title: "Filtro de estratégia alterado",
+      description: value === "ALL" 
+        ? "Mostrando sinais de todas as estratégias" 
+        : `Filtrando sinais da estratégia ${value}`,
+    });
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
@@ -63,7 +108,22 @@ const SignalsHistory = () => {
           <h1 className="text-3xl font-bold mb-2">Histórico de Sinais</h1>
           <p className="text-muted-foreground">Visualize os sinais passados e performance</p>
         </div>
-        <div className="flex mt-4 md:mt-0 space-x-2">
+        <div className="flex flex-wrap mt-4 md:mt-0 gap-2">
+          <Select value={strategyFilter} onValueChange={handleStrategyChange}>
+            <SelectTrigger className="w-[180px]">
+              <Tags className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Estratégia" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas Estratégias</SelectItem>
+              {strategies.map((strategy: string) => (
+                <SelectItem key={strategy} value={strategy}>
+                  {strategy}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           <Button variant="outline" asChild className="flex items-center">
             <Link to="/performance">
               <LineChart className="mr-2 h-4 w-4" />
@@ -152,7 +212,11 @@ const SignalsHistory = () => {
         </div>
       ) : filteredSignals.length === 0 ? (
         <div className="flex justify-center items-center h-64">
-          <p className="text-lg text-muted-foreground">Nenhum sinal encontrado para os filtros aplicados.</p>
+          <p className="text-lg text-muted-foreground">
+            {strategyFilter !== "ALL" 
+              ? `Nenhum sinal encontrado para a estratégia "${strategyFilter}".` 
+              : "Nenhum sinal encontrado para os filtros aplicados."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
