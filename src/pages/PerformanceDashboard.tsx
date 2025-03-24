@@ -36,8 +36,9 @@ import { useToast } from "@/components/ui/use-toast";
 const PerformanceDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const { toast } = useToast();
+  const [timeRange, setTimeRange] = useState(30); // Default to 30 days
 
-  // Fetch performance metrics with fixed error handling
+  // Fetch performance metrics with fixed typing for React Query
   const { data: performanceData = {
     totalSignals: 0,
     winningTrades: 0,
@@ -46,30 +47,34 @@ const PerformanceDashboard = () => {
     symbolsData: [],
     signalTypesData: []
   }, isLoading: metricsLoading } = useQuery({
-    queryKey: ['performance'],
+    queryKey: ['performance', timeRange],
     queryFn: fetchPerformanceMetrics,
     meta: {
-      onError: () => {
-        toast({
-          title: "Error fetching performance data",
-          description: "Could not load performance metrics. Please try again later.",
-          variant: "destructive",
-        });
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          toast({
+            title: "Error fetching performance data",
+            description: "Could not load performance metrics. Please try again later.",
+            variant: "destructive",
+          });
+        }
       }
     }
   });
 
-  // Fetch signals for detailed analysis with fixed error handling
+  // Fetch signals for detailed analysis with fixed typing for React Query
   const { data: signals = [], isLoading: signalsLoading } = useQuery({
     queryKey: ['signals', 'performance'],
     queryFn: () => fetchSignals({ days: 90 }),
     meta: {
-      onError: () => {
-        toast({
-          title: "Error fetching signals",
-          description: "Could not load signal data. Please try again later.",
-          variant: "destructive",
-        });
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          toast({
+            title: "Error fetching signals",
+            description: "Could not load signal data. Please try again later.",
+            variant: "destructive",
+          });
+        }
       }
     }
   });
@@ -366,8 +371,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Lucro (%)"
-                      fill="#10b981"
-                      className="recharts-bar-custom-color"
+                      fill="#8884d8"
+                      className="profit-bar"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -395,8 +400,8 @@ const PerformanceDashboard = () => {
                     <Bar
                       dataKey="profit"
                       name="Lucro (%)"
-                      fill="#10b981"
-                      className="recharts-bar-custom-color"
+                      fill="#8884d8"
+                      className="profit-bar"
                     />
                   </BarChart>
                 </ResponsiveContainer>

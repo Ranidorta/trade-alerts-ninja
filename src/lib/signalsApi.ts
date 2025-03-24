@@ -53,10 +53,11 @@ export const fetchSignals = async (params?: {
 
 /**
  * Fetches performance metrics from the API
- * @param days Number of days to include in metrics
+ * This has been refactored to work properly with React Query
  * @returns Promise with performance data
  */
-export const fetchPerformanceMetrics = async (days: number = 30) => {
+export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[] }) => {
+  const [_, days = 30] = queryKey;
   try {
     const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
     
