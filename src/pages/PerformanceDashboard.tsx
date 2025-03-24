@@ -47,7 +47,7 @@ const PerformanceDashboard = () => {
     symbolsData: [],
     signalTypesData: []
   }, isLoading: metricsLoading } = useQuery({
-    queryKey: ['performance', timeRange],
+    queryKey: ['performance', timeRange.toString()], // Convert number to string
     queryFn: fetchPerformanceMetrics,
     meta: {
       onSettled: (data: any, error: any) => {

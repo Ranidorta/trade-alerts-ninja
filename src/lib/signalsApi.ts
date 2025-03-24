@@ -57,7 +57,10 @@ export const fetchSignals = async (params?: {
  * @returns Promise with performance data
  */
 export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[] }) => {
-  const [_, days = 30] = queryKey;
+  const [_, daysString = "30"] = queryKey;
+  // Convert the string back to a number
+  const days = parseInt(daysString, 10);
+  
   try {
     const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
     
