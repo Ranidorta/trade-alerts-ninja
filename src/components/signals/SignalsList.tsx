@@ -30,6 +30,21 @@ const SignalsList = ({
   }
 
   if (error) {
+    // Tratamento especial para erros de autenticação
+    if (error.message && error.message.includes("401")) {
+      return (
+        <div className="flex flex-col justify-center items-center h-64 gap-4">
+          <p className="text-lg text-destructive">Erro de autenticação. Faça login para continuar.</p>
+          <button 
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+            onClick={() => window.location.href = "/login"}
+          >
+            Fazer Login
+          </button>
+        </div>
+      );
+    }
+    
     return (
       <div className="flex justify-center items-center h-64">
         <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>

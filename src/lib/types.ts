@@ -104,3 +104,10 @@ export interface CryptoChartDataPoint {
   longMa?: number;
   signal?: number;
 }
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  name?: string;
+  isAuthenticated: boolean;
+}

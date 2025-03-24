@@ -1,9 +1,54 @@
-
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
 // Default API base URL with fallback
 const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
+
+/**
+ * Gets the current Firebase auth token if available
+ * @returns The auth token or null
+ */
+const getAuthToken = async (): Promise<string | null> => {
+  try {
+    // Check if Firebase Auth is available
+    if (window.firebase && window.firebase.auth) {
+      const currentUser = window.firebase.auth().currentUser;
+      if (currentUser) {
+        return await currentUser.getIdToken();
+      }
+    }
+    
+    // Try to get from localStorage if Firebase not initialized
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      return storedToken;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error getting auth token:", error);
+    return null;
+  }
+};
+
+/**
+ * Creates fetch options with authorization header if token is available
+ * @returns Fetch options object
+ */
+const createFetchOptions = async (): Promise<RequestInit> => {
+  const token = await getAuthToken();
+  const options: RequestInit = {
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  };
+  
+  if (token) {
+    (options.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return options;
+};
 
 /**
  * Fetches trading signals from the API
@@ -26,9 +71,12 @@ export const fetchSignals = async (params?: {
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
     
+    // Get fetch options with auth token if available
+    const options = await createFetchOptions();
+    
     // Make API request
     console.log(`Fetching signals from: ${API_BASE_URL}/signals${queryString}`);
-    const response = await fetch(`${API_BASE_URL}/signals${queryString}`);
+    const response = await fetch(`${API_BASE_URL}/signals${queryString}`, options);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -88,8 +136,11 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
  */
 export const fetchSymbols = async (): Promise<string[]> => {
   try {
+    // Get fetch options with auth token if available
+    const options = await createFetchOptions();
+    
     console.log(`Fetching symbols from: ${API_BASE_URL}/symbols`);
-    const response = await fetch(`${API_BASE_URL}/symbols`);
+    const response = await fetch(`${API_BASE_URL}/symbols`, options);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -110,8 +161,11 @@ export const fetchSymbols = async (): Promise<string[]> => {
  */
 export const fetchStrategies = async (): Promise<string[]> => {
   try {
+    // Get fetch options with auth token if available
+    const options = await createFetchOptions();
+    
     console.log(`Fetching strategies from: ${API_BASE_URL}/strategies`);
-    const response = await fetch(`${API_BASE_URL}/strategies`);
+    const response = await fetch(`${API_BASE_URL}/strategies`, options);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -184,4 +238,54 @@ export const fetchAvailableSymbols = async (): Promise<string[]> => {
     console.error("Error fetching available symbols:", error);
     throw error;
   }
+};
+
+/**
+ * Fetches the user profile if authenticated
+ * @returns User profile data or null if not authenticated
+ */
+export const fetchUserProfile = async () => {
+  try {
+    // Get fetch options with auth token if available
+    const options = await createFetchOptions();
+    const token = await getAuthToken();
+    
+    // If no token, user is not authenticated
+    if (!token) {
+      return null;
+    }
+    
+    console.log(`Fetching user profile from: ${API_BASE_URL}/user/profile`);
+    const response = await fetch(`${API_BASE_URL}/user/profile`, options);
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        // Token expired or invalid
+        localStorage.removeItem('authToken');
+        return null;
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return null;
+  }
+};
+
+/**
+ * Sets the auth token in localStorage
+ * @param token The Firebase auth token
+ */
+export const setAuthToken = (token: string) => {
+  localStorage.setItem('authToken', token);
+};
+
+/**
+ * Clears the auth token from localStorage
+ */
+export const clearAuthToken = () => {
+  localStorage.removeItem('authToken');
 };

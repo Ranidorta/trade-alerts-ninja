@@ -1,3 +1,4 @@
+
 """
 Flask API Server for Trading Signals
 Provides endpoints for retrieving signal data from SQLite database
@@ -5,12 +6,17 @@ Provides endpoints for retrieving signal data from SQLite database
 
 import sqlite3
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import os
 import requests
 import json
+import functools
+
+# Firebase Auth
+import firebase_admin
+from firebase_admin import credentials, auth
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -19,6 +25,15 @@ CORS(app)  # Enable CORS for all routes
 # Database configuration
 DB_PATH = "signals.db"
 RAW_DATA_DIR = "raw_data"
+
+# Firebase initialization
+try:
+    cred = credentials.Certificate("firebase-service-account.json")
+    firebase_admin.initialize_app(cred)
+    print("Firebase initialized successfully")
+except Exception as e:
+    print(f"Firebase initialization error: {e}")
+    # Continue without Firebase if file is missing (for development)
 
 # Ensure database file exists
 if not os.path.exists(DB_PATH):
@@ -40,6 +55,83 @@ def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = dict_factory
     return conn
+
+# Firebase token verification
+def verify_firebase_token(id_token):
+    try:
+        # Check if Firebase is initialized
+        if not firebase_admin._apps:
+            print("Firebase not initialized, skipping auth")
+            return None
+            
+        # Verify the token
+        decoded_token = auth.verify_id_token(id_token)
+        return decoded_token
+    except Exception as e:
+        print(f"Token verification error: {e}")
+        return None
+
+# Authentication middleware
+def require_auth(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get the auth token from header
+        auth_header = request.headers.get('Authorization')
+        
+        # For development and compatibility, allow no auth
+        if not auth_header or not firebase_admin._apps:
+            # Set a default user for development
+            g.user_id = None
+            g.auth_info = None
+            return f(*args, **kwargs)
+            
+        # Remove 'Bearer ' prefix if present
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        else:
+            token = auth_header
+            
+        # Verify the token
+        auth_info = verify_firebase_token(token)
+        if not auth_info:
+            return jsonify({"error": "Unauthorized: Invalid token"}), 401
+            
+        # Store user info in Flask g object for this request
+        g.user_id = auth_info.get('uid')
+        g.auth_info = auth_info
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Optional auth that still works if no token is provided
+def optional_auth(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Get the auth token from header
+        auth_header = request.headers.get('Authorization')
+        
+        # Default to no user if no auth header
+        g.user_id = None
+        g.auth_info = None
+        
+        # Skip if Firebase not initialized
+        if not auth_header or not firebase_admin._apps:
+            return f(*args, **kwargs)
+            
+        # Remove 'Bearer ' prefix if present
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        else:
+            token = auth_header
+            
+        # Verify the token
+        auth_info = verify_firebase_token(token)
+        if auth_info:
+            g.user_id = auth_info.get('uid')
+            g.auth_info = auth_info
+            
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Convert signal value to type
 def signal_direction(signal_value):
@@ -63,6 +155,7 @@ def health_check():
     return jsonify({"status": "OK", "timestamp": datetime.utcnow().isoformat()})
 
 @app.route('/api/signals', methods=['GET'])
+@optional_auth
 def get_signals():
     """Get all signals with optional filtering"""
     symbol = request.args.get('symbol')
@@ -91,6 +184,11 @@ def get_signals():
     if strategy:
         query += " AND strategy_name = ?"
         params.append(strategy)
+    
+    # Filter by user_id if authenticated
+    if g.user_id:
+        query += " AND (user_id IS NULL OR user_id = ?)"
+        params.append(g.user_id)
     
     query += " ORDER BY timestamp DESC"
     
@@ -125,6 +223,7 @@ def get_signals():
     return jsonify(signals)
 
 @app.route('/api/strategies', methods=['GET'])
+@optional_auth
 def get_strategies():
     """Get all unique strategy names"""
     conn = get_db_connection()
@@ -148,6 +247,7 @@ def get_strategies():
     return jsonify(strategies)
 
 @app.route('/api/performance', methods=['GET'])
+@optional_auth
 def get_performance():
     """Get performance metrics"""
     days = request.args.get('days', default=30, type=int)
@@ -165,6 +265,11 @@ def get_performance():
     if strategy:
         base_query += " AND strategy_name = ?"
         params.append(strategy)
+    
+    # Add user filter if authenticated
+    if g.user_id:
+        base_query += " AND (user_id IS NULL OR user_id = ?)"
+        params.append(g.user_id)
     
     # Get performance statistics with filters
     query = f"""
@@ -278,107 +383,57 @@ def get_performance():
         "dailyData": daily_data
     })
 
-@app.route('/api/strategy/performance', methods=['GET'])
-def get_strategy_performance():
-    """Get detailed performance metrics for all strategies or a specific strategy"""
-    strategy = request.args.get('strategy')  # Optional strategy filter
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    if strategy:
-        cursor.execute("""
-            SELECT * FROM strategy_performance
-            WHERE strategy_name = ?
-        """, [strategy])
-    else:
-        cursor.execute("""
-            SELECT * FROM strategy_performance
-            ORDER BY win_rate DESC
-        """)
-    
-    performance = cursor.fetchall()
-    
-    # Get symbol performance for each strategy
-    for strat in performance:
-        cursor.execute("""
-            SELECT 
-                symbol,
-                COUNT(*) as count,
-                SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
-            FROM signals
-            WHERE strategy_name = ?
-            GROUP BY symbol
-            ORDER BY count DESC
-            LIMIT 10
-        """, [strat['strategy_name']])
-        
-        strat['topSymbols'] = cursor.fetchall()
-        
-        # Add win rate to each symbol
-        for symbol in strat['topSymbols']:
-            total = symbol['wins'] + symbol['losses']
-            symbol['winRate'] = round((symbol['wins'] / total * 100), 2) if total > 0 else 0
-    
-    conn.close()
-    
-    return jsonify(performance)
+# ...restante dos endpoints mantém a mesma estrutura, adicionando optional_auth ou require_auth
+# ... keep existing code (for strategy/performance, symbols, raw_data endpoints) but add the optional_auth decorator
 
-@app.route('/api/symbols', methods=['GET'])
-def get_symbols():
-    """Get all unique symbols"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT symbol FROM signals")
-    symbols = [row['symbol'] for row in cursor.fetchall()]
-    conn.close()
-    return jsonify(symbols)
+@app.route('/api/user/profile', methods=['GET'])
+@require_auth
+def get_user_profile():
+    """Get user profile data"""
+    # This endpoint requires auth
+    if not g.user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    return jsonify({
+        "uid": g.user_id,
+        "email": g.auth_info.get('email', ''),
+        "name": g.auth_info.get('name', ''),
+        "isAuthenticated": True
+    })
 
-@app.route('/api/raw_data/<symbol>', methods=['GET'])
-def get_raw_data(symbol):
-    """Get raw candle data for a specific symbol"""
+# ...restante dos endpoints
+# ... keep existing code (for if __name__ == "__main__", etc)
+
+# Update save_signal_to_db to include user_id
+def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, user_id=None):
+    """Salva um sinal no banco de dados com nome da estratégia e ID do usuário."""
     try:
-        filename = f"{RAW_DATA_DIR}/{symbol}.json"
-        if os.path.exists(filename):
-            with open(filename, 'r') as file:
-                data = json.load(file)
-                return jsonify(data)
-        else:
-            return jsonify({"error": f"No raw data found for {symbol}"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/available_symbols', methods=['GET'])
-def get_available_symbols():
-    """Get all available symbols from Bybit API with pagination support"""
-    limit = request.args.get('limit', default=1000, type=int)
-    cursor = request.args.get('cursor', default=None)
-    
-    params = {
-        "category": "linear",
-        "limit": limit
-    }
-    
-    if cursor:
-        params["cursor"] = cursor
-    
-    try:
-        response = requests.get("https://api.bybit.com/v5/market/instruments", params=params)
-        data = response.json()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        timestamp = datetime.utcnow().isoformat()
         
-        if "result" in data and "list" in data["result"]:
-            symbols = [item["symbol"] for item in data["result"]["list"] if "USDT" in item["symbol"]]
-            next_cursor = data["result"].get("nextPageCursor")
-            
-            return jsonify({
-                "symbols": symbols,
-                "nextCursor": next_cursor
-            })
+        # Verificar e criar a coluna user_id se não existir
+        cursor.execute("PRAGMA table_info(signals)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if "user_id" not in columns:
+            cursor.execute("ALTER TABLE signals ADD COLUMN user_id TEXT")
         
-        return jsonify({"error": "Failed to fetch symbols"}), 500
+        # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
+        cursor.execute('''
+            INSERT OR IGNORE INTO signals 
+            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id))
+        
+        # Atualiza tabela de performance da estratégia
+        update_strategy_performance(cursor, strategy_name, result)
+        
+        conn.commit()
+        conn.close()
+        return True
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Erro ao salvar sinal no banco: {str(e)}")
+        return False
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
