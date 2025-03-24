@@ -13,13 +13,13 @@ import {
   Home
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import AuthButton from "@/components/AuthButton";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const isMobile = useMobile();
+  const isMobile = useIsMobile();
   const location = useLocation();
 
   const toggleMenu = () => {
