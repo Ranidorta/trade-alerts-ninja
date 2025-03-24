@@ -36,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue, 
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -47,9 +48,7 @@ const SignalsDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [coinSearch, setCoinSearch] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [strategyFilter, setStrategyFilter] = useState<string>("ALL");
+  const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
   
   // Fetch available strategies
@@ -76,8 +75,8 @@ const SignalsDashboard = () => {
     try {
       // Use the new fetchSignals with strategy filter if selected
       const params: any = { days: 30 };
-      if (strategyFilter !== "ALL") {
-        params.strategy = strategyFilter;
+      if (activeStrategy !== "ALL") {
+        params.strategy = activeStrategy;
       }
       
       const fetchedSignals = await fetchSignals(params);
@@ -104,11 +103,11 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast, strategyFilter]);
+  }, [toast, activeStrategy]);
   
   useEffect(() => {
     loadSignalsData();
-  }, [loadSignalsData, strategyFilter]);
+  }, [loadSignalsData, activeStrategy]);
   
   useEffect(() => {
     if (!autoRefresh) return;
@@ -165,73 +164,6 @@ const SignalsDashboard = () => {
       title: "Inscrito para notificações",
       description: "Você receberá alertas quando novos sinais forem postados",
     });
-  };
-  
-  const handleCoinSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCoinSearch(e.target.value.toUpperCase());
-  };
-
-  const handleGenerateSignalForCoin = async () => {
-    if (!coinSearch) {
-      toast({
-        title: "Por favor, digite um símbolo",
-        description: "Digite um símbolo de criptomoeda para gerar sinais (ex: BTCUSDT, ETHUSDT)",
-      });
-      return;
-    }
-
-    setIsSearching(true);
-    let symbol = coinSearch;
-    
-    if (!symbol.endsWith("USDT")) {
-      symbol = `${symbol}USDT`;
-    }
-
-    try {
-      toast({
-        title: "Gerando sinal",
-        description: `Analisando dados de mercado para ${symbol}...`,
-      });
-
-      const signal = await generateTradingSignal(symbol);
-      
-      if (signal) {
-        setSignals(prevSignals => {
-          const exists = prevSignals.some(s => s.id === signal.id);
-          if (exists) {
-            toast({
-              title: "Sinal já existe",
-              description: `Um sinal para ${symbol} já existe no seu dashboard.`,
-            });
-            return prevSignals;
-          }
-          
-          toast({
-            title: "Sinal gerado",
-            description: `Novo sinal ${signal.type} para ${symbol} foi adicionado ao seu dashboard.`,
-          });
-          
-          return [signal, ...prevSignals];
-        });
-        
-        setCoinSearch("");
-      } else {
-        toast({
-          title: "Nenhum sinal gerado",
-          description: `Não foi possível gerar um sinal para ${symbol}. As condições de mercado podem não atender aos critérios.`,
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error("Error generating signal for specific coin:", error);
-      toast({
-        title: "Erro ao gerar sinal",
-        description: `Falha ao gerar sinal para ${symbol}.`,
-        variant: "destructive"
-      });
-    } finally {
-      setIsSearching(false);
-    }
   };
   
   const handleGenerateSignals = async () => {
@@ -299,13 +231,7 @@ const SignalsDashboard = () => {
   };
   
   const handleStrategyChange = (value: string) => {
-    setStrategyFilter(value);
-    toast({
-      title: "Filtro de estratégia alterado",
-      description: value === "ALL" 
-        ? "Mostrando sinais de todas as estratégias" 
-        : `Filtrando sinais da estratégia ${value}`,
-    });
+    setActiveStrategy(value);
   };
   
   const renderSkeletons = () => {
@@ -368,36 +294,6 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Gerar Sinal para Moeda Específica</h2>
-        </div>
-        
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Digite o símbolo da cripto (ex: BTC, ETH)"
-              value={coinSearch}
-              onChange={handleCoinSearchChange}
-              className="pr-10"
-            />
-          </div>
-          
-          <Button 
-            onClick={handleGenerateSignalForCoin} 
-            disabled={isSearching || !coinSearch}
-            className="shrink-0"
-          >
-            <Zap className={`mr-2 h-4 w-4 ${isSearching ? 'animate-pulse' : ''}`} />
-            {isSearching ? 'Analisando...' : 'Gerar Sinal'}
-          </Button>
-        </div>
-        
-        <p className="text-xs text-slate-500 mt-2">
-          Digite um símbolo de criptomoeda para gerar um sinal de trading com base nas condições atuais de mercado.
-        </p>
-      </div>
-      
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
@@ -410,21 +306,6 @@ const SignalsDashboard = () => {
         </div>
         
         <div className="flex flex-wrap gap-2">
-          <Select value={strategyFilter} onValueChange={handleStrategyChange}>
-            <SelectTrigger className="w-[180px]">
-              <Tags className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Estratégia" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas Estratégias</SelectItem>
-              {strategies.map((strategy: string) => (
-                <SelectItem key={strategy} value={strategy}>
-                  {strategy}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
           <Button 
             onClick={toggleAutoRefresh} 
             variant={autoRefresh ? "default" : "outline"}
@@ -513,50 +394,66 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      {!isLoading && signals.length === 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
-            <Zap className="h-8 w-8" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
-          <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
-            Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading, 
-            ou pesquise por uma criptomoeda específica acima.
-          </p>
-          <Button onClick={handleGenerateSignals} disabled={isGenerating}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
-          </Button>
-        </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading ? (
-          renderSkeletons()
-        ) : filteredSignals.length > 0 ? (
-          filteredSignals.map(signal => (
-            <SignalCard 
-              key={signal.id} 
-              signal={signal} 
-              refreshInterval={30000} // Update target status every 30 seconds
-            />
-          ))
-        ) : signals.length > 0 ? (
-          <div className="col-span-full py-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-              <Search className="h-6 w-6 text-slate-400" />
+      <Tabs 
+        value={activeStrategy} 
+        onValueChange={handleStrategyChange}
+        className="mb-8"
+      >
+        <TabsList className="mb-4 inline-flex flex-wrap">
+          <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
+          {strategies.map((strategy: string) => (
+            <TabsTrigger key={strategy} value={strategy}>
+              {strategy}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        
+        <TabsContent value={activeStrategy} className="mt-0">
+          {!isLoading && signals.length === 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+                <Zap className="h-8 w-8" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
+              <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
+                Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
+              </p>
+              <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
+              </Button>
             </div>
-            <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
-            <p className="text-slate-500 max-w-md mx-auto">
-              {searchQuery ? 
-                `Nenhum sinal correspondente a "${searchQuery}" foi encontrado. Tente um termo de pesquisa diferente.` : 
-                strategyFilter !== "ALL" ?
-                `Nenhum sinal encontrado para a estratégia "${strategyFilter}". Tente outra estratégia.` :
-                "Não há sinais com o filtro selecionado. Tente alterar seus filtros ou gerar novos sinais."}
-            </p>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {isLoading ? (
+              renderSkeletons()
+            ) : filteredSignals.length > 0 ? (
+              filteredSignals.map(signal => (
+                <SignalCard 
+                  key={signal.id} 
+                  signal={signal} 
+                  refreshInterval={30000} // Update target status every 30 seconds
+                />
+              ))
+            ) : signals.length > 0 ? (
+              <div className="col-span-full py-12 text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+                  <Search className="h-6 w-6 text-slate-400" />
+                </div>
+                <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
+                <p className="text-slate-500 max-w-md mx-auto">
+                  {searchQuery ? 
+                    `Nenhum sinal correspondente a "${searchQuery}" foi encontrado. Tente um termo de pesquisa diferente.` : 
+                    activeStrategy !== "ALL" ?
+                    `Nenhum sinal encontrado para a estratégia "${activeStrategy}". Tente outra estratégia.` :
+                    "Não há sinais com o filtro selecionado. Tente alterar seus filtros ou gerar novos sinais."}
+                </p>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

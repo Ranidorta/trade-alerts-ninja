@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart, Tags } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -10,17 +10,10 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
 import { useToast } from "@/components/ui/use-toast";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@/components/ui/select";
 
 const SignalsHistory = () => {
-  const [activeTab, setActiveTab] = useState("all");
-  const [strategyFilter, setStrategyFilter] = useState<string>("ALL");
+  const [resultTab, setResultTab] = useState("all");
+  const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
   
   // Fetch available strategies
@@ -43,11 +36,11 @@ const SignalsHistory = () => {
   
   // Fetch signals from API with strategy filtering
   const { data: signals = [], isLoading, error } = useQuery({
-    queryKey: ['signals', 'history', strategyFilter],
+    queryKey: ['signals', 'history', activeStrategy],
     queryFn: () => {
       const params: any = { days: 30 };
-      if (strategyFilter !== "ALL") {
-        params.strategy = strategyFilter;
+      if (activeStrategy !== "ALL") {
+        params.strategy = activeStrategy;
       }
       return fetchSignals(params);
     },
@@ -84,21 +77,15 @@ const SignalsHistory = () => {
 
   // Filter signals based on active tab
   const filteredSignals = signals.filter(signal => {
-    if (activeTab === "all") return true;
-    if (activeTab === "profit") return signal.profit !== undefined && signal.profit > 0;
-    if (activeTab === "loss") return signal.profit !== undefined && signal.profit < 0;
+    if (resultTab === "all") return true;
+    if (resultTab === "profit") return signal.profit !== undefined && signal.profit > 0;
+    if (resultTab === "loss") return signal.profit !== undefined && signal.profit < 0;
     return true;
   });
 
-  // Handle strategy filter change
+  // Handle strategy change
   const handleStrategyChange = (value: string) => {
-    setStrategyFilter(value);
-    toast({
-      title: "Filtro de estratégia alterado",
-      description: value === "ALL" 
-        ? "Mostrando sinais de todas as estratégias" 
-        : `Filtrando sinais da estratégia ${value}`,
-    });
+    setActiveStrategy(value);
   };
 
   return (
@@ -109,21 +96,6 @@ const SignalsHistory = () => {
           <p className="text-muted-foreground">Visualize os sinais passados e performance</p>
         </div>
         <div className="flex flex-wrap mt-4 md:mt-0 gap-2">
-          <Select value={strategyFilter} onValueChange={handleStrategyChange}>
-            <SelectTrigger className="w-[180px]">
-              <Tags className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Estratégia" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas Estratégias</SelectItem>
-              {strategies.map((strategy: string) => (
-                <SelectItem key={strategy} value={strategy}>
-                  {strategy}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
           <Button variant="outline" asChild className="flex items-center">
             <Link to="/performance">
               <LineChart className="mr-2 h-4 w-4" />
@@ -194,37 +166,55 @@ const SignalsHistory = () => {
         </Card>
       </div>
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="mb-8">
-        <TabsList>
-          <TabsTrigger value="all">Todos os Sinais</TabsTrigger>
-          <TabsTrigger value="profit">Lucro</TabsTrigger>
-          <TabsTrigger value="loss">Perda</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <p className="text-lg text-muted-foreground">Carregando sinais...</p>
-        </div>
-      ) : error ? (
-        <div className="flex justify-center items-center h-64">
-          <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
-        </div>
-      ) : filteredSignals.length === 0 ? (
-        <div className="flex justify-center items-center h-64">
-          <p className="text-lg text-muted-foreground">
-            {strategyFilter !== "ALL" 
-              ? `Nenhum sinal encontrado para a estratégia "${strategyFilter}".` 
-              : "Nenhum sinal encontrado para os filtros aplicados."}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredSignals.map((signal) => (
-            <SignalCard key={signal.id} signal={signal} />
+      <Tabs 
+        defaultValue="ALL" 
+        value={activeStrategy} 
+        onValueChange={handleStrategyChange}
+        className="mb-8"
+      >
+        <TabsList className="mb-4 inline-flex flex-wrap">
+          <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
+          {strategies.map((strategy: string) => (
+            <TabsTrigger key={strategy} value={strategy}>
+              {strategy}
+            </TabsTrigger>
           ))}
-        </div>
-      )}
+        </TabsList>
+        
+        <TabsContent value={activeStrategy} className="mt-0">
+          <Tabs defaultValue="all" value={resultTab} onValueChange={setResultTab} className="mb-8">
+            <TabsList>
+              <TabsTrigger value="all">Todos os Sinais</TabsTrigger>
+              <TabsTrigger value="profit">Lucro</TabsTrigger>
+              <TabsTrigger value="loss">Perda</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <p className="text-lg text-muted-foreground">Carregando sinais...</p>
+            </div>
+          ) : error ? (
+            <div className="flex justify-center items-center h-64">
+              <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
+            </div>
+          ) : filteredSignals.length === 0 ? (
+            <div className="flex justify-center items-center h-64">
+              <p className="text-lg text-muted-foreground">
+                {activeStrategy !== "ALL" 
+                  ? `Nenhum sinal encontrado para a estratégia "${activeStrategy}".` 
+                  : "Nenhum sinal encontrado para os filtros aplicados."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredSignals.map((signal) => (
+                <SignalCard key={signal.id} signal={signal} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
