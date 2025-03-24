@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
@@ -15,7 +14,7 @@ import ResultsTabSelector from "@/components/signals/ResultsTabSelector";
 import SignalsList from "@/components/signals/SignalsList";
 import StrategyDetails from "@/components/signals/StrategyDetails";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { InfoCircle, HelpCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const SignalsHistory = () => {
