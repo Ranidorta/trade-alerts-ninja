@@ -9,12 +9,18 @@ interface StrategiesTabListProps {
 }
 
 const StrategiesTabList = ({ strategies, activeStrategy, isLoading }: StrategiesTabListProps) => {
+  // Default strategies in case the API fails to return data
+  const defaultStrategies = ["CLASSIC", "FAST", "RSI_MACD", "BREAKOUT_ATR", "TREND_ADX"];
+  
+  // Use API strategies if available, otherwise use defaults
+  const displayStrategies = strategies.length > 0 ? strategies : defaultStrategies;
+  
   return (
     <TabsList className="mb-4 inline-flex flex-wrap">
       <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
       {isLoading ? (
         <div className="px-3 py-1.5 text-sm">Carregando...</div>
-      ) : strategies.map((strategy: string) => (
+      ) : displayStrategies.map((strategy: string) => (
         <TabsTrigger key={strategy} value={strategy}>
           {strategy}
         </TabsTrigger>
