@@ -10,6 +10,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import os
+import requests
+import json
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -17,10 +19,15 @@ CORS(app)  # Enable CORS for all routes
 
 # Database configuration
 DB_PATH = "signals.db"
+RAW_DATA_DIR = "raw_data"
 
 # Ensure database file exists
 if not os.path.exists(DB_PATH):
     print(f"Warning: Database file {DB_PATH} not found. Will be created when signals are generated.")
+
+# Create raw data directory if it doesn't exist
+if not os.path.exists(RAW_DATA_DIR):
+    os.makedirs(RAW_DATA_DIR)
 
 # Helper function to convert SQLite row to dictionary
 def dict_factory(cursor, row):
@@ -109,10 +116,13 @@ def get_signals():
 @app.route('/api/performance', methods=['GET'])
 def get_performance():
     """Get performance metrics"""
+    days = request.args.get('days', default=30, type=int)
+    date_threshold = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Get performance statistics
+    # Get performance statistics with time filter
     cursor.execute("""
         SELECT 
             COUNT(*) as total_signals,
@@ -120,25 +130,56 @@ def get_performance():
             SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losing_trades,
             COUNT(DISTINCT symbol) as symbols_count
         FROM signals
-    """)
+        WHERE timestamp > ?
+    """, [date_threshold])
     stats = cursor.fetchone()
     
     # Get signals by symbol
     cursor.execute("""
-        SELECT symbol, COUNT(*) as count
+        SELECT symbol, COUNT(*) as count,
+               SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
+               SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
         FROM signals
+        WHERE timestamp > ?
         GROUP BY symbol
         ORDER BY count DESC
-    """)
+    """, [date_threshold])
     symbols = cursor.fetchall()
+    
+    # Add win rate to each symbol
+    for symbol in symbols:
+        total = symbol['wins'] + symbol['losses']
+        symbol['winRate'] = round((symbol['wins'] / total * 100), 2) if total > 0 else 0
     
     # Get signals by type
     cursor.execute("""
-        SELECT signal_type, COUNT(*) as count
+        SELECT signal_type, COUNT(*) as count,
+               SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
+               SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
         FROM signals
+        WHERE timestamp > ?
         GROUP BY signal_type
-    """)
+    """, [date_threshold])
     types = cursor.fetchall()
+    
+    # Add win rate to each type
+    for signal_type in types:
+        total = signal_type['wins'] + signal_type['losses']
+        signal_type['winRate'] = round((signal_type['wins'] / total * 100), 2) if total > 0 else 0
+    
+    # Get signals over time (daily aggregation)
+    cursor.execute("""
+        SELECT 
+            date(timestamp) as date,
+            COUNT(*) as total,
+            SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
+            SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
+        FROM signals
+        WHERE timestamp > ?
+        GROUP BY date(timestamp)
+        ORDER BY date
+    """, [date_threshold])
+    daily_data = cursor.fetchall()
     
     # Calculate win rate
     total = stats['winning_trades'] + stats['losing_trades']
@@ -152,7 +193,8 @@ def get_performance():
         "losingTrades": stats['losing_trades'],
         "winRate": round(win_rate, 2),
         "symbolsData": symbols,
-        "signalTypesData": types
+        "signalTypesData": types,
+        "dailyData": daily_data
     })
 
 @app.route('/api/symbols', methods=['GET'])
@@ -164,6 +206,51 @@ def get_symbols():
     symbols = [row['symbol'] for row in cursor.fetchall()]
     conn.close()
     return jsonify(symbols)
+
+@app.route('/api/raw_data/<symbol>', methods=['GET'])
+def get_raw_data(symbol):
+    """Get raw candle data for a specific symbol"""
+    try:
+        filename = f"{RAW_DATA_DIR}/{symbol}.json"
+        if os.path.exists(filename):
+            with open(filename, 'r') as file:
+                data = json.load(file)
+                return jsonify(data)
+        else:
+            return jsonify({"error": f"No raw data found for {symbol}"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/available_symbols', methods=['GET'])
+def get_available_symbols():
+    """Get all available symbols from Bybit API with pagination support"""
+    limit = request.args.get('limit', default=1000, type=int)
+    cursor = request.args.get('cursor', default=None)
+    
+    params = {
+        "category": "linear",
+        "limit": limit
+    }
+    
+    if cursor:
+        params["cursor"] = cursor
+    
+    try:
+        response = requests.get("https://api.bybit.com/v5/market/instruments", params=params)
+        data = response.json()
+        
+        if "result" in data and "list" in data["result"]:
+            symbols = [item["symbol"] for item in data["result"]["list"] if "USDT" in item["symbol"]]
+            next_cursor = data["result"].get("nextPageCursor")
+            
+            return jsonify({
+                "symbols": symbols,
+                "nextCursor": next_cursor
+            })
+        
+        return jsonify({"error": "Failed to fetch symbols"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

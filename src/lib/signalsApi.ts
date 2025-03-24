@@ -53,11 +53,12 @@ export const fetchSignals = async (params?: {
 
 /**
  * Fetches performance metrics from the API
+ * @param days Number of days to include in metrics
  * @returns Promise with performance data
  */
-export const fetchPerformanceMetrics = async () => {
+export const fetchPerformanceMetrics = async (days: number = 30) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/performance`);
+    const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
@@ -89,6 +90,66 @@ export const fetchSymbols = async (): Promise<string[]> => {
     return data;
   } catch (error) {
     console.error("Error fetching symbols:", error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches raw candle data for a specific symbol
+ * @param symbol The trading symbol
+ * @returns Promise with raw candle data
+ */
+export const fetchRawData = async (symbol: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/raw_data/${symbol}`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // No data found for this symbol
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Raw data fetched for ${symbol}:`, data);
+    return data;
+  } catch (error) {
+    console.error(`Error fetching raw data for ${symbol}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches all available symbols from Bybit
+ * Handles pagination automatically
+ * @returns Promise with complete list of symbols
+ */
+export const fetchAvailableSymbols = async (): Promise<string[]> => {
+  try {
+    let allSymbols: string[] = [];
+    let nextCursor: string | null = null;
+    
+    do {
+      const url = nextCursor 
+        ? `${API_BASE_URL}/available_symbols?cursor=${nextCursor}` 
+        : `${API_BASE_URL}/available_symbols`;
+        
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      allSymbols = [...allSymbols, ...data.symbols];
+      nextCursor = data.nextCursor;
+      
+    } while (nextCursor);
+    
+    console.log(`Total available symbols: ${allSymbols.length}`);
+    return allSymbols;
+  } catch (error) {
+    console.error("Error fetching available symbols:", error);
     throw error;
   }
 };
