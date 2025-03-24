@@ -215,10 +215,20 @@ def get_performance():
     cursor.execute(query, params)
     strategies = cursor.fetchall()
     
-    # Add win rate to each strategy
+    # Add win rate and other metrics to each strategy
     for strat in strategies:
         total = strat['wins'] + strat['losses']
         strat['winRate'] = round((strat['wins'] / total * 100), 2) if total > 0 else 0
+        
+        # Calculate estimated profit (3% for wins, -1.5% for losses)
+        profit = (strat['wins'] * 3) - (strat['losses'] * 1.5)
+        strat['profit'] = round(profit, 2)
+        
+        # Calculate average trade profit
+        if total > 0:
+            strat['avgTradeProfit'] = round(profit / total, 2)
+        else:
+            strat['avgTradeProfit'] = 0
     
     # Get signals over time (daily aggregation)
     query = f"""
@@ -239,6 +249,21 @@ def get_performance():
     total = stats['winning_trades'] + stats['losing_trades']
     win_rate = (stats['winning_trades'] / total * 100) if total > 0 else 0
     
+    # Calculate strategy comparison data
+    query = """
+        SELECT 
+            strategy_name as strategy,
+            total_signals,
+            winning_signals as wins,
+            losing_signals as losses,
+            win_rate as winRate,
+            avg_profit as profit
+        FROM strategy_performance
+        ORDER BY win_rate DESC
+    """
+    cursor.execute(query)
+    strategy_performance = cursor.fetchall() or []
+    
     conn.close()
     
     return jsonify({
@@ -249,8 +274,56 @@ def get_performance():
         "symbolsData": symbols,
         "signalTypesData": strategies,
         "strategyData": strategies,  # Adding explicit strategy data
+        "strategyPerformance": strategy_performance,  # Added detailed performance data
         "dailyData": daily_data
     })
+
+@app.route('/api/strategy/performance', methods=['GET'])
+def get_strategy_performance():
+    """Get detailed performance metrics for all strategies or a specific strategy"""
+    strategy = request.args.get('strategy')  # Optional strategy filter
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    if strategy:
+        cursor.execute("""
+            SELECT * FROM strategy_performance
+            WHERE strategy_name = ?
+        """, [strategy])
+    else:
+        cursor.execute("""
+            SELECT * FROM strategy_performance
+            ORDER BY win_rate DESC
+        """)
+    
+    performance = cursor.fetchall()
+    
+    # Get symbol performance for each strategy
+    for strat in performance:
+        cursor.execute("""
+            SELECT 
+                symbol,
+                COUNT(*) as count,
+                SUM(CASE WHEN result = 1 THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 0 THEN 1 ELSE 0 END) as losses
+            FROM signals
+            WHERE strategy_name = ?
+            GROUP BY symbol
+            ORDER BY count DESC
+            LIMIT 10
+        """, [strat['strategy_name']])
+        
+        strat['topSymbols'] = cursor.fetchall()
+        
+        # Add win rate to each symbol
+        for symbol in strat['topSymbols']:
+            total = symbol['wins'] + symbol['losses']
+            symbol['winRate'] = round((symbol['wins'] / total * 100), 2) if total > 0 else 0
+    
+    conn.close()
+    
+    return jsonify(performance)
 
 @app.route('/api/symbols', methods=['GET'])
 def get_symbols():
