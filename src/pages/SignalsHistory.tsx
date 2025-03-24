@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
-import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart } from "lucide-react";
+import { Calendar, Filter, SortDesc, TrendingUp, TrendingDown, LineChart, ExternalLink, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -10,25 +10,31 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
 import { useToast } from "@/components/ui/use-toast";
+import { config } from "@/config/env";
 
 const SignalsHistory = () => {
   const [resultTab, setResultTab] = useState("all");
   const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
+  const [apiConnectivityIssue, setApiConnectivityIssue] = useState(false);
   
   // Fetch available strategies
-  const { data: strategies = [] } = useQuery({
+  const { data: strategies = [], isLoading: strategiesLoading, error: strategiesError } = useQuery({
     queryKey: ['strategies'],
     queryFn: fetchStrategies,
+    retry: 1,
     meta: {
       onSettled: (data: any, error: any) => {
         if (error) {
           console.error("Error fetching strategies:", error);
+          setApiConnectivityIssue(true);
           toast({
             title: "Erro ao carregar estratégias",
-            description: "Não foi possível carregar a lista de estratégias disponíveis.",
+            description: "Não foi possível conectar ao backend. Verifique se o servidor está rodando.",
             variant: "destructive"
           });
+        } else {
+          setApiConnectivityIssue(false);
         }
       }
     }
@@ -44,6 +50,8 @@ const SignalsHistory = () => {
       }
       return fetchSignals(params);
     },
+    retry: 1,
+    enabled: !apiConnectivityIssue,
     meta: {
       onSettled: (data: any, error: any) => {
         if (error) {
@@ -87,6 +95,53 @@ const SignalsHistory = () => {
   const handleStrategyChange = (value: string) => {
     setActiveStrategy(value);
   };
+
+  // Show API connectivity issue message
+  if (apiConnectivityIssue) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Histórico de Sinais</h1>
+            <p className="text-muted-foreground">Visualize os sinais passados e performance</p>
+          </div>
+        </div>
+        
+        <Card className="bg-amber-50 border-amber-200 mb-8">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <AlertTriangle className="h-6 w-6 text-amber-500 mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="text-lg font-medium text-amber-800 mb-2">Problema de Conectividade com a API</h3>
+                <p className="text-amber-700 mb-4">
+                  Não foi possível conectar ao servidor de sinais. Isso pode ocorrer devido a:
+                </p>
+                <ul className="list-disc pl-5 text-amber-700 mb-4 space-y-1">
+                  <li>O servidor Flask não está rodando localmente</li>
+                  <li>Existe um problema com a conexão de rede</li>
+                  <li>A URL da API está incorreta em suas configurações</li>
+                </ul>
+                <div className="bg-white p-4 rounded border border-amber-200 font-mono text-sm mb-4">
+                  URL API configurada: {config.signalsApiUrl}
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="outline" asChild>
+                    <a href="https://github.com/yourusername/trading-signals-app" target="_blank" rel="noreferrer">
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Ver Documentação
+                    </a>
+                  </Button>
+                  <Button onClick={() => window.location.reload()}>
+                    Tentar Novamente
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -166,6 +221,7 @@ const SignalsHistory = () => {
         </Card>
       </div>
 
+      {/* Estratégias em abas */}
       <Tabs 
         defaultValue="ALL" 
         value={activeStrategy} 
@@ -174,7 +230,9 @@ const SignalsHistory = () => {
       >
         <TabsList className="mb-4 inline-flex flex-wrap">
           <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
-          {strategies.map((strategy: string) => (
+          {strategiesLoading ? (
+            <div className="px-3 py-1.5 text-sm">Carregando...</div>
+          ) : strategies.map((strategy: string) => (
             <TabsTrigger key={strategy} value={strategy}>
               {strategy}
             </TabsTrigger>
@@ -182,6 +240,7 @@ const SignalsHistory = () => {
         </TabsList>
         
         <TabsContent value={activeStrategy} className="mt-0">
+          {/* Resultados em abas (profit/loss) */}
           <Tabs defaultValue="all" value={resultTab} onValueChange={setResultTab} className="mb-8">
             <TabsList>
               <TabsTrigger value="all">Todos os Sinais</TabsTrigger>

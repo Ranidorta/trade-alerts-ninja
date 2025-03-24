@@ -27,6 +27,7 @@ export const fetchSignals = async (params?: {
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
     
     // Make API request
+    console.log(`Fetching signals from: ${API_BASE_URL}/signals${queryString}`);
     const response = await fetch(`${API_BASE_URL}/signals${queryString}`);
     
     if (!response.ok) {
@@ -36,7 +37,6 @@ export const fetchSignals = async (params?: {
     const data = await response.json();
     
     // Map the API response to match our TradingSignal interface
-    // This ensures we have proper values for 'result' if it's missing
     const mappedData = data.map((signal: any) => ({
       ...signal,
       // If signal doesn't have a result property but has a profit,
@@ -44,10 +44,10 @@ export const fetchSignals = async (params?: {
       result: signal.result !== undefined ? signal.result : 
               (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined),
       // Make sure strategy is included in the mapped data
-      strategy: signal.strategy_name || signal.signal_type
+      strategy: signal.strategy || signal.strategy_name || signal.signal_type
     }));
     
-    console.log("Signals fetched:", mappedData);
+    console.log("Signals fetched:", mappedData.length);
     return mappedData as TradingSignal[];
   } catch (error) {
     console.error("Error fetching signals:", error);
@@ -66,6 +66,7 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   const days = parseInt(daysString, 10);
   
   try {
+    console.log(`Fetching performance data for ${days} days from: ${API_BASE_URL}/performance?days=${days}`);
     const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
     
     if (!response.ok) {
@@ -87,6 +88,7 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
  */
 export const fetchSymbols = async (): Promise<string[]> => {
   try {
+    console.log(`Fetching symbols from: ${API_BASE_URL}/symbols`);
     const response = await fetch(`${API_BASE_URL}/symbols`);
     
     if (!response.ok) {
@@ -94,7 +96,7 @@ export const fetchSymbols = async (): Promise<string[]> => {
     }
     
     const data = await response.json();
-    console.log("Symbols fetched:", data);
+    console.log("Symbols fetched:", data.length);
     return data;
   } catch (error) {
     console.error("Error fetching symbols:", error);
@@ -108,6 +110,7 @@ export const fetchSymbols = async (): Promise<string[]> => {
  */
 export const fetchStrategies = async (): Promise<string[]> => {
   try {
+    console.log(`Fetching strategies from: ${API_BASE_URL}/strategies`);
     const response = await fetch(`${API_BASE_URL}/strategies`);
     
     if (!response.ok) {
@@ -115,7 +118,7 @@ export const fetchStrategies = async (): Promise<string[]> => {
     }
     
     const data = await response.json();
-    console.log("Strategies fetched:", data);
+    console.log("Strategies fetched:", data.length);
     return data;
   } catch (error) {
     console.error("Error fetching strategies:", error);
