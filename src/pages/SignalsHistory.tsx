@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
@@ -379,6 +378,8 @@ const SignalsHistory = () => {
                 isLoading={isLoading}
                 error={error}
                 activeStrategy={activeStrategy}
+                strategies={strategies}
+                onSelectStrategy={handleStrategyChange}
               />
             </TabsContent>
           </Tabs>
