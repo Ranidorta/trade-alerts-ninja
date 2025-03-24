@@ -13,6 +13,7 @@ import SignalsSummary from "@/components/signals/SignalsSummary";
 import StrategiesTabList from "@/components/signals/StrategiesTabList";
 import ResultsTabSelector from "@/components/signals/ResultsTabSelector";
 import SignalsList from "@/components/signals/SignalsList";
+import StrategyDetails from "@/components/signals/StrategyDetails";
 
 const SignalsHistory = () => {
   const [resultTab, setResultTab] = useState("all");
@@ -111,6 +112,9 @@ const SignalsHistory = () => {
         />
         
         <TabsContent value={activeStrategy} className="mt-0">
+          {/* Strategy details card */}
+          <StrategyDetails strategy={activeStrategy} />
+          
           {/* Resultados em abas (profit/loss) */}
           <ResultsTabSelector 
             resultTab={resultTab} 

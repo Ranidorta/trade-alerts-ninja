@@ -2,7 +2,7 @@
 import React from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ResultsTabSelectorProps {
   resultTab: string;
@@ -18,6 +18,7 @@ const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProp
           <Tooltip>
             <TooltipTrigger asChild>
               <TabsTrigger value="profit" className="flex items-center">
+                <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
                 Lucro <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
               </TabsTrigger>
             </TooltipTrigger>
@@ -30,6 +31,7 @@ const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProp
           <Tooltip>
             <TooltipTrigger asChild>
               <TabsTrigger value="loss" className="flex items-center">
+                <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
                 Perda <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
               </TabsTrigger>
             </TooltipTrigger>

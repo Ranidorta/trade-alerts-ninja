@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -37,6 +36,8 @@ import {
   SelectValue, 
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import StrategiesTabList from "@/components/signals/StrategiesTabList";
+import StrategyDetails from "@/components/signals/StrategyDetails";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -51,8 +52,7 @@ const SignalsDashboard = () => {
   const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
   
-  // Fetch available strategies
-  const { data: strategies = [] } = useQuery({
+  const { data: strategies = [], isLoading: strategiesLoading } = useQuery({
     queryKey: ['strategies'],
     queryFn: fetchStrategies,
     meta: {
@@ -73,7 +73,6 @@ const SignalsDashboard = () => {
     setIsLoading(true);
     
     try {
-      // Use the new fetchSignals with strategy filter if selected
       const params: any = { days: 30 };
       if (activeStrategy !== "ALL") {
         params.strategy = activeStrategy;
@@ -399,16 +398,15 @@ const SignalsDashboard = () => {
         onValueChange={handleStrategyChange}
         className="mb-8"
       >
-        <TabsList className="mb-4 inline-flex flex-wrap">
-          <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
-          {strategies.map((strategy: string) => (
-            <TabsTrigger key={strategy} value={strategy}>
-              {strategy}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <StrategiesTabList 
+          strategies={strategies} 
+          activeStrategy={activeStrategy}
+          isLoading={strategiesLoading}
+        />
         
         <TabsContent value={activeStrategy} className="mt-0">
+          <StrategyDetails strategy={activeStrategy} />
+          
           {!isLoading && signals.length === 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">

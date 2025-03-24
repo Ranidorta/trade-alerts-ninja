@@ -1,7 +1,7 @@
 
 import React from "react";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { HelpCircle } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface StrategiesTabListProps {
@@ -26,6 +26,33 @@ const StrategiesTabList = ({ strategies, activeStrategy, isLoading }: Strategies
     "TREND_ADX": "Seguimento de tendência com MA9 vs MA21 e ADX > 20"
   };
   
+  // Parâmetros técnicos de cada estratégia
+  const strategyParameters: Record<string, Record<string, string>> = {
+    "CLASSIC": {
+      "RSI": "< 30 (compra) / > 70 (venda)",
+      "Médias": "MA curta acima/abaixo da MA longa",
+      "MACD": "MACD acima/abaixo da linha de sinal"
+    },
+    "FAST": {
+      "RSI": "< 40 (compra) / > 60 (venda)",
+      "MACD": "MACD cruzando a linha de sinal"
+    },
+    "RSI_MACD": {
+      "RSI": "< 30 (apenas compra)",
+      "MACD": "MACD cruzando para cima"
+    },
+    "BREAKOUT_ATR": {
+      "ATR": "Acima da média de 14 períodos",
+      "Preço": "Rompendo máxima/mínima anterior",
+      "Volume": "Acima da média"
+    },
+    "TREND_ADX": {
+      "ADX": "> 20 (força da tendência)",
+      "Médias": "MA9 acima/abaixo de MA21",
+      "Tendência": "Seguimento da direção confirmada"
+    }
+  };
+  
   return (
     <TabsList className="mb-4 inline-flex flex-wrap">
       <TabsTrigger value="ALL">Todas Estratégias</TabsTrigger>
@@ -37,11 +64,24 @@ const StrategiesTabList = ({ strategies, activeStrategy, isLoading }: Strategies
             <TooltipTrigger asChild>
               <TabsTrigger value={strategy} className="flex items-center">
                 {strategy}
-                <HelpCircle className="ml-1 h-3 w-3 opacity-70" />
+                <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
               </TabsTrigger>
             </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              <p>{strategyDescriptions[strategy] || `Estratégia ${strategy}`}</p>
+            <TooltipContent className="max-w-xs p-4 space-y-2">
+              <p className="font-medium">{strategyDescriptions[strategy] || `Estratégia ${strategy}`}</p>
+              {strategyParameters[strategy] && (
+                <div className="mt-2 pt-2 border-t border-border">
+                  <p className="text-xs font-medium mb-1">Parâmetros técnicos:</p>
+                  <ul className="text-xs space-y-1">
+                    {Object.entries(strategyParameters[strategy]).map(([param, value]) => (
+                      <li key={param} className="flex justify-between">
+                        <span className="font-medium">{param}:</span>
+                        <span className="ml-2">{value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
