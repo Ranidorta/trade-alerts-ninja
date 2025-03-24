@@ -72,6 +72,7 @@ def init_db():
             position_size REAL,
             entry_price REAL,
             timestamp TEXT,
+            strategy_name TEXT,
             UNIQUE(symbol, signal_type, timestamp)
         )
     ''')
@@ -91,12 +92,13 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_symbol ON signals (symbol)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_type ON signals (signal_type)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_timestamp ON signals (timestamp)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_strategy_name ON signals (strategy_name)')
     
     conn.commit()
     conn.close()
 
 
-def save_signal_to_db(symbol, signal_type, signal, result, position_size, entry_price):
+def save_signal_to_db(symbol, signal_type, signal, result, position_size, entry_price, strategy_name):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -104,9 +106,10 @@ def save_signal_to_db(symbol, signal_type, signal, result, position_size, entry_
         
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
-            INSERT OR IGNORE INTO signals (symbol, signal_type, signal, result, position_size, entry_price, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (symbol, signal_type, signal, result, position_size, entry_price, timestamp))
+            INSERT OR IGNORE INTO signals 
+            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name))
         
         inserted = cursor.rowcount > 0
         conn.commit()
@@ -216,17 +219,33 @@ def save_raw_data(symbol, candles_data):
 # FEATURES
 # ===============================
 def extract_features(df):
+    # Indicadores básicos
     df['rsi'] = talib.RSI(df['close'], timeperiod=14)
     df['ma_short'] = talib.SMA(df['close'], timeperiod=5)
     df['ma_long'] = talib.SMA(df['close'], timeperiod=20)
     df['atr'] = talib.ATR(df['high'], df['low'], df['close'], timeperiod=14)
-    df['macd'], df['macd_signal'], _ = talib.MACD(df['close'], 12, 26, 9)
+    df['macd'], df['macd_signal'], df['macd_hist'] = talib.MACD(df['close'], 12, 26, 9)
+    
+    # Indicadores adicionais para novas estratégias
+    df['ma9'] = talib.SMA(df['close'], timeperiod=9)
+    df['ma21'] = talib.SMA(df['close'], timeperiod=21)
+    df['adx'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
+    df['upper_band'], df['middle_band'], df['lower_band'] = talib.BBANDS(df['close'], timeperiod=20)
+    
+    # Calcula high/low anterior para estratégia de breakout
+    df['prev_high'] = df['high'].shift(1)
+    df['prev_low'] = df['low'].shift(1)
+    df['atr_avg'] = df['atr'].rolling(window=10).mean()
+    
     return df.dropna()
 
 # ===============================
-# SINAIS
+# SINAIS - IMPLEMENTAÇÃO DE TODAS AS ESTRATÉGIAS
 # ===============================
 def generate_classic_signal(row):
+    """
+    Estratégia original baseada em RSI, Médias e MACD
+    """
     if (
         row['rsi'] < RSI_THRESHOLD_BUY and
         row['ma_short'] > row['ma_long'] and
@@ -242,10 +261,45 @@ def generate_classic_signal(row):
     return 0
 
 def generate_fast_signal(row):
+    """
+    Sinais rápidos com lógica mais simples (RSI e MACD)
+    """
     if row['rsi'] < 40 and row['macd'] > row['macd_signal']:
         return 1
     elif row['rsi'] > 60 and row['macd'] < row['macd_signal']:
         return -1
+    return 0
+
+def generate_rsi_macd_signal(row):
+    """
+    Reversão baseada em RSI < 30 e MACD cruzando para cima
+    """
+    if row['rsi'] < 30 and row['macd_hist'] > 0 and row['macd_hist'] > row['macd_hist'].shift(1):
+        return 1
+    elif row['rsi'] > 70 and row['macd_hist'] < 0 and row['macd_hist'] < row['macd_hist'].shift(1):
+        return -1
+    return 0
+
+def generate_breakout_atr_signal(row):
+    """
+    Rompimento com confirmação por ATR acima da média e candle rompendo high/low anterior
+    """
+    if row['atr'] > row['atr_avg'] * 1.1:  # ATR 10% acima da média
+        if row['close'] > row['prev_high'] and row['close'] > row['open']:  # Rompimento de alta
+            return 1
+        elif row['close'] < row['prev_low'] and row['close'] < row['open']:  # Rompimento de baixa
+            return -1
+    return 0
+
+def generate_trend_adx_signal(row):
+    """
+    Seguimento de tendência com MA9 vs MA21 e ADX > 20
+    """
+    if row['adx'] > 20:  # Filtro de força de tendência
+        if row['ma9'] > row['ma21'] and row['ma9'] > row['ma9'].shift(1):  # Tendência de alta
+            return 1
+        elif row['ma9'] < row['ma21'] and row['ma9'] < row['ma9'].shift(1):  # Tendência de baixa
+            return -1
     return 0
 
 # ===============================
@@ -310,7 +364,16 @@ def process_symbol(symbol):
         df = extract_features(df)
         df['future'] = df['close'].shift(-5)
 
-        for tipo, generator in [("CLASSIC", generate_classic_signal), ("FAST", generate_fast_signal)]:
+        # Mapeamento de todas as estratégias
+        strategies = [
+            ("CLASSIC", generate_classic_signal),
+            ("FAST", generate_fast_signal),
+            ("RSI_MACD", generate_rsi_macd_signal),
+            ("BREAKOUT_ATR", generate_breakout_atr_signal),
+            ("TREND_ADX", generate_trend_adx_signal)
+        ]
+
+        for strategy_name, generator in strategies:
             df['signal'] = df.apply(generator, axis=1)
             df['result'] = df.apply(simulate_trade, axis=1)
             df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
@@ -318,10 +381,18 @@ def process_symbol(symbol):
             for _, row in df[df['signal'] != 0].dropna().iterrows():
                 if row['result'] is not None:
                     update_model(row, row['result'])
-                    inserted = save_signal_to_db(symbol, tipo, row['signal'], row['result'], row['position_size'], row['close'])
+                    inserted = save_signal_to_db(
+                        symbol, 
+                        "BUY" if row['signal'] == 1 else "SELL", 
+                        row['signal'], 
+                        row['result'], 
+                        row['position_size'], 
+                        row['close'],
+                        strategy_name
+                    )
                     if inserted:
                         signals_generated += 1
-                        print(f"[{tipo}] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
+                        print(f"[{strategy_name}] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
     
         return signals_generated
     except Exception as e:

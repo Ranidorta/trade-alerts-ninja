@@ -1,4 +1,3 @@
-
 """
 Flask API Server for Trading Signals
 Provides endpoints for retrieving signal data from SQLite database
@@ -68,7 +67,7 @@ def get_signals():
     """Get all signals with optional filtering"""
     symbol = request.args.get('symbol')
     signal_type = request.args.get('type')
-    strategy = request.args.get('strategy')  # New parameter for strategy filtering
+    strategy = request.args.get('strategy')  # Strategy parameter for filtering
     days = request.args.get('days', default=7, type=int)
     
     # Calculate date threshold
@@ -110,8 +109,13 @@ def get_signals():
         signal['type'] = "LONG" if signal['signal'] == 1 else "SHORT"
         signal['entryPrice'] = signal['entry_price']
         signal['leverage'] = 1  # Default leverage
-        # Include strategy information
-        signal['strategy'] = signal.get('strategy_name', signal.get('signal_type', 'UNKNOWN'))
+        
+        # Use correct strategy name field
+        if 'strategy_name' in signal and signal['strategy_name']:
+            signal['strategy'] = signal['strategy_name']
+        else:
+            signal['strategy'] = signal.get('signal_type', 'UNKNOWN')
+            
         # Estimate targets based on entry price and result
         signal['targets'] = [
             {"level": 1, "price": signal['entry_price'] * 1.03, "hit": signal['result'] == 1}
@@ -128,16 +132,17 @@ def get_strategies():
     
     # Try to get strategy_name first, fall back to signal_type if needed
     cursor.execute("""
-        SELECT DISTINCT 
-            CASE 
-                WHEN strategy_name IS NOT NULL AND strategy_name != '' 
-                THEN strategy_name 
-                ELSE signal_type 
-            END as strategy
+        SELECT DISTINCT strategy_name as strategy
         FROM signals
+        WHERE strategy_name IS NOT NULL AND strategy_name != ''
     """)
     
     strategies = [row['strategy'] for row in cursor.fetchall()]
+    
+    # Se não tiver estratégias ainda, retorna as estratégias padrão
+    if not strategies:
+        strategies = ["CLASSIC", "FAST", "RSI_MACD", "BREAKOUT_ATR", "TREND_ADX"]
+        
     conn.close()
     
     return jsonify(strategies)

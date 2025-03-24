@@ -1,6 +1,8 @@
 
 import React from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { InfoIcon } from "lucide-react";
 
 interface ResultsTabSelectorProps {
   resultTab: string;
@@ -12,8 +14,30 @@ const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProp
     <Tabs defaultValue="all" value={resultTab} onValueChange={onValueChange} className="mb-8">
       <TabsList>
         <TabsTrigger value="all">Todos os Sinais</TabsTrigger>
-        <TabsTrigger value="profit">Lucro</TabsTrigger>
-        <TabsTrigger value="loss">Perda</TabsTrigger>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="profit" className="flex items-center">
+                Lucro <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
+              </TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Sinais que atingiram o take profit</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <TabsTrigger value="loss" className="flex items-center">
+                Perda <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
+              </TabsTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Sinais que atingiram o stop loss</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </TabsList>
     </Tabs>
   );
