@@ -1,3 +1,4 @@
+
 """
 Agente de Trade Automatizado com integração à API da Bybit (v5), geração de sinais, simulação e persistência em banco de dados SQLite.
 Atualizado para processar automaticamente todos os pares de futuros disponíveis.

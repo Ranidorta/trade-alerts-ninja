@@ -240,6 +240,7 @@ def get_strategies():
     
     # Se não tiver estratégias ainda, retorna as estratégias padrão
     if not strategies:
+        # Adicionando as novas estratégias implementadas
         strategies = ["CLASSIC", "FAST", "RSI_MACD", "BREAKOUT_ATR", "TREND_ADX"]
         
     conn.close()

@@ -1,3 +1,4 @@
+
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -45,6 +46,7 @@ export interface TradingSignal {
   type?: SignalType;
   technicalIndicators?: TechnicalIndicators;
   result?: number; // Added result property
+  strategy?: string; // Added strategy property
 }
 
 export interface Feature {
