@@ -38,6 +38,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import StrategiesTabList from "@/components/signals/StrategiesTabList";
 import StrategyDetails from "@/components/signals/StrategyDetails";
+import SignalsList from "@/components/signals/SignalsList";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -407,7 +408,7 @@ const SignalsDashboard = () => {
         <TabsContent value={activeStrategy} className="mt-0">
           <StrategyDetails strategy={activeStrategy} />
           
-          {!isLoading && signals.length === 0 && (
+          {!isLoading && signals.length === 0 && activeStrategy !== "ALL" && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
                 <Zap className="h-8 w-8" />
@@ -423,33 +424,14 @@ const SignalsDashboard = () => {
             </div>
           )}
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? (
-              renderSkeletons()
-            ) : filteredSignals.length > 0 ? (
-              filteredSignals.map(signal => (
-                <SignalCard 
-                  key={signal.id} 
-                  signal={signal} 
-                  refreshInterval={30000} // Update target status every 30 seconds
-                />
-              ))
-            ) : signals.length > 0 ? (
-              <div className="col-span-full py-12 text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                  <Search className="h-6 w-6 text-slate-400" />
-                </div>
-                <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
-                <p className="text-slate-500 max-w-md mx-auto">
-                  {searchQuery ? 
-                    `Nenhum sinal correspondente a "${searchQuery}" foi encontrado. Tente um termo de pesquisa diferente.` : 
-                    activeStrategy !== "ALL" ?
-                    `Nenhum sinal encontrado para a estratégia "${activeStrategy}". Tente outra estratégia.` :
-                    "Não há sinais com o filtro selecionado. Tente alterar seus filtros ou gerar novos sinais."}
-                </p>
-              </div>
-            ) : null}
-          </div>
+          <SignalsList 
+            signals={filteredSignals} 
+            isLoading={isLoading} 
+            error={null} 
+            activeStrategy={activeStrategy}
+            strategies={strategies}
+            onSelectStrategy={handleStrategyChange}
+          />
         </TabsContent>
       </Tabs>
     </div>

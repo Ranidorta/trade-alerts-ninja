@@ -2,15 +2,25 @@
 import React from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
+import StrategyList from "@/components/signals/StrategyList";
 
 interface SignalsListProps {
   signals: TradingSignal[];
   isLoading: boolean;
   error: any;
   activeStrategy: string;
+  strategies: string[];
+  onSelectStrategy: (strategy: string) => void;
 }
 
-const SignalsList = ({ signals, isLoading, error, activeStrategy }: SignalsListProps) => {
+const SignalsList = ({ 
+  signals, 
+  isLoading, 
+  error, 
+  activeStrategy, 
+  strategies,
+  onSelectStrategy 
+}: SignalsListProps) => {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -24,6 +34,16 @@ const SignalsList = ({ signals, isLoading, error, activeStrategy }: SignalsListP
       <div className="flex justify-center items-center h-64">
         <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
       </div>
+    );
+  }
+
+  // Se a estratégia atual é "ALL", mostrar a lista de estratégias
+  if (activeStrategy === "ALL") {
+    return (
+      <StrategyList
+        strategies={strategies}
+        onSelectStrategy={onSelectStrategy}
+      />
     );
   }
 
