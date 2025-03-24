@@ -1,0 +1,42 @@
+
+# Trade Alerts Ninja Strategy Optimization Configuration
+
+strategies:
+  # Bollinger Bands strategy parameters
+  BOLLINGER_BANDS:
+    params:
+      bb_period: [10, 30, 5]     # min, max, step
+      bb_std_dev: [1.5, 3.0, 0.5]  # min, max, step
+      volume_period: [10, 30, 5]  # min, max, step
+      volume_threshold: [1.0, 2.0, 0.2]  # min, max, step
+  
+  # RSI_MACD strategy parameters
+  RSI_MACD:
+    params:
+      rsi_period: [7, 21, 7]      # min, max, step
+      rsi_overbought: [70, 80, 5] # min, max, step
+      rsi_oversold: [20, 30, 5]   # min, max, step
+      macd_fast: [8, 16, 4]       # min, max, step
+      macd_slow: [16, 32, 8]      # min, max, step
+
+  # BREAKOUT_ATR strategy parameters  
+  BREAKOUT_ATR:
+    params:
+      atr_period: [7, 21, 7]     # min, max, step
+      atr_mult: [1.0, 3.0, 0.5]  # min, max, step
+      lookback: [1, 5, 1]        # min, max, step
+
+  # TREND_ADX strategy parameters
+  TREND_ADX:
+    params:
+      adx_period: [7, 21, 7]     # min, max, step
+      adx_threshold: [15, 30, 5] # min, max, step
+      ma_fast: [5, 20, 5]        # min, max, step
+      ma_slow: [10, 50, 10]      # min, max, step
+
+# Backtest configuration
+backtest:
+  default_commission: 0.0004  # 0.04% default commission
+  risk_per_trade: 0.02       # 2% risk per trade
+  account_balance: 10000     # Initial balance for backtesting
+  default_leverage: 1        # Default leverage
