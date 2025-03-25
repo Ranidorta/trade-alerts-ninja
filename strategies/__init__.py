@@ -5,15 +5,18 @@ Provides a factory method to get strategy instances by name.
 """
 
 from strategies.bollinger_bands import BollingerBandsStrategy, strategy_bollinger_bands
+from strategies.mean_reversion_enhanced import MeanReversionEnhanced, strategy_mean_reversion_enhanced
 
 # Dictionary mapping strategy names to their implementation classes
 STRATEGY_CLASSES = {
     "BOLLINGER_BANDS": BollingerBandsStrategy,
+    "MEAN_REVERSION_ENHANCED": MeanReversionEnhanced,
 }
 
 # Dictionary mapping strategy names to their row-based functions
 STRATEGY_FUNCTIONS = {
     "BOLLINGER_BANDS": strategy_bollinger_bands,
+    "MEAN_REVERSION_ENHANCED": strategy_mean_reversion_enhanced,
 }
 
 def get_strategy(name: str, params: dict = None):

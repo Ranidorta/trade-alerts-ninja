@@ -1,0 +1,46 @@
+
+# Signal priority configuration for Trade Alerts Ninja
+
+# Strategy weights (higher values have more priority in conflict resolution)
+strategy_weights:
+  # Core strategies
+  BOLLINGER_BANDS: 0.9
+  BREAKOUT_ATR: 0.85
+  RSI_MACD: 0.8
+  CLASSIC: 0.75
+  FAST: 0.7
+  TREND_ADX: 0.65
+  
+  # Additional strategies
+  mean_reversion: 0.6
+  mean_reversion_enhanced: 0.65
+  volume: 0.4
+
+# Conflict resolution rules
+conflict_rules:
+  - name: breakout_vs_reversion
+    description: "Breakout strategy takes precedence over mean reversion in opposite direction"
+    condition: "strategy1 == 'BREAKOUT_ATR' and strategy2 == 'mean_reversion' and direction1 != direction2"
+    action: "select_strategy1"
+    
+  - name: trend_following_priority
+    description: "Trend following strategies win in high ADX environments"
+    condition: "('TREND_ADX' in [strategy1, strategy2]) and adx > 30"
+    action: "select_trend_strategy"
+    
+  - name: bollinger_reversal_priority
+    description: "Bollinger reversal signals are stronger at band extremes"
+    condition: "strategy1 == 'BOLLINGER_BANDS' and (price_location == 'upper' or price_location == 'lower')"
+    action: "boost_weight_strategy1,0.2"
+    
+  - name: volume_confirmation
+    description: "Any signal with volume confirmation gets a boost"
+    condition: "volume_zscore > 1.5 and direction == volume_direction"
+    action: "boost_weight,0.15"
+
+# Time-To-Live settings
+ttl_settings:
+  default: 300  # 5 minutes in seconds
+  BOLLINGER_BANDS: 900  # 15 minutes
+  BREAKOUT_ATR: 1800  # 30 minutes
+  mean_reversion: 300  # 5 minutes

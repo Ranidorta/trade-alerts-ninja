@@ -1,4 +1,3 @@
-
 """
 Agente de Trade Automatizado com integração à API da Bybit (v5), geração de sinais, simulação e persistência em banco de dados SQLite.
 Atualizado para processar automaticamente todos os pares de futuros disponíveis.
@@ -18,15 +17,32 @@ import concurrent.futures
 from river import linear_model, preprocessing
 from datetime import datetime, timedelta
 import sys
+import logging
+import yaml
 
 # Adiciona diretórios ao PYTHONPATH para importação
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import estratégias e utilidades
 from strategies.bollinger_bands import strategy_bollinger_bands
+from strategies.mean_reversion_enhanced import strategy_mean_reversion_enhanced
 from utils.caching import cached_indicator, memoize
 from utils.validation import validate_ohlcv_data
 from backtesting.performance import calculate_sharpe_ratio, calculate_max_drawdown, calculate_win_rate
+from signals.conflict_resolver import ConflictResolver
+from signals.volume_analyzer import VolumeAnalyzer
+from utils.timed_queue import TimedQueue
+
+# Configuração de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("trade_alerts.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger("trade_alerts")
 
 # ===============================
 # CONFIGURAÇÕES GERAIS
@@ -38,6 +54,7 @@ DB_PATH = "signals.db"
 RAW_DATA_DIR = "raw_data"
 INTERVAL = "1h"
 CANDLE_LIMIT = 200
+CONFIG_PATH = "config/signal_priority.yml"
 
 # Limites de requisições API
 MAX_REQUESTS_PER_SECOND = 5
@@ -56,6 +73,11 @@ ACCOUNT_BALANCE = 10000
 if not os.path.exists(RAW_DATA_DIR):
     os.makedirs(RAW_DATA_DIR)
 
+# Inicializar componentes do sistema
+conflict_resolver = ConflictResolver(config_path=CONFIG_PATH)
+volume_analyzer = VolumeAnalyzer(lookback=30)
+signal_queue = TimedQueue(ttl_seconds=300)  # 5 minutos de TTL por padrão
+
 # ===============================
 # MODELO
 # ===============================
@@ -72,7 +94,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Tabela de sinais principal
+    # Tabela de sinais principal (adicionado timestamp e confidence)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS signals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +109,8 @@ def init_db():
             user_id TEXT,
             sharpe_ratio REAL,
             max_drawdown REAL,
+            confidence REAL,
+            volume_zscore REAL,
             UNIQUE(symbol, strategy_name, timestamp)
         )
     ''')
@@ -108,6 +132,22 @@ def init_db():
         )
     ''')
     
+    # Nova tabela para armazenar conflitos entre estratégias
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS strategy_conflicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            symbol TEXT,
+            strategy1 TEXT,
+            strategy2 TEXT,
+            direction1 TEXT,
+            direction2 TEXT,
+            resolved_direction TEXT,
+            confidence REAL,
+            resolution_reason TEXT
+        )
+    ''')
+    
     # Índices para melhorar performance de queries
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_symbol ON signals (symbol)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_type ON signals (signal_type)')
@@ -116,9 +156,12 @@ def init_db():
     
     conn.commit()
     conn.close()
+    logger.info("Database initialized successfully")
 
 
-def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, user_id=None, sharpe_ratio=None, max_drawdown=None):
+def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, 
+                      user_id=None, sharpe_ratio=None, max_drawdown=None, 
+                      confidence=None, volume_zscore=None):
     """
     Salva um sinal no banco de dados com nome da estratégia e métricas de performance.
     
@@ -132,6 +175,8 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         user_id: ID do usuário (opcional)
         sharpe_ratio: Sharpe Ratio da estratégia (opcional)
         max_drawdown: Drawdown máximo (opcional)
+        confidence: Nível de confiança do sinal (0-1)
+        volume_zscore: Z-Score do volume
     
     Returns:
         bool: True se salvo com sucesso, False caso contrário
@@ -141,27 +186,78 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         cursor = conn.cursor()
         timestamp = datetime.utcnow().isoformat()
         
-        # Verificar e criar a coluna user_id se não existir
-        cursor.execute("PRAGMA table_info(signals)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if "user_id" not in columns:
-            cursor.execute("ALTER TABLE signals ADD COLUMN user_id TEXT")
-        
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
-            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown))
+            (symbol, signal_type, signal, result, position_size, entry_price, 
+             timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, 
+             confidence, volume_zscore)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, 
+              position_size, entry_price, timestamp, strategy_name, user_id, 
+              sharpe_ratio, max_drawdown, confidence, volume_zscore))
         
         # Atualiza tabela de performance da estratégia
         update_strategy_performance(cursor, strategy_name, result, sharpe_ratio, max_drawdown)
         
         conn.commit()
         conn.close()
+        
+        # Adiciona o sinal à fila temporal
+        signal_data = {
+            'symbol': symbol,
+            'strategy': strategy_name,
+            'direction': "BUY" if signal == 1 else "SELL",
+            'signal_value': signal,
+            'result': result,
+            'entry_price': entry_price,
+            'confidence': confidence,
+            'volume_zscore': volume_zscore,
+            'timestamp': timestamp
+        }
+        signal_queue.add_signal(signal_data)
+        
+        logger.info(f"Signal saved: {symbol} {strategy_name} {signal} {timestamp}")
         return True
     except Exception as e:
-        print(f"Erro ao salvar sinal no banco: {str(e)}")
+        logger.error(f"Error saving signal: {str(e)}")
+        return False
+
+
+def save_conflict_to_db(symbol, strategy1, strategy2, direction1, direction2, 
+                       resolved_direction, confidence, resolution_reason):
+    """
+    Salva um conflito entre estratégias no banco de dados.
+    
+    Args:
+        symbol: Símbolo do ativo
+        strategy1: Nome da primeira estratégia
+        strategy2: Nome da segunda estratégia
+        direction1: Direção da primeira estratégia
+        direction2: Direção da segunda estratégia
+        resolved_direction: Direção resolvida
+        confidence: Confiança na resolução
+        resolution_reason: Razão da resolução
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        timestamp = datetime.utcnow().isoformat()
+        
+        cursor.execute('''
+            INSERT INTO strategy_conflicts
+            (timestamp, symbol, strategy1, strategy2, direction1, direction2, 
+             resolved_direction, confidence, resolution_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (timestamp, symbol, strategy1, strategy2, direction1, direction2, 
+              resolved_direction, confidence, resolution_reason))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"Conflict saved: {symbol} {strategy1} vs {strategy2}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving conflict: {str(e)}")
         return False
 
 
@@ -445,8 +541,21 @@ def extract_features(df):
     df['prev_low'] = df['low'].shift(1)
     df['atr_avg'] = df['atr'].rolling(window=10).mean()
     
-    # Volume indicators
+    # Volume indicators with Z-Score
     df['volume_sma'] = talib.SMA(df['volume'], timeperiod=20)
+    
+    # Calcular volume Z-Score (se houver dados suficientes)
+    if len(df) >= 20:
+        volume_data = df['volume'].values
+        try:
+            df['volume_zscore'] = (df['volume'] - df['volume'].rolling(20).mean()) / df['volume'].rolling(20).std()
+        except:
+            df['volume_zscore'] = 0
+    else:
+        df['volume_zscore'] = 0
+        
+    # Normaliza volume Z-Score para evitar valores extremos
+    df['volume_zscore'] = df['volume_zscore'].clip(-3, 3)
     
     return df.dropna()
 
@@ -631,19 +740,26 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
     - strategy_function: função que retorna -1, 0 ou 1 para cada linha
     
     Returns:
-        int: Número de sinais gerados
+        dict: Informações sobre sinais gerados
     """
     df['signal'] = df.apply(strategy_function, axis=1)
     df['result'] = df.apply(simulate_trade, axis=1)
     df['position_size'] = df.apply(lambda r: calculate_position_size(
         ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
 
+    # Adicionar volume Z-Score aos sinais
+    if 'volume_zscore' in df.columns:
+        # Atualizar o analisador de volume
+        for _, row in df.iterrows():
+            if not pd.isna(row['volume']):
+                volume_analyzer.add_volume_data(symbol, row['volume'])
+
     # Calcular métricas de performance para essa estratégia nesse ativo
     signals = df[df['signal'] != 0].copy()
     
     # Se não houver sinais, não há o que processar
     if len(signals) == 0:
-        return 0
+        return {'count': 0, 'symbol': symbol, 'strategy': strategy_name, 'signals': []}
         
     # Calcular retornos para métricas
     signals['returns'] = np.nan
@@ -659,20 +775,75 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
         max_dd, _, _ = calculate_max_drawdown(signals['returns'].dropna())
         max_drawdown = max_dd
 
+    signals_data = []
     signals_count = 0
+    
     for _, row in df[df['signal'] != 0].dropna().iterrows():
         if row['result'] is not None:  # Apenas processa sinais com resultado
             update_model(row, row['result'])
+            
+            # Calcular confiança baseada nos indicadores
+            confidence = 0.5  # Base value
+            
+            # Ajustar confiança com base em ADX (tendência forte)
+            if 'adx' in row and not pd.isna(row['adx']):
+                if row['adx'] > 30:
+                    confidence += 0.1
+                elif row['adx'] < 15:
+                    confidence -= 0.1
+            
+            # Ajustar confiança com base em distância das bandas de Bollinger
+            if 'upper_band' in row and 'lower_band' in row and not pd.isna(row['upper_band']):
+                band_width = (row['upper_band'] - row['lower_band']) / row['middle_band']
+                if band_width > 0.05:  # Bandas largas, mais volatilidade
+                    confidence -= 0.05
+                else:  # Bandas estreitas, menos volatilidade
+                    confidence += 0.05
+            
+            # Ajustar confiança com base em RSI extremo
+            if 'rsi' in row and not pd.isna(row['rsi']):
+                if row['signal'] == 1 and row['rsi'] < 20:  # Compra com RSI muito baixo
+                    confidence += 0.15
+                elif row['signal'] == -1 and row['rsi'] > 80:  # Venda com RSI muito alto
+                    confidence += 0.15
+            
+            # Limitar confiança entre 0.3 e 0.95
+            confidence = max(0.3, min(0.95, confidence))
+            
+            # Obter Z-Score do volume, se disponível
+            volume_zscore = row.get('volume_zscore', 0)
+            if pd.isna(volume_zscore):
+                volume_zscore = 0
+                
+            # Salvar sinal no banco de dados
             saved = save_signal_to_db(
                 symbol, strategy_name, row['signal'], row['result'], 
                 row['position_size'], row['close'], 
-                sharpe_ratio=sharpe_ratio, max_drawdown=max_drawdown
+                sharpe_ratio=sharpe_ratio, max_drawdown=max_drawdown,
+                confidence=confidence, volume_zscore=volume_zscore
             )
+            
             if saved:
                 signals_count += 1
-                print(f"[{strategy_name}] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
+                signals_data.append({
+                    'symbol': symbol,
+                    'strategy': strategy_name,
+                    'signal': row['signal'],
+                    'direction': "BUY" if row['signal'] == 1 else "SELL",
+                    'result': row['result'],
+                    'entry_price': row['close'],
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'confidence': confidence,
+                    'volume_zscore': volume_zscore
+                })
+                logger.info(f"[{strategy_name}] {symbol}: sinal={row['signal']} resultado={row['result']} conf={confidence:.2f}")
     
-    return signals_count
+    return {
+        'count': signals_count,
+        'symbol': symbol,
+        'strategy': strategy_name,
+        'signals': signals_data
+    }
 
 def process_symbol(symbol):
     """
@@ -682,257 +853,9 @@ def process_symbol(symbol):
         symbol: Símbolo do ativo
     
     Returns:
-        int: Número de sinais gerados
+        dict: Informações sobre os sinais gerados
     """
     df = get_candles(symbol, interval=INTERVAL, limit=CANDLE_LIMIT)
     if df.empty:
-        print(f"Sem dados para: {symbol}")
-        return 0
-
-    df = extract_features(df)
-    df['future'] = df['close'].shift(-5)
-    df['high_prev'] = df['high'].shift(1)
-    df['low_prev'] = df['low'].shift(1)
-    df['atr_mean'] = df['atr'].rolling(14).mean()
-    df['ma_fast'] = talib.SMA(df['close'], timeperiod=9)
-    df['ma_slow'] = talib.SMA(df['close'], timeperiod=21)
-    df['adx'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
-
-    signals_generated = 0
-    signals_generated += process_strategy(df, symbol, "CLASSIC", generate_classic_signal)
-    signals_generated += process_strategy(df, symbol, "FAST", generate_fast_signal)
-    signals_generated += process_strategy(df, symbol, "RSI_MACD", strategy_rsi_macd)
-    signals_generated += process_strategy(df, symbol, "BREAKOUT_ATR", strategy_breakout_atr)
-    signals_generated += process_strategy(df, symbol, "TREND_ADX", strategy_trend_adx)
-    signals_generated += process_strategy(df, symbol, "BOLLINGER_BANDS", strategy_bollinger_bands)
-    
-    return signals_generated
-
-# ===============================
-# PROCESSAMENTO PARALELO
-# ===============================
-def process_symbols_batch(symbols_batch):
-    """
-    Processa um lote de símbolos e retorna o número total de sinais gerados.
-    
-    Args:
-        symbols_batch: Lista de símbolos para processar
-    
-    Returns:
-        int: Número de sinais gerados
-    """
-    signals_count = 0
-    for symbol in symbols_batch:
-        try:
-            symbol_signals = process_symbol(symbol)
-            signals_count += symbol_signals
-            # Respeita o rate limit
-            time.sleep(1/MAX_REQUESTS_PER_SECOND)
-        except Exception as e:
-            print(f"Erro ao processar {symbol}: {str(e)}")
-    return signals_count
-
-def process_all_parallel():
-    """
-    Processa todos os símbolos em paralelo com rate limiting inteligente.
-    
-    Returns:
-        dict: Estatísticas de processamento
-    """
-    start_time = time.time()
-    run_timestamp = datetime.utcnow().isoformat()
-    
-    init_db()
-    all_symbols = get_all_symbols()
-    
-    # Divide símbolos em lotes para processar em paralelo
-    # mas respeitando o rate limit
-    batch_size = MAX_REQUESTS_PER_SECOND * 2  # 2 requisições por símbolo em média
-    symbol_batches = [all_symbols[i:i+batch_size] for i in range(0, len(all_symbols), batch_size)]
-    
-    total_signals = 0
-    model_save_counter = 0
-    
-    # Processa os lotes em paralelo
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_PROCESSES) as executor:
-        futures = [executor.submit(process_symbols_batch, batch) for batch in symbol_batches]
-        
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                batch_signals = future.result()
-                total_signals += batch_signals
-                
-                # Salva o modelo periodicamente
-                model_save_counter += 1
-                if model_save_counter % 5 == 0:
-                    save_model_periodically()
-            except Exception as e:
-                print(f"Erro ao processar lote: {str(e)}")
-    
-    # Salva o modelo final
-    save_model_periodically()
-    
-    execution_time = time.time() - start_time
-    
-    # Salva metadados da execução
-    print(f"Processamento concluído em {execution_time:.2f} segundos")
-    print(f"Símbolos processados: {len(all_symbols)}")
-    print(f"Sinais gerados: {total_signals}")
-    
-    return {
-        "symbols_processed": len(all_symbols),
-        "signals_generated": total_signals,
-        "execution_time": execution_time
-    }
-
-# Adicionar função para testar estratégias individuais
-def test_strategy(strategy_name, symbols=None, days=30):
-    """
-    Testa uma estratégia específica em um conjunto de símbolos
-    e retorna estatísticas de performance.
-    
-    Args:
-        strategy_name: Nome da estratégia para testar
-        symbols: Lista de símbolos para testar (se None, usa todos disponíveis)
-        days: Número de dias para analisar performance
-    
-    Returns:
-        dict: Estatísticas de performance
-    """
-    strategy_functions = {
-        "CLASSIC": generate_classic_signal,
-        "FAST": generate_fast_signal,
-        "RSI_MACD": strategy_rsi_macd,
-        "BREAKOUT_ATR": strategy_breakout_atr,
-        "TREND_ADX": strategy_trend_adx,
-        "BOLLINGER_BANDS": strategy_bollinger_bands
-    }
-    
-    if strategy_name not in strategy_functions:
-        print(f"Estratégia '{strategy_name}' não encontrada!")
-        return None
-    
-    # Se não foi especificado símbolos, usa uma amostra dos disponíveis
-    if symbols is None:
-        all_symbols = get_all_symbols()
-        symbols = all_symbols[:5]  # Testa 5 símbolos para amostragem
-    
-    print(f"Testando estratégia {strategy_name} em {len(symbols)} símbolos...")
-    
-    total_signals = 0
-    for symbol in symbols:
-        df = get_candles(symbol, interval=INTERVAL, limit=CANDLE_LIMIT)
-        if df.empty:
-            continue
-            
-        df = extract_features(df)
-        df['future'] = df['close'].shift(-5)
-        df['high_prev'] = df['high'].shift(1)
-        df['low_prev'] = df['low'].shift(1)
-        df['atr_mean'] = df['atr'].rolling(14).mean()
-        df['ma_fast'] = talib.SMA(df['close'], timeperiod=9)
-        df['ma_slow'] = talib.SMA(df['close'], timeperiod=21)
-        df['adx'] = talib.ADX(df['high'], df['low'], df['close'], timeperiod=14)
-        df['volume_sma'] = talib.SMA(df['volume'], timeperiod=20)
-        
-        signals = process_strategy(df, symbol, strategy_name, strategy_functions[strategy_name])
-        total_signals += signals
-        
-    # Calcula lucro para esta estratégia
-    calculate_strategy_profit(strategy_name)
-    
-    # Retorna estatísticas atualizadas
-    stats = get_strategy_performance(strategy_name)
-    print(f"Estratégia {strategy_name} testada com {total_signals} sinais gerados.")
-    
-    return stats[0] if stats else None
-
-# Adicionar função para comparar todas as estratégias
-def compare_all_strategies():
-    """
-    Compara o desempenho de todas as estratégias implementadas.
-    
-    Returns:
-        list: Lista de estatísticas de performance por estratégia
-    """
-    performance = get_strategy_performance()
-    
-    print("\n===== COMPARATIVO DE ESTRATÉGIAS =====")
-    print(f"{'Estratégia':<15} {'Sinais':<8} {'Win Rate':<10} {'Lucro Médio':<12} {'Sharpe':<8} {'MaxDD':<8}")
-    print("-" * 70)
-    
-    for strat in performance:
-        print(f"{strat['strategy_name']:<15} {strat['total_signals']:<8} {strat['win_rate']:.2f}%    {strat['avg_profit']:.2f}%     {strat.get('sharpe_ratio', 0):.2f}    {strat.get('max_drawdown', 0):.2f}")
-    
-    return performance
-
-def save_metadata(run_timestamp, symbols_count, signals_count, execution_time):
-    """
-    Salva metadados de execução no banco de dados.
-    
-    Args:
-        run_timestamp: Timestamp da execução
-        symbols_count: Número de símbolos processados
-        signals_count: Número de sinais gerados
-        execution_time: Tempo de execução em segundos
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    # Cria a tabela de metadados se não existir
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS execution_metadata (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            symbols_processed INTEGER,
-            signals_generated INTEGER,
-            execution_time REAL
-        )
-    ''')
-    
-    # Insere os metadados
-    cursor.execute('''
-        INSERT INTO execution_metadata
-        (timestamp, symbols_processed, signals_generated, execution_time)
-        VALUES (?, ?, ?, ?)
-    ''', (run_timestamp, symbols_count, signals_count, execution_time))
-    
-    conn.commit()
-    conn.close()
-
-# ===============================
-# MAIN
-# ===============================
-if __name__ == '__main__':
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Processa sinais de trading com várias estratégias.')
-    parser.add_argument('--strategy', type=str, help='Nome da estratégia para testar (CLASSIC, FAST, RSI_MACD, BREAKOUT_ATR, TREND_ADX, BOLLINGER_BANDS)')
-    parser.add_argument('--compare', action='store_true', help='Compara todas as estratégias')
-    parser.add_argument('--process-all', action='store_true', help='Processa todos os símbolos com todas as estratégias')
-    parser.add_argument('--test', action='store_true', help='Executa os testes automatizados')
-    
-    args = parser.parse_args()
-    
-    if args.test:
-        import pytest
-        pytest.main(['tests/', '--verbose'])
-    elif args.strategy:
-        stats = test_strategy(args.strategy)
-        if stats:
-            print(f"\nResultados para estratégia {args.strategy}:")
-            print(f"Total de sinais: {stats['total_signals']}")
-            print(f"Sinais vencedores: {stats['winning_signals']}")
-            print(f"Taxa de acerto: {stats['win_rate']:.2f}%")
-            print(f"Lucro médio: {stats['avg_profit']:.2f}%")
-            if 'sharpe_ratio' in stats:
-                print(f"Sharpe Ratio: {stats['sharpe_ratio']:.2f}")
-            if 'max_drawdown' in stats:
-                print(f"Maximum Drawdown: {stats['max_drawdown']:.2f}%")
-    elif args.compare:
-        compare_all_strategies()
-    elif args.process_all:
-        process_all_parallel()
-    else:
-        print("Nenhuma ação especificada. Use --strategy, --compare, --process-all ou --test")
-        process_all_parallel()  # Comportamento padrão
+        logger.warning(f"No data for symbol: {symbol}")
+        return {'symbol': symbol, 'count
