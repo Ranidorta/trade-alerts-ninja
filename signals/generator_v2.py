@@ -161,3 +161,4 @@ class SignalGenerator:
         if self.price_feed:
             self.price_feed.stop()
             logger.info("WebSocket price feed encerrado")
+
