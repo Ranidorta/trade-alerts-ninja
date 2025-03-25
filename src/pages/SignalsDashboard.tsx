@@ -53,6 +53,35 @@ const SignalsDashboard = () => {
   const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
   
+  const { data: signalsData = [], isLoading: signalsLoading, error: signalsError, refetch: refetchSignals } = useQuery({
+    queryKey: ['signals', activeStrategy],
+    queryFn: async () => {
+      const params: any = { days: 30 };
+      if (activeStrategy !== "ALL") {
+        params.strategy = activeStrategy;
+      }
+      return fetchSignals(params);
+    },
+    meta: {
+      onSettled: (data: any, error: any) => {
+        if (error) {
+          console.error("Error fetching signals:", error);
+          toast({
+            title: "Erro ao carregar sinais",
+            description: "Falha ao carregar sinais da API.",
+            variant: "destructive"
+          });
+        } else if (data.length === 0) {
+          toast({
+            title: "Nenhum sinal encontrado",
+            description: "Nenhum sinal de trading foi encontrado com os filtros atuais.",
+          });
+        }
+        setLastUpdated(new Date());
+      }
+    }
+  });
+  
   const { data: strategies = [], isLoading: strategiesLoading } = useQuery({
     queryKey: ['strategies'],
     queryFn: fetchStrategies,
@@ -70,44 +99,15 @@ const SignalsDashboard = () => {
     }
   });
   
-  const loadSignalsData = useCallback(async () => {
-    setIsLoading(true);
-    
-    try {
-      const params: any = { days: 30 };
-      if (activeStrategy !== "ALL") {
-        params.strategy = activeStrategy;
-      }
-      
-      const fetchedSignals = await fetchSignals(params);
-      
-      if (fetchedSignals.length > 0) {
-        setSignals(fetchedSignals);
-        setFilteredSignals(fetchedSignals);
-      } else {
-        toast({
-          title: "Nenhum sinal encontrado",
-          description: "Nenhum sinal de trading foi encontrado com os filtros atuais.",
-        });
-      }
-    } catch (error) {
-      console.error("Error loading signals:", error);
-      toast({
-        title: "Erro ao carregar sinais",
-        description: "Falha ao carregar sinais da API.",
-        variant: "destructive"
-      });
+  useEffect(() => {
+    if (signalsData && signalsData.length > 0) {
+      setSignals(signalsData);
+      setFilteredSignals(signalsData);
+    } else {
       setSignals([]);
       setFilteredSignals([]);
-    } finally {
-      setIsLoading(false);
-      setLastUpdated(new Date());
     }
-  }, [toast, activeStrategy]);
-  
-  useEffect(() => {
-    loadSignalsData();
-  }, [loadSignalsData, activeStrategy]);
+  }, [signalsData]);
   
   useEffect(() => {
     if (!autoRefresh) return;
@@ -115,11 +115,11 @@ const SignalsDashboard = () => {
     const DEFAULT_REFRESH_INTERVAL = 60000;
     const intervalId = setInterval(() => {
       console.log("Auto-refreshing signals data...");
-      loadSignalsData();
+      refetchSignals();
     }, DEFAULT_REFRESH_INTERVAL);
     
     return () => clearInterval(intervalId);
-  }, [autoRefresh, loadSignalsData]);
+  }, [autoRefresh, refetchSignals]);
   
   useEffect(() => {
     let result = [...signals];
@@ -211,6 +211,7 @@ const SignalsDashboard = () => {
     } finally {
       setIsGenerating(false);
       setLastUpdated(new Date());
+      refetchSignals();
     }
   };
   
@@ -227,7 +228,7 @@ const SignalsDashboard = () => {
       title: "Atualizando sinais",
       description: "Atualizando dados dos sinais...",
     });
-    loadSignalsData();
+    refetchSignals();
   };
   
   const handleStrategyChange = (value: string) => {
@@ -408,7 +409,7 @@ const SignalsDashboard = () => {
         <TabsContent value={activeStrategy} className="mt-0">
           <StrategyDetails strategy={activeStrategy} />
           
-          {!isLoading && signals.length === 0 && activeStrategy !== "ALL" && (
+          {!signalsLoading && signals.length === 0 && activeStrategy !== "ALL" && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
                 <Zap className="h-8 w-8" />
@@ -426,8 +427,8 @@ const SignalsDashboard = () => {
           
           <SignalsList 
             signals={filteredSignals} 
-            isLoading={isLoading} 
-            error={null} 
+            isLoading={signalsLoading} 
+            error={signalsError} 
             activeStrategy={activeStrategy}
             strategies={strategies}
             onSelectStrategy={handleStrategyChange}
