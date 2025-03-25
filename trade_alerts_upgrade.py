@@ -895,6 +895,57 @@ def process_symbol(symbol):
     if df.empty:
         logger.warning(f"No data for symbol: {symbol}")
         return {'symbol': symbol, 'count': 0}
+    
+    # Extrai indicadores
+    df = extract_features(df)
+    
+    # Adiciona "future price" uma vela à frente para simular resultado
+    df['future'] = df['close'].shift(-1)
+    
+    total_signals = 0
+    strategies_results = []
+    
+    # Processa com a estratégia CLASSIC
+    classic_results = process_strategy(df, symbol, "CLASSIC", generate_classic_signal)
+    if classic_results.get('count', 0) > 0:
+        total_signals += classic_results['count']
+        strategies_results.append(classic_results)
+    
+    # Processa com a estratégia FAST
+    fast_results = process_strategy(df, symbol, "FAST", generate_fast_signal)
+    if fast_results.get('count', 0) > 0:
+        total_signals += fast_results['count']
+        strategies_results.append(fast_results)
+    
+    # Estratégia RSI_MACD
+    df['signal'] = df.apply(strategy_rsi_macd, axis=1)
+    df['result'] = df.apply(simulate_trade, axis=1)
+    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
+    for _, row in df[df['signal'] != 0].dropna().iterrows():
+        update_model(row, row['result'])
+        save_signal_to_db(symbol, "RSI_MACD", row['signal'], row['result'], row['position_size'], row['close'])
+        print(f"[RSI_MACD] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
 
+    # Estratégia BREAKOUT_ATR
+    df['signal'] = df.apply(strategy_breakout_atr, axis=1)
+    df['result'] = df.apply(simulate_trade, axis=1)
+    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
+    for _, row in df[df['signal'] != 0].dropna().iterrows():
+        update_model(row, row['result'])
+        save_signal_to_db(symbol, "BREAKOUT_ATR", row['signal'], row['result'], row['position_size'], row['close'])
+        print(f"[BREAKOUT_ATR] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
 
-
+    # Estratégia TREND_ADX
+    df['signal'] = df.apply(strategy_trend_adx, axis=1)
+    df['result'] = df.apply(simulate_trade, axis=1)
+    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
+    for _, row in df[df['signal'] != 0].dropna().iterrows():
+        update_model(row, row['result'])
+        save_signal_to_db(symbol, "TREND_ADX", row['signal'], row['result'], row['position_size'], row['close'])
+        print(f"[TREND_ADX] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']}")
+    
+    return {
+        'symbol': symbol,
+        'count': total_signals,
+        'strategies': strategies_results
+    }
