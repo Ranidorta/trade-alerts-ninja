@@ -3,7 +3,6 @@ import React from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
-import BackendConnectionInfo from "@/components/signals/MockApiInfo";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -31,8 +30,7 @@ const SignalsList = ({
   }
 
   if (error) {
-    // Se já estamos mostrando o BackendConnectionInfo no componente pai, não precisamos
-    // mostrar outro aqui, apenas uma mensagem de erro mais simples
+    // Tratamento especial para erros de autenticação
     if (error.message && error.message.includes("401")) {
       return (
         <div className="flex flex-col justify-center items-center h-64 gap-4">
@@ -49,7 +47,7 @@ const SignalsList = ({
     
     return (
       <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-destructive">Erro ao carregar sinais. Verifique a conexão com o backend.</p>
+        <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
       </div>
     );
   }
@@ -64,7 +62,7 @@ const SignalsList = ({
     );
   }
 
-  if (!signals || signals.length === 0) {
+  if (signals.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <p className="text-lg text-muted-foreground">
