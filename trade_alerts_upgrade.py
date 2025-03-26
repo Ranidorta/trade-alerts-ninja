@@ -107,7 +107,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Tabela de sinais principal (adicionado leverage)
+    # Tabela de sinais principal (adicionado timestamp e confidence)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS signals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -125,7 +125,6 @@ def init_db():
             confidence REAL,
             volume_zscore REAL,
             fingerprint TEXT,
-            leverage INTEGER,
             UNIQUE(symbol, strategy_name, timestamp)
         )
     ''')
@@ -189,7 +188,7 @@ def init_db():
 
 def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, 
                       user_id=None, sharpe_ratio=None, max_drawdown=None, 
-                      confidence=None, volume_zscore=None, fingerprint=None, leverage=None):
+                      confidence=None, volume_zscore=None, fingerprint=None):
     """
     Salva um sinal no banco de dados com nome da estratégia e métricas de performance.
     
@@ -206,7 +205,6 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         confidence: Nível de confiança do sinal (0-1)
         volume_zscore: Z-Score do volume
         fingerprint: Hash único do sinal (opcional)
-        leverage: Alavancagem recomendada (opcional)
     
     Returns:
         bool: True se salvo com sucesso, False caso contrário
@@ -227,22 +225,16 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
             }
             fingerprint = signal_diversifier._generate_fingerprint(signal_data)
         
-        # Verifica se a coluna leverage existe
-        cursor.execute("PRAGMA table_info(signals)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if "leverage" not in columns:
-            cursor.execute("ALTER TABLE signals ADD COLUMN leverage INTEGER")
-        
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
             (symbol, signal_type, signal, result, position_size, entry_price, 
              timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, 
-             confidence, volume_zscore, fingerprint, leverage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             confidence, volume_zscore, fingerprint)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, 
               position_size, entry_price, timestamp, strategy_name, user_id, 
-              sharpe_ratio, max_drawdown, confidence, volume_zscore, fingerprint, leverage))
+              sharpe_ratio, max_drawdown, confidence, volume_zscore, fingerprint))
         
         # Atualiza tabela de performance da estratégia
         update_strategy_performance(cursor, strategy_name, result, sharpe_ratio, max_drawdown)
@@ -261,12 +253,11 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
             'confidence': confidence,
             'volume_zscore': volume_zscore,
             'timestamp': timestamp,
-            'fingerprint': fingerprint,
-            'leverage': leverage
+            'fingerprint': fingerprint
         }
         signal_queue.add_signal(signal_data)
         
-        logger.info(f"Signal saved: {symbol} {strategy_name} {signal} {timestamp} leverage={leverage}")
+        logger.info(f"Signal saved: {symbol} {strategy_name} {signal} {timestamp}")
         return True
     except Exception as e:
         logger.error(f"Error saving signal: {str(e)}")
@@ -492,7 +483,7 @@ def get_all_symbols():
 @memoize
 def get_candles(symbol, interval="1h", limit=200):
     """
-    Obtém candles de um símbolo específico.
+    Obtém candles de um símbolo espec��fico.
     
     Args:
         symbol: Símbolo do ativo
@@ -700,26 +691,9 @@ def strategy_trend_adx(row):
 # ===============================
 # SIMULAÇÃO + APRENDIZADO
 # ===============================
-def calculate_leverage(atr):
-    """
-    Calcula a alavancagem recomendada com base no ATR.
-    
-    Args:
-        atr: Average True Range
-    
-    Returns:
-        int: Alavancagem recomendada
-    """
-    if atr > 10:
-        return 3
-    elif atr > 5:
-        return 5
-    else:
-        return 10
-
 def simulate_trade(row):
     """
-    Simula um trade com base no sinal gerado, usando zonas de entrada baseadas em ATR.
+    Simula um trade com base no sinal gerado.
     
     Args:
         row: Linha do DataFrame com sinal e preços
@@ -727,24 +701,24 @@ def simulate_trade(row):
     Returns:
         int: 1 para sucesso, 0 para perda, None para indefinido
     """
-    atr = row['atr']
     entry = row['close']
-    tp = entry + (atr * RISK_REWARD_RATIO) if row['signal'] == 1 else entry - (atr * RISK_REWARD_RATIO)
-    sl = entry - atr if row['signal'] == 1 else entry + atr
     future = row['future']
+    atr = row['atr']
+    tp = atr * RISK_REWARD_RATIO
+    sl = atr
     signal = row['signal']
     
     # Se não houver sinal ou dados futuros, retorna None
     if signal == 0 or pd.isna(future):
         return None
         
-    if signal == 1 and future >= tp:
+    if signal == 1 and future >= entry + tp:
         return 1
-    elif signal == -1 and future <= tp:
-        return 1
-    elif signal == 1 and future <= sl:
+    elif signal == 1 and future <= entry - sl:
         return 0
-    elif signal == -1 and future >= sl:
+    elif signal == -1 and future <= entry - tp:
+        return 1
+    elif signal == -1 and future >= entry + sl:
         return 0
     return None
 
@@ -808,7 +782,6 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
     df['result'] = df.apply(simulate_trade, axis=1)
     df['position_size'] = df.apply(lambda r: calculate_position_size(
         ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
-    df['leverage'] = df.apply(lambda r: calculate_leverage(r['atr']), axis=1)
 
     # Adicionar volume Z-Score aos sinais
     if 'volume_zscore' in df.columns:
@@ -878,16 +851,12 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
             if pd.isna(volume_zscore):
                 volume_zscore = 0
                 
-            # Calcular alavancagem recomendada
-            leverage = row['leverage']
-                
             # Salvar sinal no banco de dados
             saved = save_signal_to_db(
                 symbol, strategy_name, row['signal'], row['result'], 
                 row['position_size'], row['close'], 
                 sharpe_ratio=sharpe_ratio, max_drawdown=max_drawdown,
-                confidence=confidence, volume_zscore=volume_zscore,
-                leverage=leverage
+                confidence=confidence, volume_zscore=volume_zscore
             )
             
             if saved:
@@ -901,10 +870,9 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
                     'entry_price': row['close'],
                     'timestamp': datetime.utcnow().isoformat(),
                     'confidence': confidence,
-                    'volume_zscore': volume_zscore,
-                    'leverage': leverage
+                    'volume_zscore': volume_zscore
                 })
-                logger.info(f"[{strategy_name}] {symbol}: sinal={row['signal']} resultado={row['result']} conf={confidence:.2f} leverage={leverage}")
+                logger.info(f"[{strategy_name}] {symbol}: sinal={row['signal']} resultado={row['result']} conf={confidence:.2f}")
     
     return {
         'count': signals_count,
@@ -927,64 +895,6 @@ def process_symbol(symbol):
     if df.empty:
         logger.warning(f"No data for symbol: {symbol}")
         return {'symbol': symbol, 'count': 0}
-    
-    # Extrai indicadores
-    df = extract_features(df)
-    
-    # Adiciona "future price" uma vela à frente para simular resultado
-    df['future'] = df['close'].shift(-1)
-    
-    total_signals = 0
-    strategies_results = []
-    
-    # Processa com a estratégia CLASSIC
-    classic_results = process_strategy(df, symbol, "CLASSIC", generate_classic_signal)
-    if classic_results.get('count', 0) > 0:
-        total_signals += classic_results['count']
-        strategies_results.append(classic_results)
-    
-    # Processa com a estratégia FAST
-    fast_results = process_strategy(df, symbol, "FAST", generate_fast_signal)
-    if fast_results.get('count', 0) > 0:
-        total_signals += fast_results['count']
-        strategies_results.append(fast_results)
-    
-    # Estratégia RSI_MACD
-    df['signal'] = df.apply(strategy_rsi_macd, axis=1)
-    df['result'] = df.apply(simulate_trade, axis=1)
-    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
-    df['leverage'] = df.apply(lambda r: calculate_leverage(r['atr']), axis=1)
-    for _, row in df[df['signal'] != 0].dropna().iterrows():
-        update_model(row, row['result'])
-        leverage = row['leverage']
-        save_signal_to_db(symbol, "RSI_MACD", row['signal'], row['result'], row['position_size'], row['close'], leverage=leverage)
-        print(f"[RSI_MACD] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']} leverage={leverage}")
 
-    # Estratégia BREAKOUT_ATR
-    df['signal'] = df.apply(strategy_breakout_atr, axis=1)
-    df['result'] = df.apply(simulate_trade, axis=1)
-    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
-    df['leverage'] = df.apply(lambda r: calculate_leverage(r['atr']), axis=1)
-    for _, row in df[df['signal'] != 0].dropna().iterrows():
-        update_model(row, row['result'])
-        leverage = row['leverage']
-        save_signal_to_db(symbol, "BREAKOUT_ATR", row['signal'], row['result'], row['position_size'], row['close'], leverage=leverage)
-        print(f"[BREAKOUT_ATR] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']} leverage={leverage}")
 
-    # Estratégia TREND_ADX
-    df['signal'] = df.apply(strategy_trend_adx, axis=1)
-    df['result'] = df.apply(simulate_trade, axis=1)
-    df['position_size'] = df.apply(lambda r: calculate_position_size(ACCOUNT_BALANCE, r['atr'], RISK_PER_TRADE), axis=1)
-    df['leverage'] = df.apply(lambda r: calculate_leverage(r['atr']), axis=1)
-    for _, row in df[df['signal'] != 0].dropna().iterrows():
-        update_model(row, row['result'])
-        leverage = row['leverage']
-        save_signal_to_db(symbol, "TREND_ADX", row['signal'], row['result'], row['position_size'], row['close'], leverage=leverage)
-        print(f"[TREND_ADX] {symbol}: sinal={row['signal']} resultado={row['result']} pos={row['position_size']} leverage={leverage}")
-    
-    return {
-        'symbol': symbol,
-        'count': total_signals,
-        'strategies': strategies_results
-    }
 

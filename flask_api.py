@@ -1,3 +1,4 @@
+
 """
 Flask API Server for Trading Signals
 Provides endpoints for retrieving signal data from SQLite database
@@ -211,12 +212,7 @@ def get_signals():
         signal['pair'] = signal['symbol']
         signal['type'] = "LONG" if signal['signal'] == 1 else "SHORT"
         signal['entryPrice'] = signal['entry_price']
-        
-        # Usar leverage do banco de dados, se disponível
-        if 'leverage' in signal and signal['leverage']:
-            signal['leverage'] = signal['leverage']
-        else:
-            signal['leverage'] = 1  # Default leverage
+        signal['leverage'] = 1  # Default leverage
         
         # Use correct strategy name field
         if 'strategy_name' in signal and signal['strategy_name']:
@@ -551,7 +547,7 @@ def get_strategy_detail_performance(strategy_name):
     
     return jsonify(response)
 
-def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, leverage=None, user_id=None, sharpe_ratio=None, max_drawdown=None):
+def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, user_id=None, sharpe_ratio=None, max_drawdown=None):
     """Salva um sinal no banco de dados com nome da estratégia e ID do usuário."""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -570,16 +566,12 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         if "max_drawdown" not in columns:
             cursor.execute("ALTER TABLE signals ADD COLUMN max_drawdown REAL")
         
-        # Verificar e criar a coluna leverage se não existir
-        if "leverage" not in columns:
-            cursor.execute("ALTER TABLE signals ADD COLUMN leverage INTEGER")
-        
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
-            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, leverage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, leverage))
+            (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown))
         
         # Atualiza tabela de performance da estratégia
         update_strategy_performance(cursor, strategy_name, result, sharpe_ratio, max_drawdown)

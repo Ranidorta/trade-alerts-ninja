@@ -18,7 +18,6 @@ firebase-admin>=6.2.0
 
 # Trading APIs
 pybit>=2.4.0
-websockets>=10.4
 
 # Testing
 pytest>=7.0.0
@@ -40,4 +39,3 @@ structlog>=21.5.0
 
 # Scheduling and background tasks
 apscheduler>=3.10.1
-

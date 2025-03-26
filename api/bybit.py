@@ -1,3 +1,4 @@
+
 """
 Bybit API integration module.
 
@@ -16,7 +17,6 @@ from typing import List, Dict, Optional, Union
 # Try to import pybit, but don't fail if not installed
 try:
     from pybit import usdt_perpetual
-    from pybit.unified_trading import HTTP as UnifiedHTTP
 except ImportError:
     print("Warning: pybit not installed. Some functions may not work.")
 
@@ -42,23 +42,14 @@ class BybitAPI:
         self.testnet = testnet
         
         try:
-            # Initialize legacy API client for backward compatibility
             self.client = usdt_perpetual.HTTP(
                 endpoint="https://api-testnet.bybit.com" if testnet else "https://api.bybit.com",
                 api_key=api_key,
                 api_secret=api_secret
             )
-            
-            # Initialize unified API client for v5 API
-            self.unified_client = UnifiedHTTP(
-                testnet=testnet,
-                api_key=api_key, 
-                api_secret=api_secret
-            )
         except Exception as e:
             print(f"Error initializing Bybit client: {e}")
             self.client = None
-            self.unified_client = None
     
     def get_kline_data(self, symbol: str, interval: str = "60", limit: int = 200,
                      start_time: Optional[int] = None) -> pd.DataFrame:
@@ -190,46 +181,6 @@ class BybitAPI:
             return {"success": False, "message": str(e)}
 
 
-    def get_ticker_v5(self, symbol: str) -> Dict:
-        """
-        Get latest ticker data for a symbol using V5 API.
-        
-        Args:
-            symbol: Trading pair symbol (e.g., "BTCUSDT")
-            
-        Returns:
-            Dictionary with ticker data
-        """
-        if not self.unified_client:
-            return {}
-            
-        try:
-            response = self.unified_client.get_tickers(
-                category="linear",
-                symbol=symbol
-            )
-            
-            if response.get("retCode") != 0 or "result" not in response or "list" not in response["result"]:
-                return {}
-                
-            ticker_data = response["result"]["list"][0]
-            
-            return {
-                "symbol": ticker_data["symbol"],
-                "price": float(ticker_data["lastPrice"]),
-                "bid": float(ticker_data["bid1Price"]),
-                "ask": float(ticker_data["ask1Price"]),
-                "timestamp": int(time.time()),  # Server doesn't provide timestamp
-                "volume": float(ticker_data["volume24h"]),
-                "high": float(ticker_data["highPrice24h"]),
-                "low": float(ticker_data["lowPrice24h"])
-            }
-            
-        except Exception as e:
-            print(f"Error fetching ticker: {e}")
-            return {}
-
-
 def get_candles(symbol: str, interval: str = "60", limit: int = 200) -> pd.DataFrame:
     """
     Fetch candle data from Bybit and convert to DataFrame.
@@ -329,43 +280,3 @@ def mock_candles(symbol: str, days: int = 30, interval: str = "60") -> pd.DataFr
     }, index=timestamps)
     
     return df
-
-def get_ticker(symbol: str) -> Dict:
-    """
-    Get the latest ticker data for a symbol.
-    
-    Args:
-        symbol: Trading pair symbol (e.g., "BTCUSDT")
-        
-    Returns:
-        Dictionary with ticker data including current price and timestamp
-    """
-    try:
-        api = BybitAPI()
-        
-        # Try to use V5 API first
-        ticker = api.get_ticker_v5(symbol)
-        
-        if ticker:
-            return ticker
-            
-        # Fallback to the older API if needed
-        if api.client:
-            response = api.client.latest_information_for_symbol(symbol=symbol)
-            
-            if "result" not in response or not response["result"]:
-                return {}
-                
-            for item in response["result"]:
-                if item["symbol"] == symbol:
-                    return {
-                        "symbol": item["symbol"],
-                        "price": float(item["last_price"]),
-                        "timestamp": time.time(),  # Use local time as fallback
-                    }
-                    
-        return {}
-            
-    except Exception as e:
-        print(f"Error in get_ticker: {e}")
-        return {}
