@@ -2,7 +2,7 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ExternalLink, GitHub } from "lucide-react";
+import { AlertTriangle, ExternalLink, Github } from "lucide-react";
 import { config } from "@/config/env";
 
 const MockApiInfo = () => {
@@ -27,7 +27,7 @@ const MockApiInfo = () => {
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" asChild>
                 <a href="https://github.com/Ranidorta/trade-alerts-backend-2" target="_blank" rel="noreferrer">
-                  <GitHub className="mr-2 h-4 w-4" />
+                  <Github className="mr-2 h-4 w-4" />
                   Repositório Backend
                 </a>
               </Button>
