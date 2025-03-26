@@ -3,7 +3,7 @@ import React from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
-import MockApiInfo from "@/components/signals/MockApiInfo";
+import BackendConnectionInfo from "@/components/signals/MockApiInfo";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -31,7 +31,7 @@ const SignalsList = ({
   }
 
   if (error) {
-    // Se já estamos mostrando o MockApiInfo no componente pai, não precisamos
+    // Se já estamos mostrando o BackendConnectionInfo no componente pai, não precisamos
     // mostrar outro aqui, apenas uma mensagem de erro mais simples
     if (error.message && error.message.includes("401")) {
       return (
