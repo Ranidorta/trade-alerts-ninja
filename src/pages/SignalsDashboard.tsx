@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -39,6 +40,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import StrategiesTabList from "@/components/signals/StrategiesTabList";
 import StrategyDetails from "@/components/signals/StrategyDetails";
 import SignalsList from "@/components/signals/SignalsList";
+import MockApiInfo from "@/components/signals/MockApiInfo";
+import { config } from "@/config/env";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -51,18 +54,21 @@ const SignalsDashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
+  const [apiError, setApiError] = useState<Error | null>(null);
   const { toast } = useToast();
   
-  const { data: strategies = [], isLoading: strategiesLoading } = useQuery({
+  const { data: strategies = [], isLoading: strategiesLoading, error: strategiesError } = useQuery({
     queryKey: ['strategies'],
     queryFn: fetchStrategies,
+    retry: 1,
     meta: {
       onSettled: (data: any, error: any) => {
         if (error) {
           console.error("Error fetching strategies:", error);
+          setApiError(error);
           toast({
             title: "Erro ao carregar estratégias",
-            description: "Não foi possível carregar a lista de estratégias disponíveis.",
+            description: "Não foi possível conectar ao backend. Verifique se o servidor está rodando.",
             variant: "destructive"
           });
         }
@@ -81,20 +87,25 @@ const SignalsDashboard = () => {
       
       const fetchedSignals = await fetchSignals(params);
       
-      if (fetchedSignals.length > 0) {
+      if (fetchedSignals && fetchedSignals.length > 0) {
         setSignals(fetchedSignals);
         setFilteredSignals(fetchedSignals);
+        setApiError(null);
       } else {
         toast({
           title: "Nenhum sinal encontrado",
           description: "Nenhum sinal de trading foi encontrado com os filtros atuais.",
         });
+        // If we got an empty response but no error, still set signals to empty array
+        setSignals([]);
+        setFilteredSignals([]);
       }
     } catch (error) {
       console.error("Error loading signals:", error);
+      setApiError(error as Error);
       toast({
         title: "Erro ao carregar sinais",
-        description: "Falha ao carregar sinais da API.",
+        description: "Falha ao conectar com o backend. Verifique se o servidor está rodando.",
         variant: "destructive"
       });
       setSignals([]);
@@ -176,7 +187,7 @@ const SignalsDashboard = () => {
     try {
       const newSignals = await generateAllSignals();
       
-      if (newSignals.length > 0) {
+      if (newSignals && newSignals.length > 0) {
         setSignals(prevSignals => {
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
@@ -203,9 +214,10 @@ const SignalsDashboard = () => {
       }
     } catch (error) {
       console.error("Error generating signals:", error);
+      setApiError(error as Error);
       toast({
         title: "Erro ao gerar sinais",
-        description: "Ocorreu um erro ao analisar dados de mercado",
+        description: "Falha ao conectar com o backend. Verifique se o servidor está rodando.",
         variant: "destructive"
       });
     } finally {
@@ -293,6 +305,9 @@ const SignalsDashboard = () => {
           </Button>
         </div>
       </div>
+      
+      {/* Display API connection info if there's an error */}
+      {apiError && <MockApiInfo />}
       
       <div className="flex flex-col md:flex-row gap-4 mb-8">
         <div className="relative flex-1">
@@ -408,7 +423,7 @@ const SignalsDashboard = () => {
         <TabsContent value={activeStrategy} className="mt-0">
           <StrategyDetails strategy={activeStrategy} />
           
-          {!isLoading && signals.length === 0 && activeStrategy !== "ALL" && (
+          {!isLoading && signals.length === 0 && activeStrategy !== "ALL" && !apiError && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
                 <Zap className="h-8 w-8" />
@@ -427,9 +442,9 @@ const SignalsDashboard = () => {
           <SignalsList 
             signals={filteredSignals} 
             isLoading={isLoading} 
-            error={null} 
+            error={apiError} 
             activeStrategy={activeStrategy}
-            strategies={strategies}
+            strategies={strategies || []}
             onSelectStrategy={handleStrategyChange}
           />
         </TabsContent>

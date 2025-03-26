@@ -1,3 +1,4 @@
+
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
@@ -51,6 +52,26 @@ const createFetchOptions = async (): Promise<RequestInit> => {
 };
 
 /**
+ * Checks if the API is available
+ * @returns Promise that resolves to true if the API is available
+ */
+export const checkApiAvailability = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      // Set a short timeout to quickly detect if the API is unreachable
+      signal: AbortSignal.timeout(3000)
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error("API availability check failed:", error);
+    return false;
+  }
+};
+
+/**
  * Fetches trading signals from the API
  * @param params Optional query parameters
  * @returns Promise with trading signals
@@ -62,6 +83,12 @@ export const fetchSignals = async (params?: {
   days?: number;
 }): Promise<TradingSignal[]> => {
   try {
+    // Check if API is available first
+    const isApiAvailable = await checkApiAvailability();
+    if (!isApiAvailable) {
+      throw new Error("API is not available. Please check backend connection.");
+    }
+    
     // Build query parameters
     const queryParams = new URLSearchParams();
     if (params?.symbol) queryParams.append("symbol", params.symbol);
@@ -84,6 +111,12 @@ export const fetchSignals = async (params?: {
     
     const data = await response.json();
     
+    // Validate that data is an array
+    if (!Array.isArray(data)) {
+      console.warn("API returned non-array data:", data);
+      return [];
+    }
+    
     // Map the API response to match our TradingSignal interface
     const mappedData = data.map((signal: any) => ({
       ...signal,
@@ -92,7 +125,9 @@ export const fetchSignals = async (params?: {
       result: signal.result !== undefined ? signal.result : 
               (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined),
       // Make sure strategy is included in the mapped data
-      strategy: signal.strategy || signal.strategy_name || signal.signal_type
+      strategy: signal.strategy || signal.strategy_name || signal.signal_type,
+      // Ensure id is a string
+      id: signal.id?.toString() || Math.random().toString(36).substr(2, 9)
     }));
     
     console.log("Signals fetched:", mappedData.length);
