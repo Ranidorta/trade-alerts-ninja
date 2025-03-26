@@ -1,7 +1,7 @@
 
 import { useState, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
-import { fetchSignals } from "@/lib/signalsApi";
+import { fetchSignals as apiFetchSignals } from "@/lib/signalsApi";
 import { useToast } from "@/hooks/use-toast";
 
 export const useTradingSignals = () => {
@@ -10,7 +10,7 @@ export const useTradingSignals = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const fetchSignals = useCallback(async (params?: { 
+  const fetchSignalsData = useCallback(async (params?: { 
     strategy?: string;
     symbol?: string;
     days?: number;
@@ -19,7 +19,7 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
-      const fetchedSignals = await fetchSignals(params);
+      const fetchedSignals = await apiFetchSignals(params);
       setSignals(fetchedSignals);
       
       if (fetchedSignals.length === 0) {
@@ -41,5 +41,5 @@ export const useTradingSignals = () => {
     }
   }, [toast]);
 
-  return { signals, loading, error, fetchSignals };
+  return { signals, loading, error, fetchSignals: fetchSignalsData };
 };
