@@ -20,9 +20,10 @@ const SignalDashboard = () => {
       setLoadingStrategies(true);
       try {
         const fetchedStrategies = await fetchStrategies();
-        setStrategies(["ALL", ...fetchedStrategies]);
+        setStrategies(["ALL", ...(fetchedStrategies || [])]);
       } catch (error) {
         console.error("Erro ao carregar estratégias:", error);
+        setStrategies(["ALL"]); // Fallback to at least having the ALL option
       } finally {
         setLoadingStrategies(false);
       }
@@ -102,7 +103,7 @@ const SignalDashboard = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {signals.map((signal) => (
+        {signals && signals.map((signal) => (
           <Card key={signal.id} className="overflow-hidden hover:shadow-md transition-shadow">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-center">
