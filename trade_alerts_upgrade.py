@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 import sys
 import logging
 import yaml
-from apscheduler.schedulers.background import BackgroundScheduler
 
 # Adiciona diretórios ao PYTHONPATH para importação
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -32,9 +31,7 @@ from utils.validation import validate_ohlcv_data
 from backtesting.performance import calculate_sharpe_ratio, calculate_max_drawdown, calculate_win_rate
 from signals.conflict_resolver import ConflictResolver
 from signals.volume_analyzer import VolumeAnalyzer
-from signals.diversifier import SignalDiversifier
 from utils.timed_queue import TimedQueue
-from analytics.diversity import DiversityAnalyzer
 
 # Configuração de logging
 logging.basicConfig(
@@ -76,20 +73,10 @@ ACCOUNT_BALANCE = 10000
 if not os.path.exists(RAW_DATA_DIR):
     os.makedirs(RAW_DATA_DIR)
 
-# Criar diretório para relatórios
-REPORTS_DIR = "reports"
-if not os.path.exists(REPORTS_DIR):
-    os.makedirs(REPORTS_DIR)
-
 # Inicializar componentes do sistema
 conflict_resolver = ConflictResolver(config_path=CONFIG_PATH)
 volume_analyzer = VolumeAnalyzer(lookback=30)
 signal_queue = TimedQueue(ttl_seconds=300)  # 5 minutos de TTL por padrão
-signal_diversifier = SignalDiversifier(min_minutes_between=45, max_correlation=0.6)
-diversity_analyzer = DiversityAnalyzer()
-
-# Inicializar scheduler para tarefas periódicas
-scheduler = BackgroundScheduler()
 
 # ===============================
 # MODELO
@@ -124,7 +111,6 @@ def init_db():
             max_drawdown REAL,
             confidence REAL,
             volume_zscore REAL,
-            fingerprint TEXT,
             UNIQUE(symbol, strategy_name, timestamp)
         )
     ''')
@@ -162,24 +148,11 @@ def init_db():
         )
     ''')
     
-    # Nova tabela para diversidade de estratégias
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS strategy_diversity (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            report_date TEXT,
-            report_data TEXT,
-            total_signals INTEGER,
-            total_strategies INTEGER,
-            avg_overlap REAL
-        )
-    ''')
-    
     # Índices para melhorar performance de queries
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_symbol ON signals (symbol)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_type ON signals (signal_type)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_timestamp ON signals (timestamp)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_strategy_name ON signals (strategy_name)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_signal_fingerprint ON signals (fingerprint)')
     
     conn.commit()
     conn.close()
@@ -188,7 +161,7 @@ def init_db():
 
 def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, 
                       user_id=None, sharpe_ratio=None, max_drawdown=None, 
-                      confidence=None, volume_zscore=None, fingerprint=None):
+                      confidence=None, volume_zscore=None):
     """
     Salva um sinal no banco de dados com nome da estratégia e métricas de performance.
     
@@ -204,7 +177,6 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         max_drawdown: Drawdown máximo (opcional)
         confidence: Nível de confiança do sinal (0-1)
         volume_zscore: Z-Score do volume
-        fingerprint: Hash único do sinal (opcional)
     
     Returns:
         bool: True se salvo com sucesso, False caso contrário
@@ -214,27 +186,16 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         cursor = conn.cursor()
         timestamp = datetime.utcnow().isoformat()
         
-        # Gera fingerprint se não fornecido
-        if not fingerprint:
-            signal_data = {
-                'symbol': symbol,
-                'strategy': strategy_name,
-                'signal': signal,
-                'entry_price': entry_price,
-                'volume_zscore': volume_zscore
-            }
-            fingerprint = signal_diversifier._generate_fingerprint(signal_data)
-        
         # Usa INSERT OR IGNORE com UNIQUE constraint para evitar duplicatas
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
             (symbol, signal_type, signal, result, position_size, entry_price, 
              timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, 
-             confidence, volume_zscore, fingerprint)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             confidence, volume_zscore)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, 
               position_size, entry_price, timestamp, strategy_name, user_id, 
-              sharpe_ratio, max_drawdown, confidence, volume_zscore, fingerprint))
+              sharpe_ratio, max_drawdown, confidence, volume_zscore))
         
         # Atualiza tabela de performance da estratégia
         update_strategy_performance(cursor, strategy_name, result, sharpe_ratio, max_drawdown)
@@ -252,8 +213,7 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
             'entry_price': entry_price,
             'confidence': confidence,
             'volume_zscore': volume_zscore,
-            'timestamp': timestamp,
-            'fingerprint': fingerprint
+            'timestamp': timestamp
         }
         signal_queue.add_signal(signal_data)
         
@@ -262,6 +222,7 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
     except Exception as e:
         logger.error(f"Error saving signal: {str(e)}")
         return False
+
 
 def save_conflict_to_db(symbol, strategy1, strategy2, direction1, direction2, 
                        resolved_direction, confidence, resolution_reason):
@@ -298,6 +259,7 @@ def save_conflict_to_db(symbol, strategy1, strategy2, direction1, direction2,
     except Exception as e:
         logger.error(f"Error saving conflict: {str(e)}")
         return False
+
 
 def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None, max_drawdown=None):
     """
@@ -368,6 +330,7 @@ def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None
     except Exception as e:
         print(f"Erro ao atualizar performance da estratégia {strategy_name}: {str(e)}")
 
+
 def get_strategy_performance(strategy_name=None):
     """
     Retorna estatísticas de performance por estratégia.
@@ -392,6 +355,7 @@ def get_strategy_performance(strategy_name=None):
     conn.close()
     
     return results
+
 
 def calculate_strategy_profit(strategy_name):
     """
@@ -483,7 +447,7 @@ def get_all_symbols():
 @memoize
 def get_candles(symbol, interval="1h", limit=200):
     """
-    Obtém candles de um símbolo espec��fico.
+    Obtém candles de um símbolo específico.
     
     Args:
         symbol: Símbolo do ativo
@@ -894,7 +858,4 @@ def process_symbol(symbol):
     df = get_candles(symbol, interval=INTERVAL, limit=CANDLE_LIMIT)
     if df.empty:
         logger.warning(f"No data for symbol: {symbol}")
-        return {'symbol': symbol, 'count': 0}
-
-
-
+        return {'symbol': symbol, 'count
