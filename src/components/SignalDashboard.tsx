@@ -10,8 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 const SignalDashboard = () => {
-  const { signals, loading, error, fetchSignals } = useTradingSignals();
-  const [strategies, setStrategies] = useState<string[]>([]);
+  const { signals = [], loading, error, fetchSignals } = useTradingSignals();
+  const [strategies, setStrategies] = useState<string[]>(["ALL"]);
   const [selectedStrategy, setSelectedStrategy] = useState<string>("ALL");
   const [loadingStrategies, setLoadingStrategies] = useState(false);
 
@@ -70,7 +70,7 @@ const SignalDashboard = () => {
               <SelectValue placeholder="Estratégia" />
             </SelectTrigger>
             <SelectContent>
-              {strategies.map((strategy) => (
+              {strategies && strategies.map((strategy) => (
                 <SelectItem key={strategy} value={strategy}>
                   {strategy === "ALL" ? "Todas Estratégias" : strategy}
                 </SelectItem>

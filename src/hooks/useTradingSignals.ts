@@ -20,9 +20,9 @@ export const useTradingSignals = () => {
 
     try {
       const fetchedSignals = await apiFetchSignals(params);
-      setSignals(fetchedSignals);
+      setSignals(fetchedSignals || []);
       
-      if (fetchedSignals.length === 0) {
+      if (fetchedSignals && fetchedSignals.length === 0) {
         toast({
           title: "Nenhum sinal encontrado",
           description: "Não foram encontrados sinais com os filtros atuais.",
@@ -31,6 +31,7 @@ export const useTradingSignals = () => {
     } catch (err: any) {
       console.error("Error fetching trading signals:", err);
       setError(err.message || "Erro ao carregar sinais");
+      setSignals([]); // Ensure signals is always an array
       toast({
         title: "Erro ao carregar sinais",
         description: "Não foi possível conectar ao servidor de sinais.",
