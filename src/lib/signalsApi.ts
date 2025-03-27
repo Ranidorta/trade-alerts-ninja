@@ -2,7 +2,7 @@ import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
 // Default API base URL with fallback
-const API_BASE_URL = config.signalsApiUrl || "https://trade-alerts-backend-2.onrender.com/api";
+const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
 
 /**
  * Gets the current Firebase auth token if available
@@ -288,43 +288,4 @@ export const setAuthToken = (token: string) => {
  */
 export const clearAuthToken = () => {
   localStorage.removeItem('authToken');
-};
-
-/**
- * Triggers signal generation on the backend
- * @param options Generation options
- * @returns Promise with generation results
- */
-export const generateSignals = async (options: { 
-  generate_for?: 'all' | string[]; 
-  force?: boolean;
-  symbols?: string[];
-  strategies?: string[];
-} = {}) => {
-  try {
-    // Get fetch options with auth token if available
-    const options = await createFetchOptions();
-    options.method = 'POST';
-    
-    // Set the body
-    options.body = JSON.stringify({
-      generate_for: 'all',
-      force: true,
-      ...options
-    });
-    
-    console.log(`Generating signals from: ${API_BASE_URL}/generate_signals`);
-    const response = await fetch(`${API_BASE_URL}/generate_signals`, options);
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log("Signals generated:", data);
-    return data;
-  } catch (error) {
-    console.error("Error generating signals:", error);
-    throw error;
-  }
 };

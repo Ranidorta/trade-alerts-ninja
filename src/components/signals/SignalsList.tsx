@@ -1,11 +1,8 @@
 
-import React, { useEffect } from "react";
+import React from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
-import BackendConnectionStatus from "@/components/signals/BackendConnectionStatus";
-import { config } from "@/config/env";
-import { useQueryClient } from "@tanstack/react-query";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -24,33 +21,15 @@ const SignalsList = ({
   strategies,
   onSelectStrategy 
 }: SignalsListProps) => {
-  const queryClient = useQueryClient();
-
-  // Listen for signal refetch events
-  useEffect(() => {
-    const handleRefetch = () => {
-      queryClient.invalidateQueries({ queryKey: ['signals'] });
-    };
-
-    window.addEventListener('refetch-signals', handleRefetch);
-    return () => {
-      window.removeEventListener('refetch-signals', handleRefetch);
-    };
-  }, [queryClient]);
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-lg text-muted-foreground">Carregando sinais...</p>
+      </div>
+    );
+  }
 
   if (error) {
-    // Check if it's a connection error and show the backend connection status
-    if (error.message && error.message.includes("Failed to fetch")) {
-      return (
-        <div>
-          <BackendConnectionStatus apiUrl={config.signalsApiUrl} />
-          <div className="flex justify-center items-center h-48">
-            <p className="text-lg text-destructive">Erro ao conectar com o servidor. Verifique o status da conexão acima.</p>
-          </div>
-        </div>
-      );
-    }
-    
     // Tratamento especial para erros de autenticação
     if (error.message && error.message.includes("401")) {
       return (
@@ -73,51 +52,34 @@ const SignalsList = ({
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-muted-foreground">Carregando sinais...</p>
-      </div>
-    );
-  }
-
   // Se a estratégia atual é "ALL", mostrar a lista de estratégias
   if (activeStrategy === "ALL") {
     return (
-      <>
-        <BackendConnectionStatus apiUrl={config.signalsApiUrl} />
-        <StrategyList
-          strategies={strategies}
-          onSelectStrategy={onSelectStrategy}
-        />
-      </>
+      <StrategyList
+        strategies={strategies}
+        onSelectStrategy={onSelectStrategy}
+      />
     );
   }
 
   if (signals.length === 0) {
     return (
-      <>
-        <BackendConnectionStatus apiUrl={config.signalsApiUrl} />
-        <div className="flex justify-center items-center h-64">
-          <p className="text-lg text-muted-foreground">
-            {activeStrategy !== "ALL" 
-              ? `Nenhum sinal encontrado para a estratégia "${activeStrategy}".` 
-              : "Nenhum sinal encontrado para os filtros aplicados."}
-          </p>
-        </div>
-      </>
+      <div className="flex justify-center items-center h-64">
+        <p className="text-lg text-muted-foreground">
+          {activeStrategy !== "ALL" 
+            ? `Nenhum sinal encontrado para a estratégia "${activeStrategy}".` 
+            : "Nenhum sinal encontrado para os filtros aplicados."}
+        </p>
+      </div>
     );
   }
 
   return (
-    <>
-      <BackendConnectionStatus apiUrl={config.signalsApiUrl} />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {signals.map((signal) => (
-          <SignalCard key={signal.id} signal={signal} />
-        ))}
-      </div>
-    </>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {signals.map((signal) => (
+        <SignalCard key={signal.id} signal={signal} />
+      ))}
+    </div>
   );
 };
 
