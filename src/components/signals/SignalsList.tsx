@@ -14,11 +14,11 @@ interface SignalsListProps {
 }
 
 const SignalsList = ({ 
-  signals = [], // Provide default empty array to prevent undefined errors
+  signals, 
   isLoading, 
   error, 
   activeStrategy, 
-  strategies = [], // Provide default empty array
+  strategies,
   onSelectStrategy 
 }: SignalsListProps) => {
   if (isLoading) {
@@ -47,13 +47,10 @@ const SignalsList = ({
     
     return (
       <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-destructive">Erro ao carregar sinais: {error.message || "Tente novamente mais tarde."}</p>
+        <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
       </div>
     );
   }
-
-  // Ensure signals is an array before proceeding
-  const safeSignals = Array.isArray(signals) ? signals : [];
 
   // Se a estratégia atual é "ALL", mostrar a lista de estratégias
   if (activeStrategy === "ALL") {
@@ -65,7 +62,7 @@ const SignalsList = ({
     );
   }
 
-  if (safeSignals.length === 0) {
+  if (signals.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
         <p className="text-lg text-muted-foreground">
@@ -79,8 +76,8 @@ const SignalsList = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {safeSignals.map((signal) => (
-        <SignalCard key={signal.id || Math.random().toString()} signal={signal} />
+      {signals.map((signal) => (
+        <SignalCard key={signal.id} signal={signal} />
       ))}
     </div>
   );
