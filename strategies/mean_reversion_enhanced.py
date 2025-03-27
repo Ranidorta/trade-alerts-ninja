@@ -122,14 +122,21 @@ class MeanReversionEnhanced:
         Returns:
             DataFrame with 'signal' column (1=buy, -1=sell, 0=neutral)
         """
+        # Initialize a flag to track if parameters were modified
+        params_modified = False
+        old_params = None
+        
         # Apply overfitting protection
         if self._is_overfitting():
             logger.warning("Detected potential overfitting, reducing signal frequency")
+            # Save original parameters
+            old_params = self.params.copy()
+            params_modified = True
+            
             # Add random noise to thresholds to break patterns
             temp_params = self.params.copy()
             temp_params['rsi_oversold'] = self.params['rsi_oversold'] - np.random.randint(0, 5)
             temp_params['rsi_overbought'] = self.params['rsi_overbought'] + np.random.randint(0, 5)
-            old_params = self.params
             self.params = temp_params
         
         # Prepare data with indicators
@@ -144,8 +151,9 @@ class MeanReversionEnhanced:
         logger.info(f"Generated {buy_signals} buy signals and {sell_signals} sell signals")
         
         # Restore original parameters if changed for overfitting protection
-        if '_is_overfitting' in locals():
+        if params_modified and old_params is not None:
             self.params = old_params
+            logger.debug("Restored original parameters after temporary modification")
             
         return df
         
