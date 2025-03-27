@@ -1,10 +1,11 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
 import BackendConnectionStatus from "@/components/signals/BackendConnectionStatus";
 import { config } from "@/config/env";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -23,6 +24,20 @@ const SignalsList = ({
   strategies,
   onSelectStrategy 
 }: SignalsListProps) => {
+  const queryClient = useQueryClient();
+
+  // Listen for signal refetch events
+  useEffect(() => {
+    const handleRefetch = () => {
+      queryClient.invalidateQueries({ queryKey: ['signals'] });
+    };
+
+    window.addEventListener('refetch-signals', handleRefetch);
+    return () => {
+      window.removeEventListener('refetch-signals', handleRefetch);
+    };
+  }, [queryClient]);
+
   if (error) {
     // Check if it's a connection error and show the backend connection status
     if (error.message && error.message.includes("Failed to fetch")) {

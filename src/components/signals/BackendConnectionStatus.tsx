@@ -1,17 +1,21 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ExternalLink, CheckCircle } from "lucide-react";
+import { AlertTriangle, ExternalLink, CheckCircle, RefreshCw } from "lucide-react";
 import { config } from "@/config/env";
 import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface BackendConnectionStatusProps {
   apiUrl: string;
 }
 
 const BackendConnectionStatus = ({ apiUrl }: BackendConnectionStatusProps) => {
-  const { data, isLoading, error } = useQuery({
+  const { toast } = useToast();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['healthCheck'],
     queryFn: async () => {
       const response = await fetch(`${apiUrl}/health`);
@@ -21,6 +25,49 @@ const BackendConnectionStatus = ({ apiUrl }: BackendConnectionStatusProps) => {
     retry: 1,
     staleTime: 30000 // 30 seconds
   });
+  
+  const handleGenerateSignals = async () => {
+    if (!apiUrl) return;
+    
+    try {
+      setIsGenerating(true);
+      const response = await fetch(`${apiUrl}/generate_signals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          generate_for: 'all',
+          force: true
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      toast({
+        title: "Signals Generated",
+        description: `Successfully generated ${result.count || 0} signals.`,
+        duration: 5000,
+      });
+      
+      // Trigger refetch of signals data
+      window.dispatchEvent(new CustomEvent('refetch-signals'));
+      
+    } catch (error) {
+      console.error("Error generating signals:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate signals. Check the console for details.",
+        variant: "destructive",
+        duration: 5000,
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
   
   if (isLoading) {
     return (
@@ -82,7 +129,7 @@ const BackendConnectionStatus = ({ apiUrl }: BackendConnectionStatusProps) => {
       <CardContent className="p-6">
         <div className="flex items-start gap-4">
           <CheckCircle className="h-6 w-6 text-green-500 mt-1 flex-shrink-0" />
-          <div>
+          <div className="flex-grow">
             <h3 className="text-lg font-medium text-green-800 mb-2">Conectado ao Backend</h3>
             <p className="text-green-700 mb-4">
               Conexão estabelecida com sucesso ao servidor de sinais de trading.
@@ -93,12 +140,39 @@ const BackendConnectionStatus = ({ apiUrl }: BackendConnectionStatusProps) => {
                 <div className="mt-1">Timestamp: {data.timestamp}</div>
               )}
             </div>
-            <Button variant="outline" asChild>
-              <a href="https://github.com/Ranidorta/trade-alerts-backend-2" target="_blank" rel="noreferrer">
-                <ExternalLink className="mr-2 h-4 w-4" />
-                Ver Repositório Backend
-              </a>
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" asChild>
+                <a href="https://github.com/Ranidorta/trade-alerts-backend-2" target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Ver Repositório Backend
+                </a>
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => refetch()}
+                className="bg-green-100 hover:bg-green-200"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Verificar conexão
+              </Button>
+              <Button 
+                onClick={handleGenerateSignals}
+                disabled={isGenerating}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Gerando Sinais...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Gerar Novos Sinais
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
