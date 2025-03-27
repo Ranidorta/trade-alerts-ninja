@@ -2,7 +2,7 @@ import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
 // Default API base URL with fallback
-const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
+const API_BASE_URL = config.signalsApiUrl || "https://trade-alerts-backend-2.onrender.com/api";
 
 /**
  * Gets the current Firebase auth token if available
