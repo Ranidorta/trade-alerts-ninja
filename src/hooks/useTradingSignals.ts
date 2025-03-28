@@ -3,6 +3,12 @@ import { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
+import { 
+  saveSignalsToHistory, 
+  getSignalsHistory,
+  updateAllSignalsStatus,
+  reprocessAllHistory
+} from "@/lib/signalHistoryService";
 
 // Using a fallback URL for the backend
 const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
@@ -23,6 +29,10 @@ export const useTradingSignals = () => {
       try {
         const parsedSignals = JSON.parse(cachedSignals);
         setSignals(parsedSignals);
+        
+        // Also save to signals history
+        saveSignalsToHistory(parsedSignals);
+        
         console.log("Loaded cached signals from localStorage:", parsedSignals.length);
       } catch (err) {
         console.error("Error parsing cached signals:", err);
@@ -149,9 +159,10 @@ export const useTradingSignals = () => {
       // Update state with processed signals
       setSignals(processedSignals);
       
-      // Only save to localStorage if we actually have signals
+      // Save to localStorage and history
       if (processedSignals.length > 0) {
         localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
+        saveSignalsToHistory(processedSignals);
       }
       
       // If we succeeded in fetching from remote but there are no signals,
@@ -203,12 +214,55 @@ export const useTradingSignals = () => {
       // Combine existing and new signals
       const updatedSignals = [...processedNewSignals, ...currentSignals];
       
-      // Save to localStorage
+      // Save to localStorage and history
       localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(updatedSignals));
+      saveSignalsToHistory(processedNewSignals);
       
       return updatedSignals;
     });
   }, []);
+
+  // Update signal statuses based on current prices
+  const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
+    try {
+      const updatedSignals = await updateAllSignalsStatus(currentPrices);
+      setSignals(updatedSignals);
+      toast({
+        title: "Signals updated",
+        description: `Updated ${updatedSignals.length} signals with current status`,
+      });
+      return updatedSignals;
+    } catch (err) {
+      console.error("Error updating signal statuses:", err);
+      toast({
+        variant: "destructive",
+        title: "Error updating signals",
+        description: "Failed to update signal statuses",
+      });
+      return null;
+    }
+  }, [toast]);
+
+  // Reprocess all signals in history
+  const reprocessHistory = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
+    try {
+      const reprocessedSignals = await reprocessAllHistory(currentPrices);
+      setSignals(reprocessedSignals);
+      toast({
+        title: "History reprocessed",
+        description: `Reprocessed ${reprocessedSignals.length} signals in history`,
+      });
+      return reprocessedSignals;
+    } catch (err) {
+      console.error("Error reprocessing signal history:", err);
+      toast({
+        variant: "destructive",
+        title: "Error reprocessing history",
+        description: "Failed to reprocess signal history",
+      });
+      return null;
+    }
+  }, [toast]);
 
   // Generate mock signals for demo purposes
   const generateMockSignals = (count: number): TradingSignal[] => {
@@ -242,5 +296,13 @@ export const useTradingSignals = () => {
     });
   };
 
-  return { signals, loading, error, fetchSignals, addSignals };
+  return { 
+    signals, 
+    loading, 
+    error, 
+    fetchSignals, 
+    addSignals,
+    updateSignalStatuses,
+    reprocessHistory
+  };
 };

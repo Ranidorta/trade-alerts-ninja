@@ -4,6 +4,7 @@ import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
 import ApiConnectionError from "@/components/signals/ApiConnectionError";
+import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -14,6 +15,7 @@ interface SignalsListProps {
   activeStrategy: string;
   strategies: string[];
   onSelectStrategy: (strategy: string) => void;
+  viewMode?: "cards" | "table";
 }
 
 const SignalsList = ({ 
@@ -22,7 +24,8 @@ const SignalsList = ({
   error, 
   activeStrategy, 
   strategies,
-  onSelectStrategy 
+  onSelectStrategy,
+  viewMode = "cards"
 }: SignalsListProps) => {
   const { toast } = useToast();
 
@@ -96,6 +99,12 @@ const SignalsList = ({
     );
   }
 
+  // Renderizar como tabela se viewMode for "table"
+  if (viewMode === "table") {
+    return <SignalHistoryTable signals={signals} />;
+  }
+
+  // Caso contrário, renderizar como cards (default)
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {signals.map((signal) => (

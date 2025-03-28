@@ -54,6 +54,30 @@ export const getSignalsHistory = (): TradingSignal[] => {
 };
 
 /**
+ * Updates a signal's outcome based on profit and target information
+ */
+export const updateSignalOutcome = async (
+  signal: TradingSignal
+): Promise<TradingSignal> => {
+  // Clone the signal to avoid modifying the original object
+  const updatedSignal: TradingSignal = {...signal};
+  
+  // Update signal status based on current state
+  if (updatedSignal.status === "COMPLETED" && updatedSignal.profit !== undefined) {
+    // Determine result from profit
+    updatedSignal.result = updatedSignal.profit > 0 ? 1 : 0; // 1 for win, 0 for loss
+    // Count how many targets were hit
+    updatedSignal.tpHit = updatedSignal.targets?.filter(t => t.hit).length || 0;
+  } else {
+    // Signal is still active or waiting
+    updatedSignal.result = undefined;
+    updatedSignal.tpHit = 0;
+  }
+  
+  return updatedSignal;
+};
+
+/**
  * Updates a signal's status based on current price and target information
  */
 export const updateSignalStatus = async (
@@ -131,6 +155,33 @@ export const updateSignalStatus = async (
 };
 
 /**
+ * Reprocesses all signals in history
+ */
+export const reprocessAllHistory = async (
+  currentPrices?: {[symbol: string]: number}
+): Promise<TradingSignal[]> => {
+  const signals = getSignalsHistory();
+  
+  const updatedSignals = await Promise.all(
+    signals.map(async signal => {
+      const currentPrice = currentPrices?.[signal.symbol];
+      
+      // First update the signal status based on price
+      const statusUpdated = await updateSignalStatus(signal, currentPrice);
+      
+      // Then update the outcome based on the new status
+      return await updateSignalOutcome(statusUpdated);
+    })
+  );
+  
+  // Save updated signals back to storage
+  localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
+  console.log(`Reprocessed ${updatedSignals.length} signals in history`);
+  
+  return updatedSignals;
+};
+
+/**
  * Updates all signals in history with current status
  */
 export const updateAllSignalsStatus = async (
@@ -191,6 +242,22 @@ export const analyzeSignalsHistory = () => {
     return acc;
   }, {} as {[symbol: string]: {total: number, wins: number, losses: number}});
   
+  // Analyze strategy performance
+  const strategyPerformance = signals.reduce((acc, signal) => {
+    const strategy = signal.strategy || 'Unknown';
+    
+    if (!acc[strategy]) {
+      acc[strategy] = { total: 0, wins: 0, losses: 0, profit: 0 };
+    }
+    
+    acc[strategy].total += 1;
+    if (signal.result === 1) acc[strategy].wins += 1;
+    if (signal.result === 0) acc[strategy].losses += 1;
+    if (signal.profit !== undefined) acc[strategy].profit += signal.profit;
+    
+    return acc;
+  }, {} as {[strategy: string]: {total: number, wins: number, losses: number, profit: number}});
+  
   return {
     total,
     completed,
@@ -204,6 +271,15 @@ export const analyzeSignalsHistory = () => {
       wins: data.wins,
       losses: data.losses,
       winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0
+    })),
+    strategyPerformance: Object.entries(strategyPerformance).map(([strategy, data]) => ({
+      strategy,
+      total: data.total,
+      wins: data.wins,
+      losses: data.losses,
+      winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0,
+      profit: data.profit,
+      avgTradeProfit: data.total > 0 ? data.profit / data.total : 0
     }))
   };
 };
