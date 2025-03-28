@@ -16,11 +16,13 @@ import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import AuthButton from "@/components/AuthButton";
+import { useAuth } from "@/hooks/useAuth";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const { user } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -41,6 +43,9 @@ const Navbar = () => {
       icon: <Presentation size={18} /> 
     },
   ];
+
+  // For non-authenticated users, only show the Home link
+  const visibleNavLinks = user ? navLinks : [navLinks[0]];
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-background/95 backdrop-blur z-50 border-b border-border transition-all duration-200">
@@ -70,7 +75,7 @@ const Navbar = () => {
               {isMenuOpen && (
                 <div className="absolute top-16 left-0 w-full bg-background border-b border-border z-50">
                   <div className="container py-4 space-y-2">
-                    {navLinks.map(({ path, name, icon }) => (
+                    {visibleNavLinks.map(({ path, name, icon }) => (
                       <Link
                         key={path}
                         to={path}
@@ -96,7 +101,7 @@ const Navbar = () => {
             </>
           ) : (
             <div className="hidden md:flex items-center space-x-1">
-              {navLinks.map(({ path, name, icon }) => (
+              {visibleNavLinks.map(({ path, name, icon }) => (
                 <Link
                   key={path}
                   to={path}
