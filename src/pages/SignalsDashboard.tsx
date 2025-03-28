@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -44,20 +43,9 @@ const SignalsDashboard = () => {
   
   const { signals: cachedSignals, addSignals } = useTradingSignals();
   
-  // On component mount, check if there are signals already in the component state or localStorage
-  // We want to preserve signals across tab changes but not load them automatically on a new session
   useEffect(() => {
-    // If we already have signals in our state, do nothing (this preserves signals across tab changes)
     if (signals.length > 0) return;
-    
-    // If we have cached signals from a previous session in the same browser session, use those
-    if (cachedSignals.length > 0) {
-      setSignals(cachedSignals);
-      setFilteredSignals(cachedSignals);
-      setLastUpdated(new Date());
-    }
-    // Note: We're not fetching signals from the API here anymore
-  }, [cachedSignals, signals.length]);
+  }, [signals.length]);
   
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
@@ -90,7 +78,6 @@ const SignalsDashboard = () => {
     }
   }, [toast, addSignals]);
   
-  // Auto refresh signals if enabled
   useEffect(() => {
     if (!autoRefresh) return;
     
@@ -103,7 +90,6 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
-  // Apply filters whenever signals or filter settings change
   useEffect(() => {
     let result = [...signals];
     
@@ -160,7 +146,6 @@ const SignalsDashboard = () => {
       const newSignals = await generateAllSignals();
       
       if (newSignals.length > 0) {
-        // Save previous signals and add new ones
         setSignals(prevSignals => {
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
