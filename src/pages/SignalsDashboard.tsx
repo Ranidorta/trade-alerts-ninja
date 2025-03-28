@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -35,7 +36,7 @@ const SignalsDashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<SignalStatus | "ALL">("ALL");
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -76,9 +77,8 @@ const SignalsDashboard = () => {
     }
   }, [toast, addSignals]);
   
-  useEffect(() => {
-    loadSignalsData();
-  }, [loadSignalsData]);
+  // Removed the automatic loadSignalsData on component mount
+  // Now signals will only load when the user clicks "Gerar Sinais" or refreshes manually
   
   useEffect(() => {
     if (!autoRefresh) return;
