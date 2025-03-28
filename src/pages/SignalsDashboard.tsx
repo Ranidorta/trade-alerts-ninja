@@ -21,7 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { generateAllSignals } from "@/lib/apiServices";
 import { fetchSignals } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -42,7 +42,17 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
   
-  const { addSignals } = useTradingSignals();
+  const { signals: cachedSignals, addSignals } = useTradingSignals();
+  
+  // On component mount, load signals from cache if they exist
+  useEffect(() => {
+    // Only load signals from cache if signals is empty
+    if (signals.length === 0 && cachedSignals.length > 0) {
+      setSignals(cachedSignals);
+      setFilteredSignals(cachedSignals);
+      setLastUpdated(new Date());
+    }
+  }, [cachedSignals, signals.length]);
   
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
@@ -69,17 +79,13 @@ const SignalsDashboard = () => {
         description: "Falha ao carregar sinais da API.",
         variant: "destructive"
       });
-      setSignals([]);
-      setFilteredSignals([]);
     } finally {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
   }, [toast, addSignals]);
   
-  // Removed the automatic loadSignalsData on component mount
-  // Now signals will only load when the user clicks "Gerar Sinais" or refreshes manually
-  
+  // Auto refresh signals if enabled
   useEffect(() => {
     if (!autoRefresh) return;
     
@@ -92,6 +98,7 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
+  // Apply filters whenever signals or filter settings change
   useEffect(() => {
     let result = [...signals];
     
@@ -148,6 +155,7 @@ const SignalsDashboard = () => {
       const newSignals = await generateAllSignals();
       
       if (newSignals.length > 0) {
+        // Save previous signals and add new ones
         setSignals(prevSignals => {
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
