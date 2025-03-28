@@ -73,7 +73,8 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
       });
       
       // Determine overall trend
-      if (transformedData.length > 0) {
+      const latestCandle = transformedData[0];
+      if (latestCandle) {
         // Look at the last 5 candles to determine trend
         const lastFiveCandles = transformedData.slice(0, 5);
         const increasingCandles = lastFiveCandles.filter(candle => candle.increasing).length;
