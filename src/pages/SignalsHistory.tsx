@@ -26,6 +26,7 @@ import {
   RefreshCw,
   TrendingUp,
   TrendingDown,
+  AlertTriangle
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -38,6 +39,8 @@ import {
   Cell,
   Legend
 } from "recharts";
+import ApiConnectionError from "@/components/signals/ApiConnectionError";
+import { config } from "@/config/env";
 
 const SignalsHistory = () => {
   const [activeTab, setActiveTab] = useState<"signals" | "performance">("signals");
@@ -109,6 +112,11 @@ const SignalsHistory = () => {
     return price !== undefined ? price.toFixed(2) : "N/A";
   };
 
+  // Verifica se houve erro de conexão com a API
+  if (error && error.message && error.message.includes("fetch")) {
+    return <ApiConnectionError apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} />;
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
@@ -127,6 +135,29 @@ const SignalsHistory = () => {
           Atualizar
         </button>
       </div>
+
+      {/* Exibe mensagem de erro caso ocorra algum erro diferente de falha de conexão */}
+      {error && !error.message.includes("fetch") && (
+        <Card className="bg-destructive/10 border-destructive/20 mb-6">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <AlertTriangle className="h-6 w-6 text-destructive mt-1 flex-shrink-0" />
+              <div>
+                <h3 className="text-lg font-medium text-destructive mb-2">Erro ao carregar sinais</h3>
+                <p className="text-destructive/80 mb-4">
+                  {error.message || "Ocorreu um erro desconhecido ao tentar carregar os sinais."}
+                </p>
+                <button 
+                  onClick={handleRefresh}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md"
+                >
+                  Tentar Novamente
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -229,10 +260,6 @@ const SignalsHistory = () => {
                 <div className="py-8 text-center">
                   <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
                   <p className="mt-2 text-sm text-muted-foreground">Carregando sinais...</p>
-                </div>
-              ) : error ? (
-                <div className="py-8 text-center">
-                  <p className="text-red-500">Erro ao carregar sinais: {error}</p>
                 </div>
               ) : filteredSignals.length === 0 ? (
                 <div className="py-8 text-center">

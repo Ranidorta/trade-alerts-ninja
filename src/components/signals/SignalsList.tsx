@@ -3,6 +3,8 @@ import React from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
+import ApiConnectionError from "@/components/signals/ApiConnectionError";
+import { config } from "@/config/env";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -29,7 +31,13 @@ const SignalsList = ({
     );
   }
 
+  // Se houver erro, verifica se é erro de conexão com a API
   if (error) {
+    // Erro genérico de conexão com a API
+    if (error.message && error.message.includes("fetch")) {
+      return <ApiConnectionError apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} />;
+    }
+    
     // Tratamento especial para erros de autenticação
     if (error.message && error.message.includes("401")) {
       return (
@@ -45,9 +53,10 @@ const SignalsList = ({
       );
     }
     
+    // Erro genérico
     return (
       <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-destructive">Erro ao carregar sinais. Tente novamente mais tarde.</p>
+        <p className="text-lg text-destructive">Erro ao carregar sinais: {error.message || "Erro desconhecido"}</p>
       </div>
     );
   }

@@ -1,9 +1,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
+import { fetchSignals } from "@/lib/signalsApi";
+import { config } from "@/config/env";
 
 // Using a fallback URL for the backend
-const BACKEND_URL = "https://trade-alerts-backend.onrender.com"; 
+const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
 
 // Set up localStorage key for cached signals
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
@@ -11,7 +13,7 @@ const SIGNALS_STORAGE_KEY = "archived_trading_signals";
 export const useTradingSignals = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   // Load signals from localStorage on initial mount
   useEffect(() => {
@@ -20,6 +22,7 @@ export const useTradingSignals = () => {
       try {
         const parsedSignals = JSON.parse(cachedSignals);
         setSignals(parsedSignals);
+        console.log("Loaded cached signals from localStorage:", parsedSignals.length);
       } catch (err) {
         console.error("Error parsing cached signals:", err);
         // Invalid data in localStorage, clear it
@@ -33,6 +36,7 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
+      console.log(`Tentando buscar sinais de: ${BACKEND_URL}/signals?strategy=CLASSIC`);
       // Try to fetch from remote API first
       const response = await fetch(`${BACKEND_URL}/signals?strategy=CLASSIC`);
       let newSignals: TradingSignal[] = [];
@@ -41,16 +45,19 @@ export const useTradingSignals = () => {
         // If remote API is available, use that data
         const data = await response.json();
         newSignals = data;
+        console.log("Sinais carregados com sucesso da API:", newSignals.length);
       } else {
+        console.warn(`API retornou status ${response.status}. Tentando usar sinais em cache.`);
         // If remote API fails, check if we have signals in localStorage
         const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
         if (cachedSignals) {
           newSignals = JSON.parse(cachedSignals);
+          console.log("Usando sinais em cache:", newSignals.length);
         }
         
         // Still no signals? Throw an error
         if (newSignals.length === 0) {
-          throw new Error("Failed to fetch signals from API and no cached signals available");
+          throw new Error(`Falha ao buscar sinais da API (status: ${response.status}) e nenhum sinal em cache disponível`);
         }
       }
       
@@ -94,7 +101,7 @@ export const useTradingSignals = () => {
       localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
     } catch (err: any) {
       console.error("Error fetching trading signals:", err);
-      setError(err.message || "Unknown error");
+      setError(err);
     } finally {
       setLoading(false);
     }
