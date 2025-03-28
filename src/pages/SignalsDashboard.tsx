@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { 
@@ -28,6 +27,8 @@ import SignalsSidebar from "@/components/signals/SignalsSidebar";
 import CandlestickChart from "@/components/signals/CandlestickChart";
 import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
 import SignalHistorySummary from "@/components/signals/SignalHistorySummary";
+import { saveSignalsToHistory } from "@/lib/signalHistoryService";
+import { fetchSignals } from "@/lib/signalsApi";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -65,6 +66,9 @@ const SignalsDashboard = () => {
         }
         
         addSignals(fetchedSignals);
+        
+        // Save signals to history
+        saveSignalsToHistory(fetchedSignals);
       } else {
         toast({
           title: "Nenhum sinal encontrado",
@@ -175,6 +179,10 @@ const SignalsDashboard = () => {
               title: "Novos sinais gerados",
               description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`,
             });
+
+            // Save new signals to history
+            saveSignalsToHistory(uniqueNewSignals);
+            
             return [...uniqueNewSignals, ...prevSignals];
           }
           
@@ -417,8 +425,5 @@ const SignalsDashboard = () => {
     </div>
   );
 };
-
-// Add the missing import from signalsApi
-import { fetchSignals } from "@/lib/signalsApi";
 
 export default SignalsDashboard;

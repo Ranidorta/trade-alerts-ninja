@@ -1,288 +1,216 @@
 
-import { useEffect, useState, useCallback } from "react";
-import { fetchBybitKlines } from "@/lib/apiServices";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  Line,
-  ReferenceLine
-} from "recharts";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { PriceTarget } from "@/lib/types";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine } from "recharts";
+import { AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
 
 interface CandlestickChartProps {
   symbol: string;
   entryPrice?: number;
   stopLoss?: number;
-  targets?: { level: number; price: number; hit?: boolean }[];
+  targets?: PriceTarget[];
 }
 
 export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets }: CandlestickChartProps) {
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [interval, setInterval] = useState<string>("15");
-  const [trend, setTrend] = useState<"BULLISH" | "BEARISH" | "NEUTRAL">("NEUTRAL");
+  const [price, setPrice] = useState<number | null>(null);
+  const [trend, setTrend] = useState<"UP" | "DOWN" | "NEUTRAL">("NEUTRAL");
+  const [priceHistory, setPriceHistory] = useState<{time: number, price: number}[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
-  const fetchChartData = useCallback(async () => {
-    if (!symbol) return;
-    
-    setIsLoading(true);
+  // Generate mock price data for the demo
+  useEffect(() => {
+    if (!symbol) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setError(null);
-    
-    try {
-      const klineData = await fetchBybitKlines(symbol, interval, 100);
+
+    // Start with the entry price or a random price
+    const basePrice = entryPrice || (Math.random() * 1000 + 100);
+    setPrice(basePrice);
+
+    // Function to update price
+    const updatePrice = () => {
+      // Random small change (+/- 0.5%)
+      const change = basePrice * (Math.random() * 0.01 - 0.005);
       
-      if (!klineData || klineData.length === 0) {
-        setError("Não foi possível carregar os dados do gráfico");
-        return;
-      }
-      
-      // Transform Bybit data to format that Recharts can use
-      const transformedData = klineData.map((candle: any) => {
-        const timestamp = parseInt(candle[0]);
-        const open = parseFloat(candle[1]);
-        const high = parseFloat(candle[2]);
-        const low = parseFloat(candle[3]);
-        const close = parseFloat(candle[4]);
-        const volume = parseFloat(candle[5]);
+      setPrice((prev) => {
+        if (!prev) return basePrice;
         
-        const increasing = close >= open;
+        const newPrice = prev + change;
         
-        return {
-          timestamp,
-          time: new Date(timestamp).toLocaleTimeString(),
-          date: new Date(timestamp).toLocaleDateString(),
-          open,
-          high,
-          low,
-          close,
-          volume,
-          increasing,
-          color: increasing ? "#16a34a" : "#dc2626",
-          barSize: Math.abs(close - open),
-          barPosition: Math.min(open, close),
-        };
-      });
-      
-      // Determine overall trend
-      const latestCandle = transformedData[0];
-      if (latestCandle) {
-        // Look at the last 5 candles to determine trend
-        const lastFiveCandles = transformedData.slice(0, 5);
-        const increasingCandles = lastFiveCandles.filter(candle => candle.increasing).length;
-        
-        if (increasingCandles >= 3) {
-          setTrend("BULLISH");
-        } else if (increasingCandles <= 2) {
-          setTrend("BEARISH");
-        } else {
-          setTrend("NEUTRAL");
+        // Update trend
+        if (newPrice > prev) {
+          setTrend("UP");
+        } else if (newPrice < prev) {
+          setTrend("DOWN");
         }
+        
+        // Update price history
+        setPriceHistory((prev) => [
+          ...prev, 
+          { time: Date.now(), price: newPrice }
+        ].slice(-20)); // Keep last 20 data points
+        
+        return newPrice;
+      });
+    };
+
+    // Update price immediately
+    updatePrice();
+    
+    // Setup interval for price updates
+    intervalRef.current = window.setInterval(updatePrice, 3000);
+    
+    // Clear loading after initial data
+    setLoading(false);
+
+    // Cleanup function
+    return () => {
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-      
-      // Sort data chronologically for the chart
-      setChartData(transformedData.reverse());
-    } catch (err) {
-      console.error("Error fetching candlestick data:", err);
-      setError("Erro ao carregar dados do gráfico");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [symbol, interval]);
+    };
+  }, [symbol, entryPrice]);
 
-  useEffect(() => {
-    if (symbol) {
-      fetchChartData();
-    }
-  }, [symbol, fetchChartData]);
+  // Format price with 2 decimal places
+  const formatPrice = (price: number | null) => {
+    if (price === null) return "—";
+    return price.toFixed(2);
+  };
 
-  // Autorefresh every 60 seconds
-  useEffect(() => {
-    if (!symbol) return;
-    
-    const intervalId = setInterval(() => {
-      fetchChartData();
-    }, 60000); // Refresh every 60 seconds
-    
-    return () => clearInterval(intervalId);
-  }, [symbol, fetchChartData]);
-
-  if (isLoading && chartData.length === 0) {
+  if (loading) {
     return (
-      <Card className="h-full">
-        <CardContent className="p-6 h-full flex items-center justify-center">
-          <div className="flex flex-col items-center">
-            <Loader2 className="h-8 w-8 text-primary animate-spin mb-2" />
-            <p className="text-sm text-muted-foreground">Carregando dados do gráfico...</p>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl flex items-center justify-between">
+            <div>Carregando gráfico...</div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="h-64 flex items-center justify-center">
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl flex items-center justify-between">
+            <div>Erro ao carregar gráfico</div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="h-64 flex flex-col items-center justify-center">
+          <AlertCircle className="w-12 h-12 text-destructive mb-4" />
+          <div className="text-destructive">
+            {error.message || "Ocorreu um erro ao carregar os dados do gráfico."}
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  if (error && chartData.length === 0) {
+  if (!symbol) {
     return (
-      <Card className="h-full">
-        <CardContent className="p-6 h-full flex items-center justify-center">
-          <div className="flex flex-col items-center">
-            <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-            <p className="text-sm font-medium mb-1">Erro ao carregar o gráfico</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
-          </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xl">Gráfico de Preço</CardTitle>
+        </CardHeader>
+        <CardContent className="h-64 flex items-center justify-center text-muted-foreground">
+          Selecione um sinal para ver o gráfico
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <CardTitle className="text-xl flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle>{symbol} - Gráfico</CardTitle>
-            <Badge
-              variant={
-                trend === "BULLISH" ? "success" : 
-                trend === "BEARISH" ? "destructive" : 
-                "outline"
-              }
-              className="flex items-center gap-1"
-            >
-              {trend === "BULLISH" && <TrendingUp className="h-3 w-3" />}
-              {trend === "BEARISH" && <TrendingDown className="h-3 w-3" />}
-              {trend}
+            {symbol} 
+            <Badge variant={trend === "UP" ? "success" : trend === "DOWN" ? "destructive" : "outline"}>
+              {trend === "UP" ? (
+                <div className="flex items-center">
+                  <TrendingUp className="w-3 h-3 mr-1" />
+                  Subindo
+                </div>
+              ) : trend === "DOWN" ? (
+                <div className="flex items-center">
+                  <TrendingDown className="w-3 h-3 mr-1" />
+                  Caindo
+                </div>
+              ) : (
+                "Neutro"
+              )}
             </Badge>
           </div>
-          <div className="flex gap-1">
-            {["5", "15", "30", "60", "240"].map((timeframe) => (
-              <Badge
-                key={timeframe}
-                variant={interval === timeframe ? "default" : "outline"}
-                className="cursor-pointer"
-                onClick={() => setInterval(timeframe)}
-              >
-                {timeframe}m
-              </Badge>
-            ))}
+          <div className="text-2xl font-bold">
+            ${formatPrice(price)}
           </div>
-        </div>
+        </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 pt-2">
-        {chartData.length > 0 ? (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                data={chartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  scale="auto" 
-                  tick={{ fontSize: 10 }}
-                  tickFormatter={(value) => value.split('/').slice(0, 2).join('/')}
-                />
-                <YAxis 
-                  domain={['auto', 'auto']} 
-                  tickFormatter={(value) => value.toFixed(2)}
-                  tick={{ fontSize: 10 }}
-                />
-                <Tooltip
-                  formatter={(value: any) => value.toFixed(4)}
-                  labelFormatter={(label) => `Data: ${label}`}
-                  contentStyle={{ fontSize: '12px' }}
-                />
-                <Legend />
-                <Bar
-                  dataKey="barSize"
-                  name="Candle"
-                  fill="var(--color)"
-                  stroke="var(--color)"
-                  yAxisId={0}
-                  barSize={6}
-                  isAnimationActive={false}
-                  shape={(props) => {
-                    const { x, y, width, height, color } = props;
-                    return (
-                      <g>
-                        <line
-                          x1={x + width / 2}
-                          y1={y}
-                          x2={x + width / 2}
-                          y2={y + height}
-                          stroke={color}
-                          strokeWidth={width}
-                        />
-                      </g>
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="high"
-                  name="Máxima"
-                  stroke="#16a34a"
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="low"
-                  name="Mínima"
-                  stroke="#dc2626"
-                  dot={false}
-                  activeDot={false}
-                  isAnimationActive={false}
-                />
-                
-                {/* Reference lines for signal information */}
-                {entryPrice && (
-                  <ReferenceLine 
-                    y={entryPrice} 
-                    stroke="#2563eb" 
-                    strokeDasharray="3 3"
-                    label={{ value: 'Entrada', position: 'insideBottomRight', fill: '#2563eb', fontSize: 10 }}
-                  />
-                )}
-                {stopLoss && (
-                  <ReferenceLine 
-                    y={stopLoss} 
-                    stroke="#dc2626" 
-                    strokeDasharray="3 3"
-                    label={{ value: 'Stop', position: 'insideBottomRight', fill: '#dc2626', fontSize: 10 }}
-                  />
-                )}
-                {targets && targets.map((target, index) => (
-                  <ReferenceLine 
-                    key={`target-${index}`}
-                    y={target.price} 
-                    stroke={target.hit ? "#16a34a" : "#f59e0b"} 
-                    strokeDasharray="3 3"
-                    label={{ 
-                      value: `TP${target.level}`, 
-                      position: 'insideBottomRight', 
-                      fill: target.hit ? "#16a34a" : "#f59e0b",
-                      fontSize: 10
-                    }}
-                  />
-                ))}
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="h-[400px] flex items-center justify-center">
-            <p className="text-muted-foreground">Nenhum dado disponível</p>
-          </div>
-        )}
+      <CardContent>
+        <div className="h-64">
+          <LineChart width={600} height={250} data={priceHistory} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="time" tick={false} />
+            <YAxis domain={['auto', 'auto']} />
+            <Tooltip 
+              labelFormatter={() => "Preço"} 
+              formatter={(value: number) => [`$${value.toFixed(2)}`, "Preço"]}
+            />
+            <Legend />
+            <Line 
+              type="monotone" 
+              dataKey="price" 
+              stroke="#8884d8" 
+              name="Preço" 
+              dot={false}
+              isAnimationActive={false}
+            />
+            
+            {/* Entry price line */}
+            {entryPrice && (
+              <ReferenceLine 
+                y={entryPrice} 
+                stroke="green" 
+                strokeDasharray="3 3"
+                label={{ value: `Entrada: $${entryPrice.toFixed(2)}`, position: 'insideTopRight' }}
+              />
+            )}
+            
+            {/* Stop loss line */}
+            {stopLoss && (
+              <ReferenceLine 
+                y={stopLoss} 
+                stroke="red" 
+                strokeDasharray="3 3"
+                label={{ value: `SL: $${stopLoss.toFixed(2)}`, position: 'insideBottomRight' }}
+              />
+            )}
+            
+            {/* Target lines */}
+            {targets && targets.map((target, index) => (
+              <ReferenceLine 
+                key={`target-${index}`}
+                y={target.price} 
+                stroke="blue" 
+                strokeDasharray="3 3"
+                label={{ value: `TP${target.level}: $${target.price.toFixed(2)}`, position: 'insideTopRight' }}
+              />
+            ))}
+          </LineChart>
+        </div>
       </CardContent>
     </Card>
   );

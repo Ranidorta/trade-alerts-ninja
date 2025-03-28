@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { format } from "date-fns";
 import { 
   ArrowUp, 
@@ -45,36 +44,58 @@ import {
 } from "recharts";
 import ApiConnectionError from "@/components/signals/ApiConnectionError";
 import { config } from "@/config/env";
+import { 
+  getSignalsHistory, 
+  updateAllSignalsStatus, 
+  analyzeSignalsHistory 
+} from "@/lib/signalHistoryService";
 
 const SignalsHistory = () => {
   const [activeTab, setActiveTab] = useState<"signals" | "performance">("signals");
   const [resultTab, setResultTab] = useState("all");
-  const { signals, loading, error, fetchSignals } = useTradingSignals();
+  const [signals, setSignals] = useState<TradingSignal[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
   const [forcingLocalMode, setForcingLocalMode] = useState(
     localStorage.getItem("force_local_mode") === "true"
   );
+  const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
 
   useEffect(() => {
-    fetchSignals();
-  }, [fetchSignals]);
+    loadSignalsHistory();
+  }, []);
 
-  const handleRefresh = () => {
-    // Clear local mode flag if it's set
-    if (forcingLocalMode) {
-      localStorage.removeItem("force_local_mode");
-      setForcingLocalMode(false);
+  const loadSignalsHistory = async () => {
+    setLoading(true);
+    try {
+      const historySignals = getSignalsHistory();
+      
+      const updatedSignals = await updateAllSignalsStatus();
+      
+      setSignals(updatedSignals);
+      
+      const metrics = analyzeSignalsHistory();
+      setPerformanceMetrics(metrics);
+      
+    } catch (err: any) {
+      console.error("Error loading signal history:", err);
+      setError(err);
+    } finally {
+      setLoading(false);
     }
-    
-    fetchSignals();
+  };
+
+  const handleRefresh = async () => {
     toast({
       title: "Atualizando dados",
-      description: "Buscando os sinais mais recentes...",
+      description: "Atualizando status dos sinais históricos...",
     });
+    
+    await loadSignalsHistory();
   };
 
   const handleLocalModeClick = () => {
-    // Set local mode flag and reload
     localStorage.setItem("force_local_mode", "true");
     setForcingLocalMode(true);
     
@@ -86,7 +107,6 @@ const SignalsHistory = () => {
     window.location.reload();
   };
 
-  // Filter signals based on result tab
   const filteredSignals = signals.filter(signal => {
     if (resultTab === "all") return true;
     if (resultTab === "profit") return signal.result === 1; // Winning signals
@@ -94,27 +114,22 @@ const SignalsHistory = () => {
     return true;
   });
 
-  // Calculate performance metrics
-  const winningSignals = signals.filter(s => s.result === 1);
-  const losingSignals = signals.filter(s => s.result === 0);
-  const pendingSignals = signals.filter(s => s.result === undefined);
-  
-  const winRate = signals.length > 0 
-    ? ((winningSignals.length / (winningSignals.length + losingSignals.length)) * 100).toFixed(2)
-    : "0";
+  const formatPrice = (price?: number) => {
+    return price !== undefined ? price.toFixed(2) : "N/A";
+  };
 
-  // Prepare chart data
-  const performanceData = [
-    { name: "Vencedores", value: winningSignals.length, color: "#10b981" },
-    { name: "Perdedores", value: losingSignals.length, color: "#ef4444" },
-    { name: "Pendentes", value: pendingSignals.length, color: "#f59e0b" }
-  ];
-  
-  // For daily performance chart
+  const formatProfit = (profit?: number) => {
+    if (profit === undefined) return "N/A";
+    const formattedProfit = profit.toFixed(2);
+    return `${profit >= 0 ? '+' : ''}${formattedProfit}%`;
+  };
+
   const getDailyPerformanceData = () => {
     const dailyData: {[key: string]: {date: string, wins: number, losses: number}} = {};
     
     signals.forEach(signal => {
+      if (!signal.createdAt) return;
+      
       const date = new Date(signal.createdAt).toLocaleDateString();
       
       if (!dailyData[date]) {
@@ -133,54 +148,18 @@ const SignalsHistory = () => {
     );
   };
 
-  // Format price with 2 decimal places
-  const formatPrice = (price?: number) => {
-    return price !== undefined ? price.toFixed(2) : "N/A";
+  const getPerformanceData = () => {
+    const winningSignals = signals.filter(s => s.result === 1);
+    const losingSignals = signals.filter(s => s.result === 0);
+    const pendingSignals = signals.filter(s => s.result === undefined);
+
+    return [
+      { name: "Vencedores", value: winningSignals.length, color: "#10b981" },
+      { name: "Perdedores", value: losingSignals.length, color: "#ef4444" },
+      { name: "Pendentes", value: pendingSignals.length, color: "#f59e0b" }
+    ];
   };
 
-  // Format profit/loss percentage
-  const formatProfit = (profit?: number) => {
-    if (profit === undefined) return "N/A";
-    const formattedProfit = profit.toFixed(2);
-    return `${profit >= 0 ? '+' : ''}${formattedProfit}%`;
-  };
-
-  // Calculate estimated profit/loss percentage based on targets hit
-  const calculateEstimatedProfit = (signal: TradingSignal) => {
-    if (signal.profit !== undefined) return signal.profit;
-    
-    // If we have explicit profit information, use that
-    if (signal.result === 1) {
-      // Winning trade - estimate based on targets hit
-      let estimatedProfit = 0;
-      
-      if (signal.targets) {
-        const tp1Hit = signal.targets[0]?.hit;
-        const tp2Hit = signal.targets[1]?.hit;
-        const tp3Hit = signal.targets[2]?.hit;
-        
-        if (tp3Hit) estimatedProfit = 8; // Assuming 8% for TP3
-        else if (tp2Hit) estimatedProfit = 5; // Assuming 5% for TP2
-        else if (tp1Hit) estimatedProfit = 3; // Assuming 3% for TP1
-      }
-      
-      return estimatedProfit;
-    } else if (signal.result === 0) {
-      // Losing trade - estimate based on stop loss
-      if (signal.entryPrice && signal.stopLoss) {
-        if (signal.direction === "BUY") {
-          return ((signal.stopLoss / signal.entryPrice) - 1) * 100;
-        } else {
-          return ((signal.entryPrice / signal.stopLoss) - 1) * 100;
-        }
-      }
-      return -1.5; // Default loss estimate
-    }
-    
-    return 0; // Pending or unknown result
-  };
-
-  // Verifica se houve erro de conexão com a API e não estamos no modo local forçado
   if (error && !forcingLocalMode && error.message && (error.message.includes("fetch") || error.message.includes("network"))) {
     return <ApiConnectionError 
       apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} 
@@ -218,12 +197,11 @@ const SignalsHistory = () => {
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md flex items-center gap-2"
           >
             <RefreshCw className="h-5 w-5" />
-            Atualizar
+            Atualizar Status
           </button>
         </div>
       </div>
 
-      {/* Exibe mensagem de erro caso ocorra algum erro diferente de falha de conexão */}
       {error && !error.message.includes("fetch") && !error.message.includes("network") && (
         <Card className="bg-destructive/10 border-destructive/20 mb-6">
           <CardContent className="p-6">
@@ -246,7 +224,6 @@ const SignalsHistory = () => {
         </Card>
       )}
 
-      {/* Local Mode Banner */}
       {forcingLocalMode && (
         <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30 mb-6">
           <CardContent className="p-4">
@@ -260,7 +237,6 @@ const SignalsHistory = () => {
         </Card>
       )}
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
@@ -277,7 +253,7 @@ const SignalsHistory = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex items-center gap-2">
-              {winningSignals.length}
+              {signals.filter(s => s.result === 1).length}
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
@@ -289,7 +265,7 @@ const SignalsHistory = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold flex items-center gap-2">
-              {losingSignals.length}
+              {signals.filter(s => s.result === 0).length}
               <TrendingDown className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
@@ -300,12 +276,13 @@ const SignalsHistory = () => {
             <CardTitle className="text-sm font-medium">Taxa de Acerto</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{winRate}%</div>
+            <div className="text-2xl font-bold">
+              {performanceMetrics ? performanceMetrics.winRate.toFixed(2) : 0}%
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Tabs (Signals vs Performance) */}
       <Tabs value={activeTab} onValueChange={(value: "signals" | "performance") => setActiveTab(value)} className="mb-4">
         <div className="flex justify-end mb-4">
           <TabsList>
@@ -327,7 +304,6 @@ const SignalsHistory = () => {
         </div>
 
         <TabsContent value="signals">
-          {/* Result Filter Tabs */}
           <div className="flex mb-4">
             <TabsList>
               <TabsTrigger 
@@ -354,7 +330,6 @@ const SignalsHistory = () => {
             </TabsList>
           </div>
 
-          {/* Signals Table */}
           <Card className="overflow-hidden">
             <CardHeader className="pb-0">
               <CardTitle className="text-xl">Histórico de Sinais Detalhado</CardTitle>
@@ -370,7 +345,7 @@ const SignalsHistory = () => {
                 </div>
               ) : filteredSignals.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-muted-foreground">Nenhum sinal encontrado.</p>
+                  <p className="text-muted-foreground">Nenhum sinal encontrado. Gere sinais na aba "Sinais" primeiro.</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -396,7 +371,6 @@ const SignalsHistory = () => {
                         const isLoss = signal.result === 0;
                         const isPending = signal.result === undefined;
                         
-                        // Generate formatted date time
                         let dateTime = "Data desconhecida";
                         try {
                           if (signal.createdAt) {
@@ -405,11 +379,6 @@ const SignalsHistory = () => {
                         } catch (e) {
                           console.error("Error formatting date:", e);
                         }
-                        
-                        // Calculate estimated profit
-                        const profitValue = signal.profit !== undefined 
-                          ? signal.profit 
-                          : calculateEstimatedProfit(signal);
                         
                         return (
                           <TableRow 
@@ -456,7 +425,6 @@ const SignalsHistory = () => {
                             <TableCell>{formatPrice(signal.entryPrice)}</TableCell>
                             <TableCell>{formatPrice(signal.stopLoss)}</TableCell>
                             
-                            {/* Target 1 */}
                             <TableCell className="text-center">
                               {signal.targets && signal.targets[0] ? (
                                 <div className="flex flex-col items-center">
@@ -474,7 +442,6 @@ const SignalsHistory = () => {
                               )}
                             </TableCell>
                             
-                            {/* Target 2 */}
                             <TableCell className="text-center">
                               {signal.targets && signal.targets[1] ? (
                                 <div className="flex flex-col items-center">
@@ -492,7 +459,6 @@ const SignalsHistory = () => {
                               )}
                             </TableCell>
                             
-                            {/* Target 3 */}
                             <TableCell className="text-center">
                               {signal.targets && signal.targets[2] ? (
                                 <div className="flex flex-col items-center">
@@ -510,27 +476,25 @@ const SignalsHistory = () => {
                               )}
                             </TableCell>
                             
-                            {/* Profit/Loss */}
                             <TableCell>
                               <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                profitValue > 0 
+                                (signal.profit || 0) > 0 
                                   ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
-                                  : profitValue < 0
+                                  : (signal.profit || 0) < 0
                                   ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
                                   : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
                               }`}>
-                                {profitValue > 0 ? (
+                                {(signal.profit || 0) > 0 ? (
                                   <TrendingUp className="w-3 h-3 mr-1" />
-                                ) : profitValue < 0 ? (
+                                ) : (signal.profit || 0) < 0 ? (
                                   <TrendingDown className="w-3 h-3 mr-1" />
                                 ) : (
                                   <Percent className="w-3 h-3 mr-1" />
                                 )}
-                                {formatProfit(profitValue)}
+                                {formatProfit(signal.profit)}
                               </div>
                             </TableCell>
                             
-                            {/* Result */}
                             <TableCell>
                               <div className={`flex justify-center items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                                 isWin 
@@ -590,7 +554,7 @@ const SignalsHistory = () => {
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
-                            data={performanceData}
+                            data={getPerformanceData()}
                             margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" />
@@ -602,7 +566,7 @@ const SignalsHistory = () => {
                             />
                             <Legend />
                             <Bar dataKey="value" name="Quantidade de Sinais">
-                              {performanceData.map((entry, index) => (
+                              {getPerformanceData().map((entry, index) => (
                                 <Cell 
                                   key={`cell-${index}`} 
                                   fill={entry.color} 
@@ -636,8 +600,66 @@ const SignalsHistory = () => {
                     </div>
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-medium mb-4">Estatísticas</h3>
+                  {performanceMetrics && performanceMetrics.symbolPerformance && (
+                    <div className="mt-8">
+                      <h3 className="text-lg font-medium mb-4">Desempenho por Símbolo</h3>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-border">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Símbolo
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Total
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Vencedores
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Perdedores
+                              </th>
+                              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                Taxa de Acerto
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {performanceMetrics.symbolPerformance.map((item: any) => (
+                              <tr key={item.symbol}>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  {item.symbol}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  {item.total}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  {item.wins}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  {item.losses}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span 
+                                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                      item.winRate >= 70 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                      item.winRate >= 50 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 
+                                      'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                    }`}
+                                  >
+                                    {item.winRate.toFixed(2)}%
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-8">
+                    <h3 className="text-lg font-medium mb-4">Estatísticas Gerais</h3>
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-border">
                         <thead className="bg-muted/50">
@@ -661,10 +683,18 @@ const SignalsHistory = () => {
                           </tr>
                           <tr>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              Sinais Completados
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              {signals.filter(s => s.status === "COMPLETED").length}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               Sinais Vencedores
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {winningSignals.length}
+                              {signals.filter(s => s.result === 1).length}
                             </td>
                           </tr>
                           <tr>
@@ -672,7 +702,7 @@ const SignalsHistory = () => {
                               Sinais Perdedores
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {losingSignals.length}
+                              {signals.filter(s => s.result === 0).length}
                             </td>
                           </tr>
                           <tr>
@@ -682,23 +712,21 @@ const SignalsHistory = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <span 
                                 className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  parseFloat(winRate) >= 70 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
-                                  parseFloat(winRate) >= 50 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 
+                                  performanceMetrics && performanceMetrics.winRate >= 70 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                  performanceMetrics && performanceMetrics.winRate >= 50 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 
                                   'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                 }`}
                               >
-                                {winRate}%
+                                {performanceMetrics ? performanceMetrics.winRate.toFixed(2) : 0}%
                               </span>
                             </td>
                           </tr>
                           <tr>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              Média de Lucro por Sinal
+                              Lucro Médio por Sinal
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              {signals.length > 0 ? 
-                                (((winningSignals.length * 3) - (losingSignals.length * 1.5)) / signals.length).toFixed(2) + "%"
-                                : "0%"}
+                              {performanceMetrics ? performanceMetrics.avgProfit.toFixed(2) + "%" : "0%"}
                             </td>
                           </tr>
                         </tbody>
