@@ -26,9 +26,9 @@ import { useTradingSignals } from "@/hooks/useTradingSignals";
 import SignalsSidebar from "@/components/signals/SignalsSidebar";
 import CandlestickChart from "@/components/signals/CandlestickChart";
 import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
-import SignalHistorySummary from "@/components/signals/SignalHistorySummary";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
+import SignalCard from "@/components/SignalCard";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -60,14 +60,12 @@ const SignalsDashboard = () => {
         setSignals(fetchedSignals);
         setFilteredSignals(fetchedSignals);
         
-        // Select first signal as active by default
         if (!activeSignal) {
           setActiveSignal(fetchedSignals[0]);
         }
         
         addSignals(fetchedSignals);
         
-        // Save signals to history
         saveSignalsToHistory(fetchedSignals);
       } else {
         toast({
@@ -125,7 +123,6 @@ const SignalsDashboard = () => {
     
     setFilteredSignals(result);
     
-    // Update active signal if it's been filtered out
     if (activeSignal && !result.some(s => s.id === activeSignal.id) && result.length > 0) {
       setActiveSignal(result[0]);
     } else if (result.length === 0) {
@@ -170,7 +167,6 @@ const SignalsDashboard = () => {
           if (uniqueNewSignals.length > 0) {
             addSignals(uniqueNewSignals);
             
-            // Set first new signal as active
             if (!activeSignal) {
               setActiveSignal(uniqueNewSignals[0]);
             }
@@ -180,7 +176,6 @@ const SignalsDashboard = () => {
               description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`,
             });
 
-            // Save new signals to history
             saveSignalsToHistory(uniqueNewSignals);
             
             return [...uniqueNewSignals, ...prevSignals];
@@ -390,8 +385,7 @@ const SignalsDashboard = () => {
       
       {signals.length > 0 && (
         <>
-          <div className="grid grid-cols-12 gap-6 mb-6">
-            {/* Sidebar with signals list */}
+          <div className="grid grid-cols-12 gap-6">
             <div className="col-span-12 md:col-span-3">
               <SignalsSidebar 
                 signals={filteredSignals}
@@ -401,25 +395,32 @@ const SignalsDashboard = () => {
               />
             </div>
             
-            {/* Main content area */}
-            <div className="col-span-12 md:col-span-9 space-y-6">
-              {/* Candlestick chart */}
-              <CandlestickChart 
-                symbol={activeSignal?.symbol || ""}
-                entryPrice={activeSignal?.entryPrice}
-                stopLoss={activeSignal?.stopLoss}
-                targets={activeSignal?.targets}
-              />
-              
-              {/* News panel */}
-              <CryptoNewsPanel 
-                symbol={activeSignal?.symbol || ""}
-              />
+            <div className="col-span-12 md:col-span-9">
+              <div className="grid grid-cols-12 gap-6">
+                <div className="col-span-12 md:col-span-8">
+                  <CandlestickChart 
+                    symbol={activeSignal?.symbol || ""}
+                    entryPrice={activeSignal?.entryPrice}
+                    stopLoss={activeSignal?.stopLoss}
+                    targets={activeSignal?.targets}
+                  />
+                </div>
+                
+                <div className="col-span-12 md:col-span-4">
+                  <CryptoNewsPanel 
+                    symbol={activeSignal?.symbol || ""}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           
-          {/* History summary */}
-          <SignalHistorySummary signal={activeSignal} />
+          {activeSignal && (
+            <div className="mt-6">
+              <h3 className="text-xl font-bold mb-3">Detalhes do Sinal</h3>
+              <SignalCard signal={activeSignal} />
+            </div>
+          )}
         </>
       )}
     </div>

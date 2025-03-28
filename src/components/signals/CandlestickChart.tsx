@@ -94,7 +94,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
             <div>Carregando gráfico...</div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-64 flex items-center justify-center">
+        <CardContent className="h-[350px] flex items-center justify-center">
           <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"></div>
         </CardContent>
       </Card>
@@ -109,7 +109,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
             <div>Erro ao carregar gráfico</div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-64 flex flex-col items-center justify-center">
+        <CardContent className="h-[350px] flex flex-col items-center justify-center">
           <AlertCircle className="w-12 h-12 text-destructive mb-4" />
           <div className="text-destructive">
             {error.message || "Ocorreu um erro ao carregar os dados do gráfico."}
@@ -125,7 +125,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
         <CardHeader className="pb-2">
           <CardTitle className="text-xl">Gráfico de Preço</CardTitle>
         </CardHeader>
-        <CardContent className="h-64 flex items-center justify-center text-muted-foreground">
+        <CardContent className="h-[350px] flex items-center justify-center text-muted-foreground">
           Selecione um sinal para ver o gráfico
         </CardContent>
       </Card>
@@ -160,8 +160,14 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-64">
-          <LineChart width={600} height={250} data={priceHistory} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <div className="h-[350px]">
+          <LineChart 
+            width={600} 
+            height={300} 
+            data={priceHistory} 
+            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            className="w-full"
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="time" tick={false} />
             <YAxis domain={['auto', 'auto']} />

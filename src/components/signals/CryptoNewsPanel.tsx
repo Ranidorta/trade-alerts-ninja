@@ -61,19 +61,19 @@ export default function CryptoNewsPanel({ symbol }: CryptoNewsPanelProps) {
       </CardHeader>
       <CardContent className="p-0">
         {isLoading ? (
-          <div className="flex justify-center items-center h-[180px]">
+          <div className="flex justify-center items-center h-[300px]">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="flex justify-center items-center h-[180px] text-center px-4">
+          <div className="flex justify-center items-center h-[300px] text-center px-4">
             <p className="text-sm text-muted-foreground">{error}</p>
           </div>
         ) : news.length === 0 ? (
-          <div className="flex justify-center items-center h-[180px] text-center px-4">
+          <div className="flex justify-center items-center h-[300px] text-center px-4">
             <p className="text-sm text-muted-foreground">Nenhuma notícia encontrada</p>
           </div>
         ) : (
-          <ScrollArea className="h-[180px]">
+          <ScrollArea className="h-[300px]">
             <div className="px-6 py-2">
               {news.map((item, index) => (
                 <div 
