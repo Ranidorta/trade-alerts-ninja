@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
 import { useQuery } from "@tanstack/react-query";
 import SignalsList from "@/components/signals/SignalsList";
+import { useTradingSignals } from "@/hooks/useTradingSignals";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -40,6 +41,8 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const { toast } = useToast();
   
+  const { addSignals } = useTradingSignals();
+  
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
     
@@ -50,6 +53,8 @@ const SignalsDashboard = () => {
       if (fetchedSignals.length > 0) {
         setSignals(fetchedSignals);
         setFilteredSignals(fetchedSignals);
+        
+        addSignals(fetchedSignals);
       } else {
         toast({
           title: "Nenhum sinal encontrado",
@@ -69,7 +74,7 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast]);
+  }, [toast, addSignals]);
   
   useEffect(() => {
     loadSignalsData();
@@ -148,6 +153,8 @@ const SignalsDashboard = () => {
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
           
           if (uniqueNewSignals.length > 0) {
+            addSignals(uniqueNewSignals);
+            
             toast({
               title: "Novos sinais gerados",
               description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`,
