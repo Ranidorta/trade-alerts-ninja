@@ -1,15 +1,8 @@
 
 import { useEffect, useState, createContext, useContext, ReactNode } from 'react';
 import { UserProfile } from '@/lib/types';
-import { fetchUserProfile, setAuthToken, clearAuthToken } from '@/lib/signalsApi';
+import { setAuthToken, clearAuthToken } from '@/lib/signalsApi';
 import { useToast } from '@/components/ui/use-toast';
-
-// Declare global Firebase interface to avoid TypeScript errors
-declare global {
-  interface Window {
-    firebase: any;
-  }
-}
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -35,6 +28,9 @@ const AuthContext = createContext<AuthContextType>({
 // Hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
+// Mock user store for demo purposes - in a real app, this would be in a database
+const mockUsers: Record<string, UserProfile> = {};
+
 // Auth provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -42,117 +38,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
-  // Initialize Firebase Auth if available
-  const initializeFirebase = async () => {
-    try {
-      // Check if Firebase is available in the window object (from CDN)
-      if (!window.firebase) {
-        console.log('Firebase not available, loading from CDN');
-        
-        // Load Firebase from CDN if not already loaded
-        const script = document.createElement('script');
-        script.src = 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-        script.async = true;
-        document.head.appendChild(script);
-        
-        const authScript = document.createElement('script');
-        authScript.src = 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-        authScript.async = true;
-        document.head.appendChild(authScript);
-        
-        // Wait for scripts to load
-        await new Promise((resolve) => {
-          authScript.onload = resolve;
-        });
-      }
-
-      // Initialize Firebase if not already initialized
-      if (window.firebase && !window.firebase.apps?.length) {
-        // Replace with your Firebase config
-        const firebaseConfig = {
-          apiKey: "YOUR_API_KEY",
-          authDomain: "YOUR_AUTH_DOMAIN",
-          projectId: "YOUR_PROJECT_ID",
-          appId: "YOUR_APP_ID"
-        };
-
-        window.firebase.initializeApp(firebaseConfig);
-      }
-      
-      // Set up auth state listener
-      if (window.firebase && window.firebase.auth) {
-        window.firebase.auth().onAuthStateChanged(async (firebaseUser: any) => {
-          setIsLoading(true);
-          
-          if (firebaseUser) {
-            // User is signed in
-            const token = await firebaseUser.getIdToken();
-            setAuthToken(token);
-            
-            // Fetch user profile from our API
-            const userProfile = await fetchUserProfile();
-            setUser(userProfile || {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName,
-              isAuthenticated: true
-            });
-          } else {
-            // User is signed out
-            clearAuthToken();
-            setUser(null);
-          }
-          
-          setIsLoading(false);
-        });
-      } else {
-        // Firebase Auth not available, try API with stored token
-        const userProfile = await fetchUserProfile();
-        if (userProfile) {
-          setUser(userProfile);
-        }
-        setIsLoading(false);
-      }
-      
-      setIsInitialized(true);
-    } catch (error) {
-      console.error('Firebase initialization error:', error);
-      setIsLoading(false);
-      setIsInitialized(true);
-    }
-  };
-
   useEffect(() => {
-    initializeFirebase();
+    // Check if user is already logged in (from localStorage)
+    const initAuth = async () => {
+      setIsLoading(true);
+      try {
+        const storedUser = localStorage.getItem('trading-ninja-user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+          // Set auth token for API calls
+          if (parsedUser.token) {
+            setAuthToken(parsedUser.token);
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        // Clear potentially corrupted data
+        localStorage.removeItem('trading-ninja-user');
+        clearAuthToken();
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  // Auth methods
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
       
-      if (!window.firebase || !window.firebase.auth) {
-        throw new Error('Firebase Auth não está disponível');
+      // In a real app, you would make an API call to validate credentials
+      const normalizedEmail = email.toLowerCase().trim();
+      const mockUser = Object.values(mockUsers).find(
+        u => u.email.toLowerCase() === normalizedEmail
+      );
+      
+      if (!mockUser || mockUser.password !== password) {
+        throw new Error('Email ou senha incorretos.');
       }
       
-      await window.firebase.auth().signInWithEmailAndPassword(email, password);
+      // Create auth session
+      const userProfile: UserProfile = {
+        uid: mockUser.uid,
+        email: mockUser.email,
+        name: mockUser.name,
+        isAuthenticated: true,
+        token: `mock-token-${Date.now()}`
+      };
+      
+      // Store in localStorage
+      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
+      setAuthToken(userProfile.token);
+      setUser(userProfile);
       
       toast({
         title: "Login realizado com sucesso",
-        description: `Bem-vindo de volta, ${email}!`,
+        description: `Bem-vindo de volta, ${mockUser.name || mockUser.email}!`,
       });
     } catch (error: any) {
       console.error('Login error:', error);
       
-      let errorMessage = 'Erro ao fazer login. Tente novamente.';
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-        errorMessage = 'Email ou senha incorretos.';
-      }
-      
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: errorMessage,
+        description: error.message || 'Erro ao fazer login. Tente novamente.',
       });
       
       throw error;
@@ -165,18 +117,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       
-      if (!window.firebase || !window.firebase.auth) {
-        throw new Error('Firebase Auth não está disponível');
-      }
+      // Create a mock Google user
+      const timestamp = Date.now();
+      const userProfile: UserProfile = {
+        uid: `google-user-${timestamp}`,
+        email: `google-user-${timestamp}@example.com`,
+        name: `Google User ${timestamp}`,
+        isAuthenticated: true,
+        token: `mock-google-token-${timestamp}`
+      };
       
-      const provider = new window.firebase.auth.GoogleAuthProvider();
-      await window.firebase.auth().signInWithPopup(provider);
+      // Store in localStorage
+      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
+      setAuthToken(userProfile.token);
+      setUser(userProfile);
       
       toast({
         title: "Login com Google realizado",
         description: "Você foi autenticado com sucesso!",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Google login error:', error);
       
       toast({
@@ -195,10 +155,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       
-      if (window.firebase && window.firebase.auth) {
-        await window.firebase.auth().signOut();
-      }
-      
+      // Clear local storage and state
+      localStorage.removeItem('trading-ninja-user');
       clearAuthToken();
       setUser(null);
       
@@ -225,19 +183,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       
-      if (!window.firebase || !window.firebase.auth) {
-        throw new Error('Firebase Auth não está disponível');
+      // In a real app, you would make an API call to create a user
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Check if email is already registered
+      const emailExists = Object.values(mockUsers).some(
+        u => u.email.toLowerCase() === normalizedEmail
+      );
+      
+      if (emailExists) {
+        throw new Error('Este email já está em uso.');
       }
       
-      // Create user with email and password
-      const userCredential = await window.firebase.auth().createUserWithEmailAndPassword(email, password);
-      
-      // Update profile with name
-      if (userCredential.user) {
-        await userCredential.user.updateProfile({
-          displayName: name
-        });
+      if (password.length < 6) {
+        throw new Error('A senha precisa ter pelo menos 6 caracteres.');
       }
+      
+      // Create new user
+      const uid = `user-${Date.now()}`;
+      const newUser: UserProfile = {
+        uid,
+        email: normalizedEmail,
+        name,
+        password, // In a real app, NEVER store plain text passwords
+        isAuthenticated: true,
+        token: `mock-token-${Date.now()}`
+      };
+      
+      // Add to mock store
+      mockUsers[uid] = newUser;
+      
+      // Create auth session
+      const userProfile: UserProfile = {
+        uid: newUser.uid,
+        email: newUser.email,
+        name: newUser.name,
+        isAuthenticated: true,
+        token: newUser.token
+      };
+      
+      // Store in localStorage
+      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
+      setAuthToken(userProfile.token);
+      setUser(userProfile);
       
       toast({
         title: "Registro realizado com sucesso",
@@ -246,17 +234,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.error('Registration error:', error);
       
-      let errorMessage = 'Erro ao criar conta. Tente novamente.';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Este email já está em uso.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'A senha precisa ter pelo menos 6 caracteres.';
-      }
-      
       toast({
         variant: "destructive",
         title: "Erro no registro",
-        description: errorMessage,
+        description: error.message || 'Erro ao criar conta. Tente novamente.',
       });
       
       throw error;

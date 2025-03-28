@@ -1,4 +1,3 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -121,6 +120,8 @@ export interface UserProfile {
   email: string;
   name?: string;
   isAuthenticated: boolean;
+  token?: string;
+  password?: string; // Only for mocking - would never store this in a real app
 }
 
 export interface PerformanceMetrics {
