@@ -1,3 +1,4 @@
+
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
@@ -10,9 +11,11 @@ const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
  */
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    // Check if Firebase Auth is available
-    if (window.firebase && window.firebase.auth) {
-      const currentUser = window.firebase.auth().currentUser;
+    // Check if Firebase Auth is available using safer type checking
+    // that won't cause TypeScript errors
+    const firebaseObj = (window as any).firebase;
+    if (firebaseObj && firebaseObj.auth) {
+      const currentUser = firebaseObj.auth().currentUser;
       if (currentUser) {
         return await currentUser.getIdToken();
       }
