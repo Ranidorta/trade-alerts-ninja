@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -200,6 +199,10 @@ const SignalsDashboard = () => {
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
+
+  const handleSelectStrategy = (strategy: string) => {
+    console.log(`Strategy selected: ${strategy}`);
+  };
   
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -360,6 +363,7 @@ const SignalsDashboard = () => {
         error={null} 
         activeStrategy="CLASSIC"
         strategies={["CLASSIC"]}
+        onSelectStrategy={handleSelectStrategy}
       />
     </div>
   );
