@@ -44,14 +44,19 @@ const SignalsDashboard = () => {
   
   const { signals: cachedSignals, addSignals } = useTradingSignals();
   
-  // On component mount, load signals from cache if they exist
+  // On component mount, check if there are signals already in the component state or localStorage
+  // We want to preserve signals across tab changes but not load them automatically on a new session
   useEffect(() => {
-    // Only load signals from cache if signals is empty
-    if (signals.length === 0 && cachedSignals.length > 0) {
+    // If we already have signals in our state, do nothing (this preserves signals across tab changes)
+    if (signals.length > 0) return;
+    
+    // If we have cached signals from a previous session in the same browser session, use those
+    if (cachedSignals.length > 0) {
       setSignals(cachedSignals);
       setFilteredSignals(cachedSignals);
       setLastUpdated(new Date());
     }
+    // Note: We're not fetching signals from the API here anymore
   }, [cachedSignals, signals.length]);
   
   const loadSignalsData = useCallback(async () => {
