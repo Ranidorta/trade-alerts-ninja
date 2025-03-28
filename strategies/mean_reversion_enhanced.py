@@ -1,6 +1,6 @@
 
 """
-Enhanced Mean Reversion strategy with dynamic ADX filtering and overfitting protection.
+Classic Trading Strategy with RSI, Moving Averages and MACD.
 """
 
 import pandas as pd
@@ -14,14 +14,17 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("mean_reversion")
+logger = logging.getLogger("classic_strategy")
 
-class MeanReversionEnhanced:
+class ClassicStrategy:
     """
-    Enhanced Mean Reversion strategy with dynamic ADX filtering.
+    Classic Trading Strategy that combines RSI, Moving Averages and MACD.
     
-    This strategy looks for oversold/overbought conditions with 
-    RSI while applying an ADX filter to avoid trading in strong trends.
+    This strategy looks for trading opportunities by analyzing multiple technical
+    indicators for stronger confirmation:
+    - RSI for overbought/oversold conditions
+    - Moving Averages crossover for trend direction
+    - MACD for momentum confirmation
     """
     
     def __init__(self, params: Dict[str, Any] = None):
@@ -35,8 +38,11 @@ class MeanReversionEnhanced:
             'rsi_window': 14,
             'rsi_overbought': 70,
             'rsi_oversold': 30,
-            'adx_period': 14,
-            'adx_threshold': 25,
+            'short_ma': 9,
+            'long_ma': 21,
+            'macd_fast': 12,
+            'macd_slow': 26,
+            'macd_signal': 9,
             'lookback_periods': 100  # For overfitting protection
         }
         
@@ -44,7 +50,7 @@ class MeanReversionEnhanced:
         if params:
             self.params.update(params)
             
-        logger.info(f"Initialized MeanReversionEnhanced with params: {self.params}")
+        logger.info(f"Initialized ClassicStrategy with params: {self.params}")
         
         # Store recent performance for overfitting protection
         self.recent_signals = []
@@ -66,20 +72,17 @@ class MeanReversionEnhanced:
         # Calculate RSI
         data['rsi'] = talib.RSI(data['close'], timeperiod=self.params['rsi_window'])
         
-        # Calculate ADX for trend strength
-        data['adx'] = talib.ADX(data['high'], data['low'], data['close'], 
-                               timeperiod=self.params['adx_period'])
+        # Calculate Moving Averages
+        data['short_ma'] = talib.SMA(data['close'], timeperiod=self.params['short_ma'])
+        data['long_ma'] = talib.SMA(data['close'], timeperiod=self.params['long_ma'])
         
-        # Calculate dynamic ADX threshold based on recent volatility
-        volatility = data['close'].pct_change().rolling(20).std() * 100
-        data['adx_threshold'] = np.maximum(
-            self.params['adx_threshold'], 
-            volatility * 2  # Adjust threshold based on volatility
+        # Calculate MACD
+        data['macd'], data['macd_signal'], data['macd_hist'] = talib.MACD(
+            data['close'], 
+            fastperiod=self.params['macd_fast'], 
+            slowperiod=self.params['macd_slow'], 
+            signalperiod=self.params['macd_signal']
         )
-        
-        # Add Bollinger Bands for additional confirmation
-        data['upper_band'], data['middle_band'], data['lower_band'] = \
-            talib.BBANDS(data['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
             
         return data
         
@@ -94,19 +97,21 @@ class MeanReversionEnhanced:
             int: Signal (1 for buy, -1 for sell, 0 for neutral)
         """
         # Skip if not enough data points for calculation
-        if pd.isna(row['rsi']) or pd.isna(row['adx']):
+        if (pd.isna(row['rsi']) or pd.isna(row['short_ma']) or 
+            pd.isna(row['long_ma']) or pd.isna(row['macd']) or 
+            pd.isna(row['macd_signal'])):
             return 0
             
-        # Buy condition: RSI oversold + weak trend
+        # Buy condition: RSI oversold + MAs bullish + MACD bullish
         if (row['rsi'] < self.params['rsi_oversold'] and 
-            row['adx'] < row['adx_threshold'] and
-            row['close'] < row['lower_band']):
+            row['short_ma'] > row['long_ma'] and
+            row['macd'] > row['macd_signal']):
             return 1
             
-        # Sell condition: RSI overbought + weak trend
+        # Sell condition: RSI overbought + MAs bearish + MACD bearish
         elif (row['rsi'] > self.params['rsi_overbought'] and 
-              row['adx'] < row['adx_threshold'] and
-              row['close'] > row['upper_band']):
+              row['short_ma'] < row['long_ma'] and
+              row['macd'] < row['macd_signal']):
             return -1
             
         # No signal
@@ -204,9 +209,9 @@ class MeanReversionEnhanced:
             self.success_rate = sum(results) / len(results)
 
 # For backwards compatibility - function version of the strategy
-def strategy_mean_reversion_enhanced(row):
+def strategy_classic(row):
     """
-    Legacy function interface for mean reversion strategy.
+    Classic strategy function interface.
     
     Args:
         row: DataFrame row with indicators
@@ -214,19 +219,17 @@ def strategy_mean_reversion_enhanced(row):
     Returns:
         int: Signal (1=buy, -1=sell, 0=neutral)
     """
-    # Default ADX threshold
-    adx_threshold = 25
-    
     # Skip if indicators not available
-    if 'rsi' not in row or 'adx' not in row:
+    if 'rsi' not in row or 'short_ma' not in row or 'long_ma' not in row:
         return 0
         
-    # Buy condition (oversold + weak trend)
-    if row['rsi'] < 30 and row['adx'] < adx_threshold:
+    # Buy condition
+    if row['rsi'] < 30 and row['short_ma'] > row['long_ma']:
         return 1
         
-    # Sell condition (overbought + weak trend)
-    elif row['rsi'] > 70 and row['adx'] < adx_threshold:
+    # Sell condition
+    elif row['rsi'] > 70 and row['short_ma'] < row['long_ma']:
         return -1
         
     return 0
+

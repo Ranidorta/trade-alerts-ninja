@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -8,8 +9,6 @@ import {
   Bell,
   RefreshCw,
   Zap,
-  Settings,
-  Tags
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,21 +22,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { generateAllSignals, generateTradingSignal } from "@/lib/apiServices";
-import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
+import { generateAllSignals } from "@/lib/apiServices";
+import { fetchSignals } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import GenericSearchBar from "@/components/GenericSearchBar";
 import { useQuery } from "@tanstack/react-query";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue, 
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import StrategiesTabList from "@/components/signals/StrategiesTabList";
-import StrategyDetails from "@/components/signals/StrategyDetails";
 import SignalsList from "@/components/signals/SignalsList";
 
 const SignalsDashboard = () => {
@@ -50,35 +39,13 @@ const SignalsDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [activeStrategy, setActiveStrategy] = useState<string>("ALL");
   const { toast } = useToast();
-  
-  const { data: strategies = [], isLoading: strategiesLoading } = useQuery({
-    queryKey: ['strategies'],
-    queryFn: fetchStrategies,
-    meta: {
-      onSettled: (data: any, error: any) => {
-        if (error) {
-          console.error("Error fetching strategies:", error);
-          toast({
-            title: "Erro ao carregar estratégias",
-            description: "Não foi possível carregar a lista de estratégias disponíveis.",
-            variant: "destructive"
-          });
-        }
-      }
-    }
-  });
   
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      const params: any = { days: 30 };
-      if (activeStrategy !== "ALL") {
-        params.strategy = activeStrategy;
-      }
-      
+      const params: any = { days: 30, strategy: "CLASSIC" };
       const fetchedSignals = await fetchSignals(params);
       
       if (fetchedSignals.length > 0) {
@@ -103,11 +70,11 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast, activeStrategy]);
+  }, [toast]);
   
   useEffect(() => {
     loadSignalsData();
-  }, [loadSignalsData, activeStrategy]);
+  }, [loadSignalsData]);
   
   useEffect(() => {
     if (!autoRefresh) return;
@@ -230,29 +197,6 @@ const SignalsDashboard = () => {
     loadSignalsData();
   };
   
-  const handleStrategyChange = (value: string) => {
-    setActiveStrategy(value);
-  };
-  
-  const renderSkeletons = () => {
-    return Array(6).fill(0).map((_, index) => (
-      <div key={index} className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 animate-pulse">
-        <div className="flex justify-between">
-          <div className="h-8 bg-slate-200 rounded w-1/3"></div>
-          <div className="h-6 bg-slate-200 rounded-full w-1/4"></div>
-        </div>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="h-12 bg-slate-200 rounded"></div>
-            <div className="h-12 bg-slate-200 rounded"></div>
-          </div>
-          <div className="h-20 bg-slate-200 rounded"></div>
-        </div>
-        <div className="h-8 bg-slate-200 rounded w-1/2"></div>
-      </div>
-    ));
-  };
-  
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
@@ -263,7 +207,7 @@ const SignalsDashboard = () => {
         <div>
           <h1 className="text-3xl font-bold mb-2">Sinais de Trading</h1>
           <p className="text-slate-600 dark:text-slate-300">
-            Oportunidades de trading ativas atuais
+            Oportunidades de trading utilizando estratégia CLASSIC
           </p>
           <div className="mt-2 flex items-center gap-2">
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
@@ -394,46 +338,29 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      <Tabs 
-        value={activeStrategy} 
-        onValueChange={handleStrategyChange}
-        className="mb-8"
-      >
-        <StrategiesTabList 
-          strategies={strategies} 
-          activeStrategy={activeStrategy}
-          isLoading={strategiesLoading}
-        />
-        
-        <TabsContent value={activeStrategy} className="mt-0">
-          <StrategyDetails strategy={activeStrategy} />
-          
-          {!isLoading && signals.length === 0 && activeStrategy !== "ALL" && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
-                <Zap className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
-              <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
-                Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
-              </p>
-              <Button onClick={handleGenerateSignals} disabled={isGenerating}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
-              </Button>
-            </div>
-          )}
-          
-          <SignalsList 
-            signals={filteredSignals} 
-            isLoading={isLoading} 
-            error={null} 
-            activeStrategy={activeStrategy}
-            strategies={strategies}
-            onSelectStrategy={handleStrategyChange}
-          />
-        </TabsContent>
-      </Tabs>
+      {!isLoading && signals.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+            <Zap className="h-8 w-8" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
+          <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
+            Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
+          </p>
+          <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
+          </Button>
+        </div>
+      )}
+      
+      <SignalsList 
+        signals={filteredSignals} 
+        isLoading={isLoading} 
+        error={null} 
+        activeStrategy="CLASSIC"
+        strategies={["CLASSIC"]}
+      />
     </div>
   );
 };

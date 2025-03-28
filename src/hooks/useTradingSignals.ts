@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 
@@ -13,7 +14,8 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
-      const response = await fetch(`${BACKEND_URL}/signals`);
+      // Always use the CLASSIC strategy
+      const response = await fetch(`${BACKEND_URL}/signals?strategy=CLASSIC`);
       if (!response.ok) throw new Error("Failed to fetch signals");
 
       const data = await response.json();
