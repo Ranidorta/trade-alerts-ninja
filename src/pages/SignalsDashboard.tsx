@@ -1,6 +1,6 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
-import SignalCard from "@/components/SignalCard";
 import { 
   ArrowUpDown, 
   BarChart3, 
@@ -22,12 +22,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 import { generateAllSignals } from "@/lib/apiServices";
-import { fetchSignals } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import GenericSearchBar from "@/components/GenericSearchBar";
-import { useQuery } from "@tanstack/react-query";
-import SignalsList from "@/components/signals/SignalsList";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
+import SignalsSidebar from "@/components/signals/SignalsSidebar";
+import CandlestickChart from "@/components/signals/CandlestickChart";
+import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
+import SignalHistorySummary from "@/components/signals/SignalHistorySummary";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -39,6 +39,7 @@ const SignalsDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
   const { toast } = useToast();
   
   const { signals: cachedSignals, addSignals } = useTradingSignals();
@@ -58,6 +59,11 @@ const SignalsDashboard = () => {
         setSignals(fetchedSignals);
         setFilteredSignals(fetchedSignals);
         
+        // Select first signal as active by default
+        if (!activeSignal) {
+          setActiveSignal(fetchedSignals[0]);
+        }
+        
         addSignals(fetchedSignals);
       } else {
         toast({
@@ -76,7 +82,7 @@ const SignalsDashboard = () => {
       setIsLoading(false);
       setLastUpdated(new Date());
     }
-  }, [toast, addSignals]);
+  }, [toast, addSignals, activeSignal]);
   
   useEffect(() => {
     if (!autoRefresh) return;
@@ -114,7 +120,14 @@ const SignalsDashboard = () => {
     });
     
     setFilteredSignals(result);
-  }, [signals, statusFilter, searchQuery, sortBy]);
+    
+    // Update active signal if it's been filtered out
+    if (activeSignal && !result.some(s => s.id === activeSignal.id) && result.length > 0) {
+      setActiveSignal(result[0]);
+    } else if (result.length === 0) {
+      setActiveSignal(null);
+    }
+  }, [signals, statusFilter, searchQuery, sortBy, activeSignal]);
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -152,6 +165,11 @@ const SignalsDashboard = () => {
           
           if (uniqueNewSignals.length > 0) {
             addSignals(uniqueNewSignals);
+            
+            // Set first new signal as active
+            if (!activeSignal) {
+              setActiveSignal(uniqueNewSignals[0]);
+            }
             
             toast({
               title: "Novos sinais gerados",
@@ -205,8 +223,8 @@ const SignalsDashboard = () => {
     return lastUpdated.toLocaleTimeString();
   };
 
-  const handleSelectStrategy = (strategy: string) => {
-    console.log(`Strategy selected: ${strategy}`);
+  const handleSelectSignal = (signal: TradingSignal) => {
+    setActiveSignal(signal);
   };
   
   return (
@@ -362,16 +380,45 @@ const SignalsDashboard = () => {
         </div>
       )}
       
-      <SignalsList 
-        signals={filteredSignals} 
-        isLoading={isLoading} 
-        error={null} 
-        activeStrategy="CLASSIC"
-        strategies={["CLASSIC"]}
-        onSelectStrategy={handleSelectStrategy}
-      />
+      {signals.length > 0 && (
+        <>
+          <div className="grid grid-cols-12 gap-6 mb-6">
+            {/* Sidebar with signals list */}
+            <div className="col-span-12 md:col-span-3">
+              <SignalsSidebar 
+                signals={filteredSignals}
+                activeSignal={activeSignal}
+                onSelectSignal={handleSelectSignal}
+                isLoading={isLoading}
+              />
+            </div>
+            
+            {/* Main content area */}
+            <div className="col-span-12 md:col-span-9 space-y-6">
+              {/* Candlestick chart */}
+              <CandlestickChart 
+                symbol={activeSignal?.symbol || ""}
+                entryPrice={activeSignal?.entryPrice}
+                stopLoss={activeSignal?.stopLoss}
+                targets={activeSignal?.targets}
+              />
+              
+              {/* News panel */}
+              <CryptoNewsPanel 
+                symbol={activeSignal?.symbol || ""}
+              />
+            </div>
+          </div>
+          
+          {/* History summary */}
+          <SignalHistorySummary signal={activeSignal} />
+        </>
+      )}
     </div>
   );
 };
+
+// Add the missing import from signalsApi
+import { fetchSignals } from "@/lib/signalsApi";
 
 export default SignalsDashboard;
