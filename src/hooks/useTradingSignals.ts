@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 
 const BACKEND_URL = "https://trade-alerts-backend.onrender.com"; // ou env var
@@ -9,7 +9,7 @@ export const useTradingSignals = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSignals = async () => {
+  const fetchSignals = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -60,7 +60,7 @@ export const useTradingSignals = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   return { signals, loading, error, fetchSignals };
 };
