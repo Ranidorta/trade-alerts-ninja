@@ -1,33 +1,9 @@
 
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
+import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { config } from "@/config/env";
-
-// Components
-import PageHeader from "@/components/signals/PageHeader";
-import ApiConnectionError from "@/components/signals/ApiConnectionError";
-import SignalsSummary from "@/components/signals/SignalsSummary";
-import ResultsTabSelector from "@/components/signals/ResultsTabSelector";
-import SignalsList from "@/components/signals/SignalsList";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  Cell,
-  Legend
-} from "recharts";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { HelpCircle, BarChart4, TrendingUp, TrendingDown, Check, X, ArrowUp, ArrowDown, Calendar, Clock, RefreshCw } from "lucide-react";
-import { useTradingSignals } from "@/hooks/useTradingSignals";
-import { 
+import {
   Table,
   TableBody,
   TableCaption,
@@ -36,21 +12,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { format } from "date-fns";
+import { 
+  ArrowUp, 
+  ArrowDown, 
+  Check, 
+  X, 
+  BarChart4, 
+  Calendar, 
+  Clock,
+  RefreshCw,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Cell,
+  Legend
+} from "recharts";
 
 const SignalsHistory = () => {
+  const [activeTab, setActiveTab] = useState<"signals" | "performance">("signals");
   const [resultTab, setResultTab] = useState("all");
   const { signals, loading, error, fetchSignals } = useTradingSignals();
   const { toast } = useToast();
-  const [apiConnectivityIssue, setApiConnectivityIssue] = useState(false);
-  const [activeTab, setActiveTab] = useState<"signals" | "performance">("signals");
-  
-  // Fetch signals on component mount
+
   useEffect(() => {
     fetchSignals();
-  }, []);
-  
-  // Handle refresh button click
+  }, [fetchSignals]);
+
   const handleRefresh = () => {
     fetchSignals();
     toast({
@@ -58,15 +56,15 @@ const SignalsHistory = () => {
       description: "Buscando os sinais mais recentes...",
     });
   };
-  
-  // Filter signals based on active tab
+
+  // Filter signals based on result tab
   const filteredSignals = signals.filter(signal => {
     if (resultTab === "all") return true;
     if (resultTab === "profit") return signal.result === 1; // Winning signals
     if (resultTab === "loss") return signal.result === 0; // Losing signals
     return true;
   });
-  
+
   // Calculate performance metrics
   const winningSignals = signals.filter(s => s.result === 1);
   const losingSignals = signals.filter(s => s.result === 0);
@@ -75,7 +73,7 @@ const SignalsHistory = () => {
   const winRate = signals.length > 0 
     ? ((winningSignals.length / (winningSignals.length + losingSignals.length)) * 100).toFixed(2)
     : "0";
-  
+
   // Prepare chart data
   const performanceData = [
     { name: "Vencedores", value: winningSignals.length, color: "#10b981" },
@@ -105,38 +103,10 @@ const SignalsHistory = () => {
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   };
-  
-  // Handle strategy selection (simplified since we only have CLASSIC now)
-  const handleSelectStrategy = () => {
-    console.log("CLASSIC strategy is the only available option");
-  };
 
-  // Show API connectivity issue message
-  if (apiConnectivityIssue) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <PageHeader />
-        <ApiConnectionError apiUrl={config.signalsApiUrl} />
-      </div>
-    );
-  }
-
-  // Strategy details for CLASSIC
-  const classicStrategyDetails = {
-    name: "Clássica",
-    description: "Estratégia tradicional baseada em RSI, Médias Móveis e MACD",
-    indicators: ["RSI", "Médias Móveis", "MACD"],
-    parameters: {
-      "RSI Compra": "30",
-      "RSI Venda": "70",
-      "MA Curta": "5 períodos",
-      "MA Longa": "20 períodos"
-    },
-    timeframe: "1h",
-    riskLevel: "Médio",
-    successRate: winRate + "%",
-    pros: ["Confiável e testada", "Bom equilíbrio entre velocidade e confirmação"],
-    cons: ["Pode ser lenta em mercados muito voláteis", "Menos sinais gerados"]
+  // Format price with 2 decimal places
+  const formatPrice = (price?: number) => {
+    return price !== undefined ? price.toFixed(2) : "N/A";
   };
 
   return (
@@ -144,8 +114,8 @@ const SignalsHistory = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">Histórico de Sinais</h1>
-          <p className="text-slate-600 dark:text-slate-300">
-            Histórico completo dos sinais gerados pela estratégia CLASSIC
+          <p className="text-muted-foreground">
+            Histórico detalhado dos sinais gerados com informações sobre alvos atingidos
           </p>
         </div>
         
@@ -219,115 +189,39 @@ const SignalsHistory = () => {
         </div>
 
         <TabsContent value="signals">
-          {/* Strategy details card */}
-          <Card className="mb-6 border-t-4 border-t-blue-600">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-xl flex items-center gap-2">
-                    {classicStrategyDetails.name}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <HelpCircle className="h-4 w-4 opacity-70 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-sm">
-                          <p>{classicStrategyDetails.description}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </CardTitle>
-                  <CardDescription>
-                    {classicStrategyDetails.description}
-                  </CardDescription>
-                </div>
-                <div className="flex flex-wrap gap-1 text-xs">
-                  {classicStrategyDetails.indicators.map((indicator: string) => (
-                    <span 
-                      key={indicator} 
-                      className="px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-medium">
-                      {indicator}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <div className="font-medium mb-1">Timeframe</div>
-                  <div>{classicStrategyDetails.timeframe}</div>
-                </div>
-                <div>
-                  <div className="font-medium mb-1">Nível de Risco</div>
-                  <div>{classicStrategyDetails.riskLevel}</div>
-                </div>
-                <div>
-                  <div className="font-medium mb-1">Taxa de Sucesso</div>
-                  <div>{classicStrategyDetails.successRate}</div>
-                </div>
-                <div>
-                  <div className="font-medium mb-1 flex items-center gap-1">
-                    Parâmetros
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <HelpCircle className="h-3 w-3 opacity-70 cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Configurações principais desta estratégia</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  {Object.keys(classicStrategyDetails.parameters).length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(classicStrategyDetails.parameters).map(([key, value]) => (
-                        <span key={key} className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-700">
-                          {key}: <span className="font-medium">{String(value)}</span>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-slate-500">Múltiplos parâmetros</div>
-                  )}
-                </div>
-              </div>
+          {/* Result Filter Tabs */}
+          <div className="flex mb-4">
+            <TabsList>
+              <TabsTrigger 
+                value="all" 
+                onClick={() => setResultTab("all")}
+                className={resultTab === "all" ? "bg-muted" : ""}
+              >
+                Todos
+              </TabsTrigger>
+              <TabsTrigger 
+                value="profit" 
+                onClick={() => setResultTab("profit")}
+                className={resultTab === "profit" ? "bg-muted" : ""}
+              >
+                Vencedores
+              </TabsTrigger>
+              <TabsTrigger 
+                value="loss" 
+                onClick={() => setResultTab("loss")}
+                className={resultTab === "loss" ? "bg-muted" : ""}
+              >
+                Perdedores
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-              {/* Pros & Cons */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 text-sm">
-                <div>
-                  <div className="font-medium mb-1 text-green-600">Vantagens</div>
-                  <ul className="list-disc list-inside text-slate-700">
-                    {classicStrategyDetails.pros.map((pro: string, index: number) => (
-                      <li key={index}>{pro}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <div className="font-medium mb-1 text-red-600">Desvantagens</div>
-                  <ul className="list-disc list-inside text-slate-700">
-                    {classicStrategyDetails.cons.map((con: string, index: number) => (
-                      <li key={index}>{con}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Resultados em abas (profit/loss) */}
-          <ResultsTabSelector 
-            resultTab={resultTab} 
-            onValueChange={setResultTab} 
-          />
-
-          {/* Enhanced Signals Table with Detailed Information */}
+          {/* Signals Table */}
           <Card className="overflow-hidden">
             <CardHeader className="pb-0">
               <CardTitle className="text-xl">Histórico de Sinais Detalhado</CardTitle>
               <CardDescription>
-                Registro completo dos sinais gerados pela estratégia CLASSIC com detalhes sobre alvos alcançados
+                Registro completo dos sinais com detalhes sobre alvos atingidos
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -376,11 +270,6 @@ const SignalsHistory = () => {
                           console.error("Error formatting date:", e);
                         }
                         
-                        // Format price with 2 decimal places
-                        const formatPrice = (price?: number) => {
-                          return price !== undefined ? price.toFixed(2) : "N/A";
-                        };
-                        
                         return (
                           <TableRow 
                             key={signal.id}
@@ -395,19 +284,19 @@ const SignalsHistory = () => {
                                 {dateTime}
                               </div>
                             </TableCell>
-                            <TableCell className="font-medium">{signal.pair}</TableCell>
+                            <TableCell className="font-medium">{signal.symbol}</TableCell>
                             <TableCell>
                               <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                signal.type === "LONG" 
+                                signal.direction === "BUY" 
                                   ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
                                   : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
                               }`}>
-                                {signal.type === "LONG" ? (
+                                {signal.direction === "BUY" ? (
                                   <ArrowUp className="w-3 h-3 mr-1" />
                                 ) : (
                                   <ArrowDown className="w-3 h-3 mr-1" />
                                 )}
-                                {signal.type === "LONG" ? "Compra" : "Venda"}
+                                {signal.direction === "BUY" ? "Compra" : "Venda"}
                               </div>
                             </TableCell>
                             <TableCell>{formatPrice(signal.entryPrice)}</TableCell>
@@ -423,7 +312,7 @@ const SignalsHistory = () => {
                                   ) : isLoss ? (
                                     <X className="w-4 h-4 text-red-600" />
                                   ) : (
-                                    <span className="text-xs text-gray-400">Pendente</span>
+                                    <span className="text-xs text-muted-foreground">Pendente</span>
                                   )}
                                 </div>
                               ) : (
@@ -441,7 +330,7 @@ const SignalsHistory = () => {
                                   ) : isLoss ? (
                                     <X className="w-4 h-4 text-red-600" />
                                   ) : (
-                                    <span className="text-xs text-gray-400">Pendente</span>
+                                    <span className="text-xs text-muted-foreground">Pendente</span>
                                   )}
                                 </div>
                               ) : (
@@ -459,7 +348,7 @@ const SignalsHistory = () => {
                                   ) : isLoss ? (
                                     <X className="w-4 h-4 text-red-600" />
                                   ) : (
-                                    <span className="text-xs text-gray-400">Pendente</span>
+                                    <span className="text-xs text-muted-foreground">Pendente</span>
                                   )}
                                 </div>
                               ) : (
@@ -507,17 +396,17 @@ const SignalsHistory = () => {
             <CardHeader>
               <CardTitle>Performance dos Sinais</CardTitle>
               <CardDescription>
-                Análise do desempenho dos sinais gerados pela estratégia CLASSIC
+                Análise do desempenho dos sinais gerados
               </CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="h-64 w-full flex items-center justify-center">
-                  <p className="text-slate-500">Carregando dados de performance...</p>
+                  <p className="text-muted-foreground">Carregando dados de performance...</p>
                 </div>
               ) : signals.length === 0 ? (
                 <div className="h-64 w-full flex items-center justify-center">
-                  <p className="text-slate-500">Nenhum sinal disponível para análise.</p>
+                  <p className="text-muted-foreground">Nenhum sinal disponível para análise.</p>
                 </div>
               ) : (
                 <>
@@ -574,25 +463,25 @@ const SignalsHistory = () => {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-medium mb-4">Estatísticas da Estratégia CLASSIC</h3>
+                    <h3 className="text-lg font-medium mb-4">Estatísticas</h3>
                     <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                      <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-muted/50">
                           <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               Métrica
                             </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               Valor
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="divide-y divide-border">
                           <tr>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               Total de Sinais
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {signals.length}
                             </td>
                           </tr>
@@ -600,7 +489,7 @@ const SignalsHistory = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               Sinais Vencedores
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {winningSignals.length}
                             </td>
                           </tr>
@@ -608,7 +497,7 @@ const SignalsHistory = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               Sinais Perdedores
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {losingSignals.length}
                             </td>
                           </tr>
@@ -619,9 +508,9 @@ const SignalsHistory = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               <span 
                                 className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                  parseFloat(winRate) >= 70 ? 'bg-green-100 text-green-800' : 
-                                  parseFloat(winRate) >= 50 ? 'bg-blue-100 text-blue-800' : 
-                                  'bg-red-100 text-red-800'
+                                  parseFloat(winRate) >= 70 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 
+                                  parseFloat(winRate) >= 50 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 
+                                  'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                 }`}
                               >
                                 {winRate}%
@@ -632,7 +521,7 @@ const SignalsHistory = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               Média de Lucro por Sinal
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {signals.length > 0 ? 
                                 (((winningSignals.length * 3) - (losingSignals.length * 1.5)) / signals.length).toFixed(2) + "%"
                                 : "0%"}
