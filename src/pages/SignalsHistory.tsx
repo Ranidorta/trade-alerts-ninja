@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignals, fetchStrategies } from "@/lib/signalsApi";
@@ -25,8 +24,18 @@ import {
   Legend
 } from "recharts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { HelpCircle, BarChart4, TrendingUp, TrendingDown } from "lucide-react";
+import { HelpCircle, BarChart4, TrendingUp, TrendingDown, Check, X, ArrowUp, ArrowDown, Calendar, Clock } from "lucide-react";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
+import { 
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { format } from "date-fns";
 
 const SignalsHistory = () => {
   const [resultTab, setResultTab] = useState("all");
@@ -194,7 +203,10 @@ const SignalsHistory = () => {
       <Tabs value={activeTab} onValueChange={(value: "signals" | "performance") => setActiveTab(value)} className="mb-4">
         <div className="flex justify-end mb-4">
           <TabsList>
-            <TabsTrigger value="signals">Sinais</TabsTrigger>
+            <TabsTrigger value="signals" className="flex items-center gap-1">
+              <Calendar className="w-4 h-4" />
+              Sinais
+            </TabsTrigger>
             <TabsTrigger value="performance" className="flex items-center gap-1">
               <BarChart4 className="w-4 h-4" />
               Performance
@@ -306,14 +318,184 @@ const SignalsHistory = () => {
             onValueChange={setResultTab} 
           />
 
-          <SignalsList 
-            signals={filteredSignals}
-            isLoading={loading}
-            error={error}
-            activeStrategy="CLASSIC"
-            strategies={["CLASSIC"]}
-            onSelectStrategy={handleSelectStrategy}
-          />
+          {/* Enhanced Signals Table with Detailed Information */}
+          <Card className="overflow-hidden">
+            <CardHeader className="pb-0">
+              <CardTitle className="text-xl">Histórico de Sinais Detalhado</CardTitle>
+              <CardDescription>
+                Registro completo dos sinais gerados pela estratégia CLASSIC com detalhes sobre alvos alcançados
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="py-8 text-center">
+                  <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+                  <p className="mt-2 text-sm text-muted-foreground">Carregando sinais...</p>
+                </div>
+              ) : error ? (
+                <div className="py-8 text-center">
+                  <p className="text-red-500">Erro ao carregar sinais: {error}</p>
+                </div>
+              ) : filteredSignals.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-muted-foreground">Nenhum sinal encontrado.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data/Hora</TableHead>
+                        <TableHead>Par</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Entrada</TableHead>
+                        <TableHead>Stop Loss</TableHead>
+                        <TableHead className="text-center">TP1</TableHead>
+                        <TableHead className="text-center">TP2</TableHead>
+                        <TableHead className="text-center">TP3</TableHead>
+                        <TableHead className="text-center">Resultado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSignals.map((signal) => {
+                        const isWin = signal.result === 1;
+                        const isLoss = signal.result === 0;
+                        const isPending = signal.result === undefined;
+                        
+                        // Generate formatted date time
+                        let dateTime = "Data desconhecida";
+                        try {
+                          if (signal.createdAt) {
+                            dateTime = format(new Date(signal.createdAt), "dd/MM/yyyy HH:mm");
+                          }
+                        } catch (e) {
+                          console.error("Error formatting date:", e);
+                        }
+                        
+                        // Format price with 2 decimal places
+                        const formatPrice = (price?: number) => {
+                          return price !== undefined ? price.toFixed(2) : "N/A";
+                        };
+                        
+                        return (
+                          <TableRow 
+                            key={signal.id}
+                            className={
+                              isWin ? "bg-green-50 dark:bg-green-900/20" : 
+                              isLoss ? "bg-red-50 dark:bg-red-900/20" : ""
+                            }
+                          >
+                            <TableCell className="font-medium">
+                              <div className="flex items-center">
+                                <Clock className="w-4 h-4 mr-2 opacity-70" />
+                                {dateTime}
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">{signal.pair}</TableCell>
+                            <TableCell>
+                              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                signal.type === "LONG" 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                                  : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                              }`}>
+                                {signal.type === "LONG" ? (
+                                  <ArrowUp className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 mr-1" />
+                                )}
+                                {signal.type === "LONG" ? "Compra" : "Venda"}
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatPrice(signal.entryPrice)}</TableCell>
+                            <TableCell>{formatPrice(signal.stopLoss)}</TableCell>
+                            
+                            {/* Target 1 */}
+                            <TableCell className="text-center">
+                              {signal.targets && signal.targets[0] ? (
+                                <div className="flex flex-col items-center">
+                                  <span>{formatPrice(signal.targets[0].price)}</span>
+                                  {signal.targets[0].hit ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                  ) : isLoss ? (
+                                    <X className="w-4 h-4 text-red-600" />
+                                  ) : (
+                                    <span className="text-xs text-gray-400">Pendente</span>
+                                  )}
+                                </div>
+                              ) : (
+                                "N/A"
+                              )}
+                            </TableCell>
+                            
+                            {/* Target 2 */}
+                            <TableCell className="text-center">
+                              {signal.targets && signal.targets[1] ? (
+                                <div className="flex flex-col items-center">
+                                  <span>{formatPrice(signal.targets[1].price)}</span>
+                                  {signal.targets[1].hit ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                  ) : isLoss ? (
+                                    <X className="w-4 h-4 text-red-600" />
+                                  ) : (
+                                    <span className="text-xs text-gray-400">Pendente</span>
+                                  )}
+                                </div>
+                              ) : (
+                                "N/A"
+                              )}
+                            </TableCell>
+                            
+                            {/* Target 3 */}
+                            <TableCell className="text-center">
+                              {signal.targets && signal.targets[2] ? (
+                                <div className="flex flex-col items-center">
+                                  <span>{formatPrice(signal.targets[2].price)}</span>
+                                  {signal.targets[2].hit ? (
+                                    <Check className="w-4 h-4 text-green-600" />
+                                  ) : isLoss ? (
+                                    <X className="w-4 h-4 text-red-600" />
+                                  ) : (
+                                    <span className="text-xs text-gray-400">Pendente</span>
+                                  )}
+                                </div>
+                              ) : (
+                                "N/A"
+                              )}
+                            </TableCell>
+                            
+                            {/* Result */}
+                            <TableCell>
+                              <div className={`flex justify-center items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                isWin 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                  : isLoss
+                                  ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                                  : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                              }`}>
+                                {isWin ? (
+                                  <>
+                                    <Check className="w-3 h-3 mr-1" />
+                                    Vencedor
+                                  </>
+                                ) : isLoss ? (
+                                  <>
+                                    <X className="w-3 h-3 mr-1" />
+                                    Perdedor
+                                  </>
+                                ) : (
+                                  "Pendente"
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="performance">
