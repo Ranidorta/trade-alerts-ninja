@@ -9,8 +9,7 @@ import {
   Clock,
   LineChart,
   Menu,
-  X,
-  Home
+  X
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -29,7 +28,6 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { path: "/", name: "Home", icon: <Home size={18} /> },
     { path: "/signals", name: "Sinais", icon: <BarChart4 size={18} /> },
     { path: "/history", name: "Histórico", icon: <Clock size={18} /> },
     { 
@@ -44,8 +42,8 @@ const Navbar = () => {
     },
   ];
 
-  // For non-authenticated users, only show the Home link
-  const visibleNavLinks = user ? navLinks : [navLinks[0]];
+  // For non-authenticated users, don't show any links
+  const visibleNavLinks = user ? navLinks : [];
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-background/95 backdrop-blur z-50 border-b border-border transition-all duration-200">
