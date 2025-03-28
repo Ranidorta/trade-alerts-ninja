@@ -47,6 +47,7 @@ export interface TradingSignal {
   result?: number; // Added result property
   strategy?: string; // Added strategy property
   performance?: StrategyPerformance; // Added performance metrics
+  tpHit?: number; // Added tpHit property to track how many targets were hit
 }
 
 export interface StrategyPerformance {
