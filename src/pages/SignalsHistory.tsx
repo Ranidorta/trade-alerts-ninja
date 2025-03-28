@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
@@ -30,7 +29,8 @@ import {
   Target,
   Percent,
   AlertCircle,
-  DollarSign
+  DollarSign,
+  Database 
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -51,17 +51,39 @@ const SignalsHistory = () => {
   const [resultTab, setResultTab] = useState("all");
   const { signals, loading, error, fetchSignals } = useTradingSignals();
   const { toast } = useToast();
+  const [forcingLocalMode, setForcingLocalMode] = useState(
+    localStorage.getItem("force_local_mode") === "true"
+  );
 
   useEffect(() => {
     fetchSignals();
   }, [fetchSignals]);
 
   const handleRefresh = () => {
+    // Clear local mode flag if it's set
+    if (forcingLocalMode) {
+      localStorage.removeItem("force_local_mode");
+      setForcingLocalMode(false);
+    }
+    
     fetchSignals();
     toast({
       title: "Atualizando dados",
       description: "Buscando os sinais mais recentes...",
     });
+  };
+
+  const handleLocalModeClick = () => {
+    // Set local mode flag and reload
+    localStorage.setItem("force_local_mode", "true");
+    setForcingLocalMode(true);
+    
+    toast({
+      title: "Modo Local Ativado",
+      description: "Utilizando dados armazenados localmente.",
+    });
+    
+    window.location.reload();
   };
 
   // Filter signals based on result tab
@@ -158,9 +180,12 @@ const SignalsHistory = () => {
     return 0; // Pending or unknown result
   };
 
-  // Verifica se houve erro de conexão com a API
-  if (error && error.message && error.message.includes("fetch")) {
-    return <ApiConnectionError apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} />;
+  // Verifica se houve erro de conexão com a API e não estamos no modo local forçado
+  if (error && !forcingLocalMode && error.message && (error.message.includes("fetch") || error.message.includes("network"))) {
+    return <ApiConnectionError 
+      apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} 
+      onLocalModeClick={handleLocalModeClick}
+    />;
   }
 
   return (
@@ -170,20 +195,36 @@ const SignalsHistory = () => {
           <h1 className="text-3xl font-bold">Histórico de Sinais</h1>
           <p className="text-muted-foreground">
             Histórico detalhado dos sinais gerados com informações sobre alvos atingidos
+            {forcingLocalMode && <span className="ml-2 text-amber-500">(Modo Local)</span>}
           </p>
         </div>
         
-        <button 
-          onClick={handleRefresh}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md flex items-center gap-2"
-        >
-          <RefreshCw className="h-5 w-5" />
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          {forcingLocalMode && (
+            <button 
+              onClick={() => {
+                localStorage.removeItem("force_local_mode");
+                window.location.reload();
+              }}
+              className="px-4 py-2 bg-amber-500 text-white rounded-md flex items-center gap-2"
+            >
+              <RefreshCw className="h-5 w-5" />
+              Tentar API Novamente
+            </button>
+          )}
+          
+          <button 
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md flex items-center gap-2"
+          >
+            <RefreshCw className="h-5 w-5" />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Exibe mensagem de erro caso ocorra algum erro diferente de falha de conexão */}
-      {error && !error.message.includes("fetch") && (
+      {error && !error.message.includes("fetch") && !error.message.includes("network") && (
         <Card className="bg-destructive/10 border-destructive/20 mb-6">
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
@@ -200,6 +241,20 @@ const SignalsHistory = () => {
                   Tentar Novamente
                 </button>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Local Mode Banner */}
+      {forcingLocalMode && (
+        <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30 mb-6">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <Database className="h-5 w-5 text-amber-500" />
+              <p className="text-amber-700 dark:text-amber-300">
+                Modo Local Ativado: Utilizando dados armazenados localmente. Alguns dados podem estar desatualizados.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -254,11 +309,17 @@ const SignalsHistory = () => {
       <Tabs value={activeTab} onValueChange={(value: "signals" | "performance") => setActiveTab(value)} className="mb-4">
         <div className="flex justify-end mb-4">
           <TabsList>
-            <TabsTrigger value="signals" className="flex items-center gap-1">
+            <TabsTrigger 
+              value="signals" 
+              className="flex items-center gap-1"
+            >
               <Calendar className="w-4 h-4" />
               Sinais
             </TabsTrigger>
-            <TabsTrigger value="performance" className="flex items-center gap-1">
+            <TabsTrigger 
+              value="performance" 
+              className="flex items-center gap-1"
+            >
               <BarChart4 className="w-4 h-4" />
               Performance
             </TabsTrigger>

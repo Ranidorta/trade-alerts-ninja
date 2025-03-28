@@ -5,6 +5,7 @@ import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
 import ApiConnectionError from "@/components/signals/ApiConnectionError";
 import { config } from "@/config/env";
+import { useToast } from "@/components/ui/use-toast";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -23,6 +24,15 @@ const SignalsList = ({
   strategies,
   onSelectStrategy 
 }: SignalsListProps) => {
+  const { toast } = useToast();
+
+  // Function to handle switching to local mode
+  const handleLocalModeClick = () => {
+    // Clear the API error by refreshing and forcing local mode
+    localStorage.setItem("force_local_mode", "true");
+    window.location.reload();
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -34,8 +44,11 @@ const SignalsList = ({
   // Se houver erro, verifica se é erro de conexão com a API
   if (error) {
     // Erro genérico de conexão com a API
-    if (error.message && error.message.includes("fetch")) {
-      return <ApiConnectionError apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} />;
+    if (error.message && (error.message.includes("fetch") || error.message.includes("network"))) {
+      return <ApiConnectionError 
+        apiUrl={config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"} 
+        onLocalModeClick={handleLocalModeClick}
+      />;
     }
     
     // Tratamento especial para erros de autenticação

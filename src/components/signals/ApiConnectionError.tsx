@@ -2,13 +2,14 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
+import { AlertTriangle, ExternalLink, RefreshCw, Database } from "lucide-react";
 
 interface ApiConnectionErrorProps {
   apiUrl: string;
+  onLocalModeClick: () => void;
 }
 
-const ApiConnectionError = ({ apiUrl }: ApiConnectionErrorProps) => {
+const ApiConnectionError = ({ apiUrl, onLocalModeClick }: ApiConnectionErrorProps) => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
@@ -37,6 +38,10 @@ const ApiConnectionError = ({ apiUrl }: ApiConnectionErrorProps) => {
                 URL API configurada: {apiUrl}
               </div>
               <div className="flex flex-wrap gap-3">
+                <Button onClick={onLocalModeClick} variant="default" className="bg-green-600 hover:bg-green-700">
+                  <Database className="mr-2 h-4 w-4" />
+                  Continuar com Modo Local
+                </Button>
                 <Button variant="outline" className="bg-white dark:bg-black/20" asChild>
                   <a 
                     href="https://github.com/yourusername/trading-signals-app" 
@@ -47,7 +52,7 @@ const ApiConnectionError = ({ apiUrl }: ApiConnectionErrorProps) => {
                     Ver Documentação
                   </a>
                 </Button>
-                <Button onClick={() => window.location.reload()}>
+                <Button onClick={() => window.location.reload()} variant="outline">
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Tentar Novamente
                 </Button>
