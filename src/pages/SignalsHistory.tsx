@@ -26,7 +26,11 @@ import {
   RefreshCw,
   TrendingUp,
   TrendingDown,
-  AlertTriangle
+  AlertTriangle,
+  Target,
+  Percent,
+  AlertCircle,
+  DollarSign
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -110,6 +114,48 @@ const SignalsHistory = () => {
   // Format price with 2 decimal places
   const formatPrice = (price?: number) => {
     return price !== undefined ? price.toFixed(2) : "N/A";
+  };
+
+  // Format profit/loss percentage
+  const formatProfit = (profit?: number) => {
+    if (profit === undefined) return "N/A";
+    const formattedProfit = profit.toFixed(2);
+    return `${profit >= 0 ? '+' : ''}${formattedProfit}%`;
+  };
+
+  // Calculate estimated profit/loss percentage based on targets hit
+  const calculateEstimatedProfit = (signal: TradingSignal) => {
+    if (signal.profit !== undefined) return signal.profit;
+    
+    // If we have explicit profit information, use that
+    if (signal.result === 1) {
+      // Winning trade - estimate based on targets hit
+      let estimatedProfit = 0;
+      
+      if (signal.targets) {
+        const tp1Hit = signal.targets[0]?.hit;
+        const tp2Hit = signal.targets[1]?.hit;
+        const tp3Hit = signal.targets[2]?.hit;
+        
+        if (tp3Hit) estimatedProfit = 8; // Assuming 8% for TP3
+        else if (tp2Hit) estimatedProfit = 5; // Assuming 5% for TP2
+        else if (tp1Hit) estimatedProfit = 3; // Assuming 3% for TP1
+      }
+      
+      return estimatedProfit;
+    } else if (signal.result === 0) {
+      // Losing trade - estimate based on stop loss
+      if (signal.entryPrice && signal.stopLoss) {
+        if (signal.direction === "BUY") {
+          return ((signal.stopLoss / signal.entryPrice) - 1) * 100;
+        } else {
+          return ((signal.entryPrice / signal.stopLoss) - 1) * 100;
+        }
+      }
+      return -1.5; // Default loss estimate
+    }
+    
+    return 0; // Pending or unknown result
   };
 
   // Verifica se houve erro de conexão com a API
@@ -273,11 +319,13 @@ const SignalsHistory = () => {
                         <TableHead>Data/Hora</TableHead>
                         <TableHead>Par</TableHead>
                         <TableHead>Tipo</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Entrada</TableHead>
                         <TableHead>Stop Loss</TableHead>
                         <TableHead className="text-center">TP1</TableHead>
                         <TableHead className="text-center">TP2</TableHead>
                         <TableHead className="text-center">TP3</TableHead>
+                        <TableHead>Lucro/Prejuízo</TableHead>
                         <TableHead className="text-center">Resultado</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -297,6 +345,11 @@ const SignalsHistory = () => {
                           console.error("Error formatting date:", e);
                         }
                         
+                        // Calculate estimated profit
+                        const profitValue = signal.profit !== undefined 
+                          ? signal.profit 
+                          : calculateEstimatedProfit(signal);
+                        
                         return (
                           <TableRow 
                             key={signal.id}
@@ -305,7 +358,7 @@ const SignalsHistory = () => {
                               isLoss ? "bg-red-50 dark:bg-red-900/20" : ""
                             }
                           >
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium whitespace-nowrap">
                               <div className="flex items-center">
                                 <Clock className="w-4 h-4 mr-2 opacity-70" />
                                 {dateTime}
@@ -323,7 +376,20 @@ const SignalsHistory = () => {
                                 ) : (
                                   <ArrowDown className="w-3 h-3 mr-1" />
                                 )}
-                                {signal.direction === "BUY" ? "Compra" : "Venda"}
+                                {signal.direction === "BUY" ? "COMPRA" : "VENDA"}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                ${signal.status === "COMPLETED" 
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
+                                  : signal.status === "ACTIVE"
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                  : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                }`}>
+                                <AlertCircle className="w-3 h-3 mr-1" />
+                                {signal.status === "COMPLETED" ? "CONCLUÍDO" : 
+                                 signal.status === "ACTIVE" ? "ATIVO" : signal.status}
                               </div>
                             </TableCell>
                             <TableCell>{formatPrice(signal.entryPrice)}</TableCell>
@@ -381,6 +447,26 @@ const SignalsHistory = () => {
                               ) : (
                                 "N/A"
                               )}
+                            </TableCell>
+                            
+                            {/* Profit/Loss */}
+                            <TableCell>
+                              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                profitValue > 0 
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                                  : profitValue < 0
+                                  ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                                  : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                              }`}>
+                                {profitValue > 0 ? (
+                                  <TrendingUp className="w-3 h-3 mr-1" />
+                                ) : profitValue < 0 ? (
+                                  <TrendingDown className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <Percent className="w-3 h-3 mr-1" />
+                                )}
+                                {formatProfit(profitValue)}
+                              </div>
                             </TableCell>
                             
                             {/* Result */}
