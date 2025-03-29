@@ -1,5 +1,16 @@
 
-import { useEffect, useState, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { 
+  User, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  GoogleAuthProvider,
+  createUserWithEmailAndPassword, 
+  signOut,
+  updateProfile
+} from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { UserProfile } from '@/lib/types';
 import { setAuthToken, clearAuthToken } from '@/lib/signalsApi';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,9 +39,6 @@ const AuthContext = createContext<AuthContextType>({
 // Hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
-// Mock user store for demo purposes - in a real app, this would be in a database
-const mockUsers: Record<string, UserProfile> = {};
-
 // Auth provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -38,65 +46,63 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
+  // Convert Firebase user to UserProfile
+  const formatUser = (firebaseUser: User): UserProfile => {
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || '',
+      name: firebaseUser.displayName || '',
+      isAuthenticated: true,
+      token: '',
+      photoURL: firebaseUser.photoURL
+    };
+  };
+
   useEffect(() => {
-    // Check if user is already logged in (from localStorage)
-    const initAuth = async () => {
+    // Listen for authentication state changes
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsLoading(true);
       try {
-        const storedUser = localStorage.getItem('trading-ninja-user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          // Set auth token for API calls
-          if (parsedUser.token) {
-            setAuthToken(parsedUser.token);
-          }
+        if (firebaseUser) {
+          // User is signed in
+          const token = await firebaseUser.getIdToken();
+          const formattedUser = formatUser(firebaseUser);
+          formattedUser.token = token;
+          
+          setUser(formattedUser);
+          setAuthToken(token);
+          
+          // Store in localStorage for persistence
+          localStorage.setItem('trading-ninja-user', JSON.stringify(formattedUser));
+        } else {
+          // User is signed out
+          setUser(null);
+          clearAuthToken();
+          localStorage.removeItem('trading-ninja-user');
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
-        // Clear potentially corrupted data
-        localStorage.removeItem('trading-ninja-user');
+        console.error("Auth state change error:", error);
+        setUser(null);
         clearAuthToken();
+        localStorage.removeItem('trading-ninja-user');
       } finally {
         setIsLoading(false);
         setIsInitialized(true);
       }
-    };
+    });
 
-    initAuth();
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
-      
-      // In a real app, you would make an API call to validate credentials
-      const normalizedEmail = email.toLowerCase().trim();
-      const mockUser = Object.values(mockUsers).find(
-        u => u.email.toLowerCase() === normalizedEmail
-      );
-      
-      if (!mockUser || mockUser.password !== password) {
-        throw new Error('Email ou senha incorretos.');
-      }
-      
-      // Create auth session
-      const userProfile: UserProfile = {
-        uid: mockUser.uid,
-        email: mockUser.email,
-        name: mockUser.name,
-        isAuthenticated: true,
-        token: `mock-token-${Date.now()}`
-      };
-      
-      // Store in localStorage
-      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
-      setAuthToken(userProfile.token);
-      setUser(userProfile);
+      await signInWithEmailAndPassword(auth, email, password);
       
       toast({
         title: "Login realizado com sucesso",
-        description: `Bem-vindo de volta, ${mockUser.name || mockUser.email}!`,
+        description: "Bem-vindo de volta!",
       });
     } catch (error: any) {
       console.error('Login error:', error);
@@ -116,21 +122,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loginWithGoogle = async () => {
     try {
       setIsLoading(true);
-      
-      // Create a mock Google user
-      const timestamp = Date.now();
-      const userProfile: UserProfile = {
-        uid: `google-user-${timestamp}`,
-        email: `google-user-${timestamp}@example.com`,
-        name: `Google User ${timestamp}`,
-        isAuthenticated: true,
-        token: `mock-google-token-${timestamp}`
-      };
-      
-      // Store in localStorage
-      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
-      setAuthToken(userProfile.token);
-      setUser(userProfile);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
       
       toast({
         title: "Login com Google realizado",
@@ -142,7 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: "Não foi possível fazer login com o Google. Tente novamente.",
+        description: error.message || "Não foi possível fazer login com o Google. Tente novamente.",
       });
       
       throw error;
@@ -154,23 +147,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       setIsLoading(true);
-      
-      // Clear local storage and state
-      localStorage.removeItem('trading-ninja-user');
-      clearAuthToken();
-      setUser(null);
+      await signOut(auth);
       
       toast({
         title: "Logout realizado",
         description: "Você saiu da sua conta com sucesso.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Logout error:', error);
       
       toast({
         variant: "destructive",
         title: "Erro ao sair",
-        description: "Ocorreu um erro ao fazer logout. Tente novamente.",
+        description: error.message || "Ocorreu um erro ao fazer logout. Tente novamente.",
       });
       
       throw error;
@@ -183,49 +172,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setIsLoading(true);
       
-      // In a real app, you would make an API call to create a user
-      const normalizedEmail = email.toLowerCase().trim();
-      
-      // Check if email is already registered
-      const emailExists = Object.values(mockUsers).some(
-        u => u.email.toLowerCase() === normalizedEmail
-      );
-      
-      if (emailExists) {
-        throw new Error('Este email já está em uso.');
-      }
-      
       if (password.length < 6) {
         throw new Error('A senha precisa ter pelo menos 6 caracteres.');
       }
       
       // Create new user
-      const uid = `user-${Date.now()}`;
-      const newUser: UserProfile = {
-        uid,
-        email: normalizedEmail,
-        name,
-        password, // In a real app, NEVER store plain text passwords
-        isAuthenticated: true,
-        token: `mock-token-${Date.now()}`
-      };
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Add to mock store
-      mockUsers[uid] = newUser;
-      
-      // Create auth session
-      const userProfile: UserProfile = {
-        uid: newUser.uid,
-        email: newUser.email,
-        name: newUser.name,
-        isAuthenticated: true,
-        token: newUser.token
-      };
-      
-      // Store in localStorage
-      localStorage.setItem('trading-ninja-user', JSON.stringify(userProfile));
-      setAuthToken(userProfile.token);
-      setUser(userProfile);
+      // Update profile with name
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name
+        });
+      }
       
       toast({
         title: "Registro realizado com sucesso",

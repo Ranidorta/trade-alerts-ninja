@@ -1,23 +1,27 @@
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { Link, useNavigate } from 'react-router-dom';
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, loginWithGoogle, register, user } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const { toast } = useToast();
   const navigate = useNavigate();
   
-  // If user is already logged in, redirect to dashboard
-  if (user) {
+  // Check if user is already logged in
+  if (auth.currentUser) {
     navigate('/signals');
     return null;
   }
@@ -27,10 +31,14 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      await login(email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       navigate('/signals');
-    } catch (error) {
-      console.error('Login error:', error);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro de autenticação",
+        description: error.message || 'Erro ao fazer login. Tente novamente.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -41,10 +49,20 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      await register(email, password, name);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Update profile with name
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name
+        });
+      }
       navigate('/signals');
-    } catch (error) {
-      console.error('Register error:', error);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro no registro",
+        description: error.message || 'Erro ao criar conta. Tente novamente.',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -54,13 +72,22 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      await loginWithGoogle();
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
       navigate('/signals');
-    } catch (error) {
-      console.error('Google login error:', error);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro de autenticação",
+        description: error.message || 'Erro ao fazer login com Google. Tente novamente.',
+      });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
   };
 
   return (
@@ -94,14 +121,31 @@ const Login = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password">Senha</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Senha</Label>
+                      <Link 
+                        to="/forgot-password" 
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Esqueceu a senha?
+                      </Link>
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <button 
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={togglePasswordVisibility}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-4">
@@ -167,13 +211,22 @@ const Login = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="register-password">Senha</Label>
-                    <Input
-                      id="register-password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
+                    <div className="relative">
+                      <Input
+                        id="register-password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <button 
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={togglePasswordVisibility}
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter>
