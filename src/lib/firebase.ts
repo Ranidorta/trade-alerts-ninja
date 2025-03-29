@@ -2,8 +2,10 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 
+// Para desenvolvimento, use uma chave API Firebase válida
+// Em produção, considere usar variáveis de ambiente
 const firebaseConfig = {
-  apiKey: "sua-chave",
+  apiKey: "AIzaSyD5jS5CJX521o3ynuQB4zEiGJ65XxvaIkQ",
   authDomain: "trade-alerts-ninja.firebaseapp.com",
   projectId: "trade-alerts-ninja",
   storageBucket: "trade-alerts-ninja.appspot.com",
