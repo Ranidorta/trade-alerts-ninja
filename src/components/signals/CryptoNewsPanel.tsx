@@ -26,7 +26,7 @@ const CryptoNewsPanel: React.FC<CryptoNewsPanelProps> = ({ symbol, isLoading = f
     
     const symbolWithoutPair = symbol.replace('USDT', '');
     return news.filter(item => 
-      item.relatedCoins.some(coin => coin === symbolWithoutPair)
+      item.relatedCoins && item.relatedCoins.some(coin => coin === symbolWithoutPair)
     ).slice(0, 5);
   }, [news, symbol]);
 
@@ -69,7 +69,7 @@ const CryptoNewsPanel: React.FC<CryptoNewsPanelProps> = ({ symbol, isLoading = f
                 href={item.url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                key={item.id}
+                key={item.id || `news-${Math.random().toString(36).substring(2, 9)}`}
                 className="block hover:bg-primary/5 p-2 rounded-lg transition-colors"
               >
                 <div className="flex justify-between items-start">

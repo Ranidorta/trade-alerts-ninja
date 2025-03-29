@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
@@ -12,7 +11,7 @@ import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
 import PageHeader from "@/components/signals/PageHeader";
 import CryptoTicker from "@/components/CryptoTicker";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { fetchTopCryptos } from "@/lib/apiServices";
 import { useIsMobile } from "@/hooks/use-mobile";
 

@@ -1,6 +1,16 @@
 
 import { CryptoCoin, CryptoNews, MarketOverview, TradingSignal } from "@/lib/types";
-import { mockCryptoCoins, mockCryptoNews, mockMarketOverview, formatPercentage } from "@/lib/mockData";
+import { mockCryptoCoins, mockCryptoNews, mockMarketOverview } from "@/lib/mockData";
+
+// Export the formatPercentage function
+export const formatPercentage = (value: number) => {
+  const sign = value >= 0 ? "+" : "";
+  const color = value >= 0 ? "text-green-500" : "text-red-500";
+  return {
+    value: `${sign}${value.toFixed(2)}%`,
+    color
+  };
+};
 
 export async function fetchCryptoNews(): Promise<CryptoNews[]> {
   try {

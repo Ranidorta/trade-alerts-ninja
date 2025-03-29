@@ -1,6 +1,5 @@
-
 import { useState, useEffect, useCallback } from 'react';
-import { TradingSignal, SignalStatus, SignalDirection, TradingStrategy } from '@/lib/types';
+import { TradingSignal, SignalStatus, SignalDirection, SignalType } from '@/lib/types';
 import { fetchSignals } from '@/lib/signalsApi';
 import { mockSignals } from '@/lib/mockData';
 import { toast } from 'sonner';
@@ -21,8 +20,8 @@ export interface UseTradingSignalsReturn {
 // Helper functions
 const generateId = () => Math.random().toString(36).substring(2, 11);
 
-const generateMockSignal = (type: SignalDirection, symbol: string): TradingSignal => {
-  const isLong = type === 'LONG';
+const generateMockSignal = (type: SignalType, symbol: string): TradingSignal => {
+  const isLong = type === 'LONG' as SignalType;
   const basePrice = symbol === 'BTCUSDT' ? 65000 : 
                    symbol === 'ETHUSDT' ? 3500 : 
                    symbol === 'BNBUSDT' ? 550 : 
@@ -115,7 +114,7 @@ export function useTradingSignals(): UseTradingSignalsReturn {
       // If no signals provided, generate some random ones
       if (!newSignals || newSignals.length === 0) {
         const pairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT'];
-        const types: SignalDirection[] = ['LONG', 'SHORT'];
+        const types: SignalType[] = ['LONG' as SignalType, 'SHORT' as SignalType];
         
         newSignals = Array(5).fill(null).map(() => {
           const randomPair = pairs[Math.floor(Math.random() * pairs.length)];
@@ -124,18 +123,7 @@ export function useTradingSignals(): UseTradingSignalsReturn {
         });
       }
       
-      // Update the state with new signals
-      setSignals(currentSignals => {
-        // Make sure the new signals match the TradingSignal type
-        const typedNewSignals: TradingSignal[] = newSignals.map(signal => ({
-          ...signal,
-          status: signal.status as SignalStatus,
-          direction: signal.direction as SignalDirection,
-          type: signal.type as SignalDirection, // For backward compatibility
-        }));
-        
-        return [...typedNewSignals, ...currentSignals];
-      });
+      setSignals(currentSignals => [...newSignals, ...currentSignals]);
       
       // Extract strategies from new signals
       const newStrategies = newSignals
@@ -179,4 +167,4 @@ export function useTradingSignals(): UseTradingSignalsReturn {
   };
 }
 
-export default useTradingSignals;
+export { useTradingSignals };
