@@ -1,8 +1,12 @@
-
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  createUserWithEmailAndPassword, 
+  updateProfile 
+} from 'firebase/auth';
+import { auth, googleProvider } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +24,6 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Check if user is already logged in
   if (auth.currentUser) {
     navigate('/signals');
     return null;
@@ -34,10 +37,21 @@ const Login = () => {
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/signals');
     } catch (error: any) {
+      console.error("Login error:", error);
+      
+      let errorMessage = 'Erro ao fazer login. Tente novamente.';
+      if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'E-mail ou senha inválidos.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta.';
+      }
+      
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: error.message || 'Erro ao fazer login. Tente novamente.',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -49,19 +63,42 @@ const Login = () => {
     setIsLoading(true);
     
     try {
+      if (password.length < 6) {
+        throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+      }
+      
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // Update profile with name
-      if (userCredential.user) {
+      
+      if (userCredential.user && name) {
         await updateProfile(userCredential.user, {
           displayName: name
         });
       }
+      
+      toast({
+        title: "Conta criada com sucesso",
+        description: "Bem-vindo ao Trading Ninja!",
+      });
+      
       navigate('/signals');
     } catch (error: any) {
+      console.error("Registration error:", error);
+      
+      let errorMessage = 'Erro ao criar conta. Tente novamente.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este e-mail já está sendo usado.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'E-mail inválido.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'A senha é muito fraca.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         variant: "destructive",
         title: "Erro no registro",
-        description: error.message || 'Erro ao criar conta. Tente novamente.',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -72,14 +109,33 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Google login successful:", result.user);
+      
+      toast({
+        title: "Login com Google realizado",
+        description: "Bem-vindo ao Trading Ninja!",
+      });
+      
       navigate('/signals');
     } catch (error: any) {
+      console.error("Google login error:", error);
+      
+      let errorMessage = 'Erro ao fazer login com Google. Tente novamente.';
+      if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Popup de login fechado antes da conclusão.';
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = 'O navegador bloqueou o popup. Permita popups para este site.';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        errorMessage = 'Operação cancelada. Tente novamente.';
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = 'Este e-mail já está associado a outro método de login.';
+      }
+      
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: error.message || 'Erro ao fazer login com Google. Tente novamente.',
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
