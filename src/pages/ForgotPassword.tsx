@@ -37,11 +37,11 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="container flex items-center justify-center h-screen">
+    <div className="container flex items-center justify-center min-h-screen py-12">
       <div className="w-full max-w-md">
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Recuperar Senha</CardTitle>
+            <CardTitle className="text-2xl">Recuperar Senha</CardTitle>
             <CardDescription>
               Enviaremos um link para você redefinir sua senha
             </CardDescription>
