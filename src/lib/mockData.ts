@@ -1,5 +1,4 @@
-
-import { TradingSignal } from './types';
+import { TradingSignal, CryptoCoin, CryptoNews, MarketOverview } from './types';
 
 export const mockSignals: TradingSignal[] = [
   {
@@ -106,7 +105,6 @@ export const mockSignals: TradingSignal[] = [
   }
 ];
 
-// Historical signals
 export const mockHistoricalSignals: TradingSignal[] = [
   {
     id: "6",
@@ -176,5 +174,152 @@ export const mockHistoricalSignals: TradingSignal[] = [
   }
 ];
 
-// All signals combined
 export const allSignals = [...mockSignals, ...mockHistoricalSignals];
+
+export const mockCryptoCoins: CryptoCoin[] = [
+  {
+    id: "bitcoin",
+    symbol: "BTC",
+    name: "Bitcoin",
+    image: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+    currentPrice: 62548.32,
+    priceChange24h: 1245.67,
+    priceChangePercentage24h: 2.12,
+    marketCap: 1234567890123,
+    volume24h: 45678901234,
+    high24h: 63500.21,
+    low24h: 61200.45,
+    lastUpdated: new Date(),
+    trend: "BULLISH"
+  },
+  {
+    id: "ethereum",
+    symbol: "ETH",
+    name: "Ethereum",
+    image: "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
+    currentPrice: 3246.18,
+    priceChange24h: 86.43,
+    priceChangePercentage24h: 2.74,
+    marketCap: 387654321098,
+    volume24h: 19876543210,
+    high24h: 3280.12,
+    low24h: 3150.56,
+    lastUpdated: new Date(),
+    trend: "BULLISH"
+  },
+  {
+    id: "solana",
+    symbol: "SOL",
+    name: "Solana",
+    image: "https://assets.coingecko.com/coins/images/4128/large/solana.png",
+    currentPrice: 139.72,
+    priceChange24h: -5.89,
+    priceChangePercentage24h: -4.04,
+    marketCap: 58765432109,
+    volume24h: 8765432109,
+    high24h: 146.21,
+    low24h: 138.56,
+    lastUpdated: new Date(),
+    trend: "BEARISH"
+  },
+  {
+    id: "cardano",
+    symbol: "ADA",
+    name: "Cardano",
+    image: "https://assets.coingecko.com/coins/images/975/large/cardano.png",
+    currentPrice: 0.45,
+    priceChange24h: 0.02,
+    priceChangePercentage24h: 4.65,
+    marketCap: 15765432109,
+    volume24h: 876543210,
+    high24h: 0.46,
+    low24h: 0.42,
+    lastUpdated: new Date(),
+    trend: "BULLISH"
+  },
+  {
+    id: "binancecoin",
+    symbol: "BNB",
+    name: "Binance Coin",
+    image: "https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png",
+    currentPrice: 562.78,
+    priceChange24h: -12.34,
+    priceChangePercentage24h: -2.15,
+    marketCap: 87654321098,
+    volume24h: 5678901234,
+    high24h: 578.32,
+    low24h: 559.87,
+    lastUpdated: new Date(),
+    trend: "BEARISH"
+  }
+];
+
+export const mockCryptoNews: CryptoNews[] = [
+  {
+    id: "1",
+    title: "Bitcoin Hits New All-Time High Amid Institutional Adoption",
+    summary: "Bitcoin has reached a new record price as major financial institutions continue to invest.",
+    url: "https://example.com/news/bitcoin-ath",
+    publishedAt: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(),
+    source: "CryptoNews",
+    image: "https://example.com/images/bitcoin-news.jpg",
+    relatedCoins: ["BTC"]
+  },
+  {
+    id: "2",
+    title: "Ethereum 2.0 Upgrade On Schedule For Q3 Launch",
+    summary: "The long-awaited Ethereum upgrade is proceeding as planned according to developers.",
+    url: "https://example.com/news/ethereum-upgrade",
+    publishedAt: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString(),
+    source: "BlockchainReport",
+    image: "https://example.com/images/ethereum-news.jpg",
+    relatedCoins: ["ETH"]
+  },
+  {
+    id: "3",
+    title: "Regulatory Framework for Cryptocurrencies Proposed by EU Commission",
+    summary: "New regulations aim to provide clarity while protecting investors in the crypto space.",
+    url: "https://example.com/news/crypto-regulations",
+    publishedAt: new Date(new Date().setDate(new Date().getDate() - 3)).toISOString(),
+    source: "FinanceDaily",
+    image: "https://example.com/images/regulation-news.jpg",
+    relatedCoins: ["BTC", "ETH", "XRP"]
+  },
+  {
+    id: "4",
+    title: "Solana Network Experiences Brief Outage, Quickly Recovers",
+    summary: "The Solana blockchain faced technical issues but was restored within hours.",
+    url: "https://example.com/news/solana-outage",
+    publishedAt: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(),
+    source: "CryptoInsider",
+    image: "https://example.com/images/solana-news.jpg",
+    relatedCoins: ["SOL"]
+  },
+  {
+    id: "5",
+    title: "Major Bank Launches Cryptocurrency Custody Service for Institutional Clients",
+    summary: "Banking giant enters the crypto space with new services for large investors.",
+    url: "https://example.com/news/bank-crypto-service",
+    publishedAt: new Date().toISOString(),
+    source: "BusinessCrypto",
+    image: "https://example.com/images/bank-news.jpg",
+    relatedCoins: ["BTC", "ETH"]
+  }
+];
+
+export const mockMarketOverview: MarketOverview = {
+  activeCryptocurrencies: 12874,
+  totalMarketCap: 2346789012345,
+  totalVolume24h: 98765432101,
+  marketCapPercentage: {
+    btc: 47.2,
+    eth: 18.5
+  },
+  marketCapChangePercentage24hUsd: 2.4,
+  lastUpdated: new Date()
+};
+
+export const formatPercentage = (value: number): string => {
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+};

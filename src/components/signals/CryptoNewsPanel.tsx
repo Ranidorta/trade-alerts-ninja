@@ -1,119 +1,98 @@
 
-import { useEffect, useState } from "react";
-import { fetchCryptoNews } from "@/lib/apiServices";
-import { CryptoNews } from "@/lib/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { ExternalLink, Newspaper, Loader2 } from "lucide-react";
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { fetchCryptoNews } from '@/lib/apiServices';
+import { CryptoNews } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ExternalLink } from 'lucide-react';
 
-interface CryptoNewsPanelProps {
+export interface CryptoNewsPanelProps {
   symbol?: string;
   isLoading?: boolean;
 }
 
-export default function CryptoNewsPanel({ symbol = "", isLoading = false }: CryptoNewsPanelProps) {
-  const [news, setNews] = useState<CryptoNews[]>([]);
-  const [isLoadingNews, setIsLoadingNews] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const CryptoNewsPanel: React.FC<CryptoNewsPanelProps> = ({ symbol, isLoading = false }) => {
+  // Fetch crypto news
+  const { data: news, isLoading: isLoadingNews } = useQuery({
+    queryKey: ['cryptoNews'],
+    queryFn: fetchCryptoNews,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
 
-  useEffect(() => {
-    const fetchNews = async () => {
-      setIsLoadingNews(true);
-      setError(null);
-
-      try {
-        const newsData = await fetchCryptoNews();
-        
-        // Filter news to try to find relevant ones for the symbol
-        // This is just a simple filter since the mock API doesn't support symbol filtering
-        if (symbol) {
-          const tokenName = symbol.replace('USDT', '').toLowerCase();
-          const filteredNews = newsData.filter(item => 
-            item.title.toLowerCase().includes(tokenName) || 
-            item.description.toLowerCase().includes(tokenName)
-          );
-          
-          // If no specific news found, just show all news
-          setNews(filteredNews.length > 0 ? filteredNews : newsData);
-        } else {
-          setNews(newsData);
-        }
-      } catch (err) {
-        console.error("Error fetching crypto news:", err);
-        setError("Não foi possível carregar notícias");
-      } finally {
-        setIsLoadingNews(false);
-      }
-    };
-
-    fetchNews();
-  }, [symbol]);
+  // Filter news by symbol if provided
+  const filteredNews = React.useMemo(() => {
+    if (!news) return [];
+    if (!symbol) return news.slice(0, 5);
+    
+    const symbolWithoutPair = symbol.replace('USDT', '');
+    return news.filter(item => 
+      item.relatedCoins.some(coin => coin === symbolWithoutPair)
+    ).slice(0, 5);
+  }, [news, symbol]);
 
   const showLoading = isLoading || isLoadingNews;
 
+  if (showLoading) {
+    return (
+      <div>
+        <div className="p-4 border-b border-primary/10">
+          <h2 className="text-lg font-semibold">Crypto News</h2>
+        </div>
+        <div className="p-4 space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Card className="h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <Newspaper className="h-5 w-5" />
-          Notícias Relacionadas
-        </CardTitle>
-        <CardDescription>
-          {symbol ? `Últimas notícias sobre ${symbol.replace("USDT", "")}` : "Últimas notícias do mercado"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        {showLoading ? (
-          <div className="flex justify-center items-center h-[300px]">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : error ? (
-          <div className="flex justify-center items-center h-[300px] text-center px-4">
-            <p className="text-sm text-muted-foreground">{error}</p>
-          </div>
-        ) : news.length === 0 ? (
-          <div className="flex justify-center items-center h-[300px] text-center px-4">
-            <p className="text-sm text-muted-foreground">Nenhuma notícia encontrada</p>
+    <div>
+      <div className="p-4 border-b border-primary/10">
+        <h2 className="text-lg font-semibold">
+          {symbol 
+            ? `${symbol.replace('USDT', '')} News`
+            : 'Crypto News'
+          }
+        </h2>
+      </div>
+      <div className="p-4">
+        {filteredNews.length > 0 ? (
+          <div className="space-y-4">
+            {filteredNews.map((item: CryptoNews) => (
+              <a 
+                href={item.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                key={item.id}
+                className="block hover:bg-primary/5 p-2 rounded-lg transition-colors"
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="font-medium text-sm">{item.title}</h3>
+                  <ExternalLink className="h-3 w-3 flex-shrink-0 text-muted-foreground mt-1" />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{item.summary}</p>
+                <div className="flex items-center text-xs text-muted-foreground mt-2">
+                  <span>{item.source}</span>
+                  <span className="mx-1">•</span>
+                  <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
+                </div>
+              </a>
+            ))}
           </div>
         ) : (
-          <ScrollArea className="h-[300px]">
-            <div className="px-6 py-2">
-              {news.map((item, index) => (
-                <div 
-                  key={`${item.url}-${index}`} 
-                  className="mb-4 last:mb-2 border-b last:border-0 pb-4 last:pb-0"
-                >
-                  <a 
-                    href={item.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="group"
-                  >
-                    <h3 className="text-sm font-medium mb-1 group-hover:text-primary group-hover:underline">
-                      {item.title}
-                      <ExternalLink className="inline-block ml-1 h-3 w-3 opacity-50 group-hover:opacity-100" />
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {item.description}
-                    </p>
-                    <div className="flex justify-between items-center mt-2 text-xs text-muted-foreground">
-                      <span>{item.source.name}</span>
-                      <span>
-                        {formatDistanceToNow(new Date(item.publishedAt), { 
-                          addSuffix: true,
-                          locale: ptBR
-                        })}
-                      </span>
-                    </div>
-                  </a>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+          <div className="text-center py-4">
+            <p className="text-muted-foreground">No news available{symbol ? ` for ${symbol.replace('USDT', '')}` : ''}.</p>
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
-}
+};
+
+export default CryptoNewsPanel;
