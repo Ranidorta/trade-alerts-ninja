@@ -211,6 +211,11 @@ body {
   background-color: #ff3d71;
 }
 
+.status-waiting {
+  background-color: #ffb300;
+  box-shadow: 0 0 8px rgba(255, 179, 0, 0.6);
+}
+
 /* Responsive fixes */
 @media (max-width: 768px) {
   .dashboard-grid {

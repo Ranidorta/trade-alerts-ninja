@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import useTradingSignals from "@/hooks/useTradingSignals";
+import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { TradingSignal } from "@/lib/types";
 import { Loader2, RefreshCw } from "lucide-react";
 import CandlestickChart from "@/components/signals/CandlestickChart";
@@ -18,7 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const SignalsDashboard = () => {
   const { toast } = useToast();
-  const { signals, isLoading, error, refreshSignals, generateSignals } = useTradingSignals();
+  const { signals, loading: isLoading, error, fetchSignals: refreshSignals, addSignals: generateSignals } = useTradingSignals();
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const isMobile = useIsMobile();
@@ -47,7 +47,7 @@ const SignalsDashboard = () => {
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     try {
-      await generateSignals();
+      await generateSignals([]);
       toast({
         title: "Sinais gerados com sucesso!",
         description: "Novos sinais de trading foram gerados.",
@@ -118,33 +118,32 @@ const SignalsDashboard = () => {
       </div>
 
       <div className="flex flex-col space-y-4">
-        <PageHeader 
-          title="Dashboard de Sinais"
-          description="Acompanhe e analise sinais de trading em tempo real"
-          buttons={
-            <>
-              <Button
-                variant="outline"
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className="mr-2"
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                Atualizar
-              </Button>
-              <Button onClick={handleGenerateSignals} disabled={isGenerating}>
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  'Gerar Sinais'
-                )}
-              </Button>
-            </>
-          }
-        />
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold">Dashboard de Sinais</h1>
+            <p className="text-muted-foreground">Acompanhe e analise sinais de trading em tempo real</p>
+          </div>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+            <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                'Gerar Sinais'
+              )}
+            </Button>
+          </div>
+        </div>
 
         {/* Summary cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -210,7 +209,10 @@ const SignalsDashboard = () => {
 
             {/* News */}
             <div className="crypto-card">
-              <CryptoNewsPanel isLoading={false} />
+              <CryptoNewsPanel 
+                symbol={activeSignal?.symbol} 
+                isLoading={isLoading} 
+              />
             </div>
           </div>
         </div>

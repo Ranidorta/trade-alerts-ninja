@@ -9,19 +9,18 @@ import { ptBR } from "date-fns/locale";
 import { ExternalLink, Newspaper, Loader2 } from "lucide-react";
 
 interface CryptoNewsPanelProps {
-  symbol: string;
+  symbol?: string;
+  isLoading?: boolean;
 }
 
-export default function CryptoNewsPanel({ symbol }: CryptoNewsPanelProps) {
+export default function CryptoNewsPanel({ symbol = "", isLoading = false }: CryptoNewsPanelProps) {
   const [news, setNews] = useState<CryptoNews[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingNews, setIsLoadingNews] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchNews = async () => {
-      if (!symbol) return;
-
-      setIsLoading(true);
+      setIsLoadingNews(true);
       setError(null);
 
       try {
@@ -29,24 +28,30 @@ export default function CryptoNewsPanel({ symbol }: CryptoNewsPanelProps) {
         
         // Filter news to try to find relevant ones for the symbol
         // This is just a simple filter since the mock API doesn't support symbol filtering
-        const tokenName = symbol.replace('USDT', '').toLowerCase();
-        const filteredNews = newsData.filter(item => 
-          item.title.toLowerCase().includes(tokenName) || 
-          item.description.toLowerCase().includes(tokenName)
-        );
-        
-        // If no specific news found, just show all news
-        setNews(filteredNews.length > 0 ? filteredNews : newsData);
+        if (symbol) {
+          const tokenName = symbol.replace('USDT', '').toLowerCase();
+          const filteredNews = newsData.filter(item => 
+            item.title.toLowerCase().includes(tokenName) || 
+            item.description.toLowerCase().includes(tokenName)
+          );
+          
+          // If no specific news found, just show all news
+          setNews(filteredNews.length > 0 ? filteredNews : newsData);
+        } else {
+          setNews(newsData);
+        }
       } catch (err) {
         console.error("Error fetching crypto news:", err);
         setError("Não foi possível carregar notícias");
       } finally {
-        setIsLoading(false);
+        setIsLoadingNews(false);
       }
     };
 
     fetchNews();
   }, [symbol]);
+
+  const showLoading = isLoading || isLoadingNews;
 
   return (
     <Card className="h-full">
@@ -56,11 +61,11 @@ export default function CryptoNewsPanel({ symbol }: CryptoNewsPanelProps) {
           Notícias Relacionadas
         </CardTitle>
         <CardDescription>
-          Últimas notícias sobre {symbol.replace("USDT", "")}
+          {symbol ? `Últimas notícias sobre ${symbol.replace("USDT", "")}` : "Últimas notícias do mercado"}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        {isLoading ? (
+        {showLoading ? (
           <div className="flex justify-center items-center h-[300px]">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>

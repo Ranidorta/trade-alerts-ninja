@@ -4,9 +4,7 @@ import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
 import { 
   saveSignalsToHistory, 
-  getSignalsHistory,
-  updateAllSignalsStatus,
-  reprocessAllHistory
+  getSignalsHistory
 } from "@/lib/signalHistoryService";
 
 // Using a fallback URL for the backend
@@ -77,7 +75,7 @@ export const useTradingSignals = () => {
         } else {
           throw new Error(`API returned status ${response.status}`);
         }
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         clearTimeout(timeoutId);
         console.warn(`Could not fetch from API: ${fetchError.message}. Trying to use cached signals.`);
         
@@ -142,7 +140,9 @@ export const useTradingSignals = () => {
           ...signal,
           // Make sure we have a symbol
           symbol: signal.symbol || signal.pair || "UNKNOWN",
-          // Ensure direction is set
+          // Ensure type is set (LONG or SHORT)
+          type: signal.type || (Math.random() > 0.5 ? "LONG" : "SHORT"),
+          // Ensure direction is set (BUY or SELL)
           direction: signal.direction || (Math.random() > 0.5 ? "BUY" : "SELL"),
           // Ensure status is set
           status: signal.status || "WAITING",
@@ -202,6 +202,10 @@ export const useTradingSignals = () => {
         createdAt: signal.createdAt || new Date().toISOString(),
         // Add default result if not provided
         result: signal.result !== undefined ? signal.result : undefined,
+        // Ensure type is set (LONG or SHORT)
+        type: signal.type || (Math.random() > 0.5 ? "LONG" : "SHORT"),
+        // Ensure direction is set
+        direction: signal.direction || (Math.random() > 0.5 ? "BUY" : "SELL"),
         // Ensure targets are properly formatted
         targets: signal.targets || (signal.entryPrice ? [
           { level: 1, price: signal.entryPrice * 1.03, hit: false },
@@ -224,13 +228,77 @@ export const useTradingSignals = () => {
   // Update signal statuses based on current prices
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
-      const updatedSignals = await updateAllSignalsStatus(currentPrices);
-      setSignals(updatedSignals);
+      // Since we've removed updateAllSignalsStatus, we'll implement our own update logic
+      setSignals(currentSignals => {
+        const updatedSignals = currentSignals.map(signal => {
+          // If we have current price for this symbol, update signal status
+          if (currentPrices && currentPrices[signal.symbol]) {
+            const currentPrice = currentPrices[signal.symbol];
+            
+            // Only update active signals
+            if (signal.status === "ACTIVE") {
+              const isLong = signal.type === "LONG";
+              
+              // Check if stop loss hit
+              if ((isLong && currentPrice <= signal.stopLoss) || 
+                  (!isLong && currentPrice >= signal.stopLoss)) {
+                return { ...signal, status: "COMPLETED", result: 0, profit: -5 };
+              }
+              
+              // Check if take profit hit
+              if (signal.targets && signal.targets.length > 0) {
+                // For long positions
+                if (isLong && currentPrice >= signal.targets[0].price) {
+                  const updatedTargets = signal.targets.map((target, idx) => ({
+                    ...target,
+                    hit: currentPrice >= target.price
+                  }));
+                  const hitCount = updatedTargets.filter(t => t.hit).length;
+                  return { 
+                    ...signal, 
+                    status: "COMPLETED", 
+                    result: 1, 
+                    profit: hitCount * 5,
+                    targets: updatedTargets,
+                    tpHit: hitCount
+                  };
+                }
+                
+                // For short positions
+                if (!isLong && currentPrice <= signal.targets[0].price) {
+                  const updatedTargets = signal.targets.map((target, idx) => ({
+                    ...target,
+                    hit: currentPrice <= target.price
+                  }));
+                  const hitCount = updatedTargets.filter(t => t.hit).length;
+                  return { 
+                    ...signal, 
+                    status: "COMPLETED", 
+                    result: 1, 
+                    profit: hitCount * 5,
+                    targets: updatedTargets,
+                    tpHit: hitCount
+                  };
+                }
+              }
+            }
+          }
+          
+          return signal;
+        });
+        
+        // Save updated signals to localStorage
+        localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(updatedSignals));
+        
+        return updatedSignals;
+      });
+      
       toast({
         title: "Signals updated",
-        description: `Updated ${updatedSignals.length} signals with current status`,
+        description: `Updated signals with current status`,
       });
-      return updatedSignals;
+      
+      return signals;
     } catch (err) {
       console.error("Error updating signal statuses:", err);
       toast({
@@ -240,28 +308,7 @@ export const useTradingSignals = () => {
       });
       return null;
     }
-  }, [toast]);
-
-  // Reprocess all signals in history
-  const reprocessHistory = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
-    try {
-      const reprocessedSignals = await reprocessAllHistory(currentPrices);
-      setSignals(reprocessedSignals);
-      toast({
-        title: "History reprocessed",
-        description: `Reprocessed ${reprocessedSignals.length} signals in history`,
-      });
-      return reprocessedSignals;
-    } catch (err) {
-      console.error("Error reprocessing signal history:", err);
-      toast({
-        variant: "destructive",
-        title: "Error reprocessing history",
-        description: "Failed to reprocess signal history",
-      });
-      return null;
-    }
-  }, [toast]);
+  }, [signals, toast]);
 
   // Generate mock signals for demo purposes
   const generateMockSignals = (count: number): TradingSignal[] => {
@@ -271,6 +318,7 @@ export const useTradingSignals = () => {
     return Array.from({ length: count }, (_, i) => {
       const entryPrice = Math.random() * 1000 + 100;
       const direction = Math.random() > 0.5 ? "BUY" : "SELL";
+      const type = Math.random() > 0.5 ? "LONG" : "SHORT";
       const isWinner = Math.random() > 0.4;
       const createdDate = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
       
@@ -278,18 +326,19 @@ export const useTradingSignals = () => {
         id: `mock-${i}-${Date.now()}`,
         symbol: symbols[Math.floor(Math.random() * symbols.length)],
         direction,
+        type,
         entryPrice,
         status: Math.random() > 0.3 ? "COMPLETED" : "ACTIVE",
         result: isWinner ? 1 : 0,
         profit: isWinner ? Math.random() * 5 + 1 : -(Math.random() * 2 + 0.5),
         createdAt: createdDate.toISOString(),
-        stopLoss: direction === "BUY" 
+        stopLoss: type === "LONG" 
           ? entryPrice * (1 - Math.random() * 0.05) 
           : entryPrice * (1 + Math.random() * 0.05),
         targets: [
-          { level: 1, price: direction === "BUY" ? entryPrice * 1.03 : entryPrice * 0.97, hit: isWinner },
-          { level: 2, price: direction === "BUY" ? entryPrice * 1.05 : entryPrice * 0.95, hit: isWinner && Math.random() > 0.5 },
-          { level: 3, price: direction === "BUY" ? entryPrice * 1.08 : entryPrice * 0.92, hit: isWinner && Math.random() > 0.7 }
+          { level: 1, price: type === "LONG" ? entryPrice * 1.03 : entryPrice * 0.97, hit: isWinner },
+          { level: 2, price: type === "LONG" ? entryPrice * 1.05 : entryPrice * 0.95, hit: isWinner && Math.random() > 0.5 },
+          { level: 3, price: type === "LONG" ? entryPrice * 1.08 : entryPrice * 0.92, hit: isWinner && Math.random() > 0.7 }
         ]
       } as TradingSignal;
     });
@@ -301,7 +350,8 @@ export const useTradingSignals = () => {
     error, 
     fetchSignals, 
     addSignals,
-    updateSignalStatuses,
-    reprocessHistory
+    updateSignalStatuses
   };
 };
+
+export default useTradingSignals;

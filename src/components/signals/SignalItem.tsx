@@ -1,6 +1,6 @@
 
 import React from "react";
-import { TradingSignal } from "@/lib/types";
+import { TradingSignal, SignalType, SignalStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ interface SignalItemProps {
 }
 
 const SignalItem = ({ signal, isActive, onSelect }: SignalItemProps) => {
-  const isLong = signal.direction === "LONG";
+  const isLong = signal.type === "LONG";
   const badgeVariant = isLong ? "success" : "destructive";
   const badgeText = isLong ? "LONG" : "SHORT";
   const signalIcon = isLong ? (
@@ -27,8 +27,8 @@ const SignalItem = ({ signal, isActive, onSelect }: SignalItemProps) => {
         return <div className="status-indicator status-active"></div>;
       case "COMPLETED":
         return <div className="status-indicator status-completed"></div>;
-      case "FAILED":
-        return <div className="status-indicator status-failed"></div>;
+      case "WAITING":
+        return <div className="status-indicator status-waiting"></div>;
       default:
         return null;
     }
@@ -61,7 +61,7 @@ const SignalItem = ({ signal, isActive, onSelect }: SignalItemProps) => {
       <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground">Entrada:</span>
-          <span className="font-medium">${formatPrice(signal.entryPrice)}</span>
+          <span className="font-medium">${formatPrice(signal.entryPrice || 0)}</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground">SL:</span>
