@@ -87,7 +87,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <div className="gamer-theme">
+            <div className="gamer-theme font-orbitron">
               <Navbar />
               <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
                 <AppRoutes />
