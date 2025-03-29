@@ -20,7 +20,8 @@ export default {
 		extend: {
 			fontFamily: {
 				orbitron: ['Orbitron', 'sans-serif'],
-				sans: ['Orbitron', 'sans-serif'],
+				rajdhani: ['Rajdhani', 'sans-serif'],
+				sans: ['Rajdhani', 'sans-serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
