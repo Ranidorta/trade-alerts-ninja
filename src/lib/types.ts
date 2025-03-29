@@ -123,6 +123,7 @@ export interface UserProfile {
   isAuthenticated: boolean;
   token?: string;
   password?: string; // Only for mocking - would never store this in a real app
+  photoURL?: string; // Adicionando o campo photoURL como opcional
 }
 
 export interface PerformanceMetrics {
