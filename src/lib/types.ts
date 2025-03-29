@@ -1,3 +1,4 @@
+
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -140,6 +141,7 @@ export interface PerformanceMetrics {
   strategyData: StrategyTypePerformance[];
   dailyData: DailyPerformance[];
   strategyPerformance?: StrategyDetailedPerformance[];
+  avgProfit?: number;
 }
 
 export interface SymbolPerformance {

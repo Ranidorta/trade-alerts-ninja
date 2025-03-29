@@ -1,3 +1,4 @@
+
 import { TradingSignal } from "@/lib/types";
 import { logTradeSignal } from "./firebase";
 
@@ -265,28 +266,33 @@ export const analyzeSignalsHistory = () => {
     return acc;
   }, {} as {[strategy: string]: {total: number, wins: number, losses: number, profit: number}});
   
+  // Transform the symbolPerformance object into an array
+  const symbolsData = Object.entries(symbolPerformance).map(([symbol, data]) => ({
+    symbol,
+    count: data.total,
+    wins: data.wins,
+    losses: data.losses,
+    winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0
+  }));
+  
+  // Transform the strategyPerformance object into an array
+  const strategyData = Object.entries(strategyPerformance).map(([strategy, data]) => ({
+    strategy,
+    count: data.total,
+    wins: data.wins,
+    losses: data.losses,
+    winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0,
+    profit: data.profit,
+    avgTradeProfit: data.total > 0 ? data.profit / data.total : 0
+  }));
+  
   return {
-    total,
-    completed,
-    wins,
-    losses,
+    totalSignals: total,
+    winningTrades: wins,
+    losingTrades: losses,
     winRate,
     avgProfit,
-    symbolPerformance: Object.entries(symbolPerformance).map(([symbol, data]) => ({
-      symbol,
-      total: data.total,
-      wins: data.wins,
-      losses: data.losses,
-      winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0
-    })),
-    strategyPerformance: Object.entries(strategyPerformance).map(([strategy, data]) => ({
-      strategy,
-      total: data.total,
-      wins: data.wins,
-      losses: data.losses,
-      winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0,
-      profit: data.profit,
-      avgTradeProfit: data.total > 0 ? data.profit / data.total : 0
-    }))
+    symbolsData,
+    strategyData
   };
 };
