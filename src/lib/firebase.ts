@@ -32,7 +32,8 @@ if (import.meta.env.PROD) {
   });
 } else {
   // For non-production environments, you can bypass App Check for development
-  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  // Using type assertion to safely set the debug token
+  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 }
 
 // Initialize analytics only if supported by the browser
