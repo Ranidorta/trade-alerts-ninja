@@ -1,4 +1,5 @@
 import { TradingSignal } from "@/lib/types";
+import { logTradeSignal } from "./firebase";
 
 // Local storage key for saved signals
 const SIGNALS_HISTORY_KEY = "trading_signals_history";
@@ -67,6 +68,13 @@ export const updateSignalOutcome = async (
     updatedSignal.result = updatedSignal.profit > 0 ? 1 : 0; // 1 for win, 0 for loss
     // Count how many targets were hit
     updatedSignal.tpHit = updatedSignal.targets?.filter(t => t.hit).length || 0;
+    
+    // Also log updated signal to Firebase for tracking
+    try {
+      await logTradeSignal(updatedSignal);
+    } catch (err) {
+      console.error("Error updating signal in Firebase:", err);
+    }
   } else {
     // Signal is still active or waiting
     updatedSignal.result = undefined;

@@ -1,9 +1,9 @@
-
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { config } from "@/config/env";
+import { updateStrategyStatistics } from "./firebaseFunctions";
 
 // Firebase configuration using environment variables
 const firebaseConfig = {
@@ -44,7 +44,8 @@ export async function logTradeSignal(signalData) {
     }
 
     // 2. Save details to Firestore
-    await setDoc(doc(db, "signals", `signal_${Date.now()}`), {
+    const signalId = `signal_${Date.now()}`;
+    await setDoc(doc(db, "signals", signalId), {
       asset: signalData.symbol || signalData.pair || "UNKNOWN",
       direction: signalData.direction || "UNKNOWN",
       timestamp: new Date(),
@@ -55,6 +56,11 @@ export async function logTradeSignal(signalData) {
       stopLoss: signalData.stopLoss,
       targets: signalData.targets
     });
+    
+    // 3. Update strategy statistics (similar to Firebase Functions trigger)
+    if (signalData.result !== undefined) {
+      await updateStrategyStatistics(signalData);
+    }
     
     console.log("Signal logged to Firebase:", signalData.symbol);
     return true;
