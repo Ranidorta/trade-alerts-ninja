@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap } from "lucide-react";
@@ -36,12 +35,50 @@ const SignalsDashboard = () => {
   
   const {
     signals: cachedSignals,
-    addSignals
+    addSignals,
+    getLastActiveSignal,
+    setLastActiveSignal
   } = useTradingSignals();
   
   useEffect(() => {
-    if (signals.length > 0) return;
-  }, [signals.length]);
+    if (signals.length > 0) {
+      if (!activeSignal) {
+        const lastActiveSignal = getLastActiveSignal();
+        if (lastActiveSignal) {
+          const signalExists = signals.some(s => s.id === lastActiveSignal.id);
+          if (signalExists) {
+            setActiveSignal(lastActiveSignal);
+          } else if (signals.length > 0) {
+            setActiveSignal(signals[0]);
+            setLastActiveSignal(signals[0]);
+          }
+        } else if (signals.length > 0) {
+          setActiveSignal(signals[0]);
+          setLastActiveSignal(signals[0]);
+        }
+      }
+      return;
+    }
+    
+    if (cachedSignals && cachedSignals.length > 0) {
+      setSignals(cachedSignals);
+      setFilteredSignals(cachedSignals);
+      
+      const lastActive = getLastActiveSignal();
+      if (lastActive) {
+        const signalExists = cachedSignals.some(s => s.id === lastActive.id);
+        if (signalExists) {
+          setActiveSignal(lastActive);
+        } else {
+          setActiveSignal(cachedSignals[0]);
+          setLastActiveSignal(cachedSignals[0]);
+        }
+      } else if (cachedSignals.length > 0) {
+        setActiveSignal(cachedSignals[0]);
+        setLastActiveSignal(cachedSignals[0]);
+      }
+    }
+  }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal]);
   
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
@@ -202,6 +239,7 @@ const SignalsDashboard = () => {
   
   const handleSelectSignal = (signal: TradingSignal) => {
     setActiveSignal(signal);
+    setLastActiveSignal(signal);
   };
   
   return (

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
@@ -12,8 +13,9 @@ import {
 // Using a fallback URL for the backend
 const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
 
-// Set up localStorage key for cached signals
+// Set up localStorage keys
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
+const LAST_ACTIVE_SIGNAL_KEY = "last_active_signal";
 
 export const useTradingSignals = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -38,6 +40,27 @@ export const useTradingSignals = () => {
         // Invalid data in localStorage, clear it
         localStorage.removeItem(SIGNALS_STORAGE_KEY);
       }
+    }
+  }, []);
+
+  // Function to get the last active signal
+  const getLastActiveSignal = useCallback((): TradingSignal | null => {
+    try {
+      const lastSignalJson = localStorage.getItem(LAST_ACTIVE_SIGNAL_KEY);
+      if (lastSignalJson) {
+        return JSON.parse(lastSignalJson);
+      }
+    } catch (err) {
+      console.error("Error retrieving last active signal:", err);
+      localStorage.removeItem(LAST_ACTIVE_SIGNAL_KEY);
+    }
+    return null;
+  }, []);
+
+  // Function to set the last active signal
+  const setLastActiveSignal = useCallback((signal: TradingSignal | null) => {
+    if (signal) {
+      localStorage.setItem(LAST_ACTIVE_SIGNAL_KEY, JSON.stringify(signal));
     }
   }, []);
 
@@ -210,6 +233,11 @@ export const useTradingSignals = () => {
         ] : [])
       }));
       
+      // Set the last active signal if this is the first signal being added
+      if (processedNewSignals.length > 0 && currentSignals.length === 0) {
+        setLastActiveSignal(processedNewSignals[0]);
+      }
+      
       // Combine existing and new signals
       const updatedSignals = [...processedNewSignals, ...currentSignals];
       
@@ -219,7 +247,7 @@ export const useTradingSignals = () => {
       
       return updatedSignals;
     });
-  }, []);
+  }, [setLastActiveSignal]);
 
   // Update signal statuses based on current prices
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
@@ -302,6 +330,8 @@ export const useTradingSignals = () => {
     fetchSignals, 
     addSignals,
     updateSignalStatuses,
-    reprocessHistory
+    reprocessHistory,
+    getLastActiveSignal,
+    setLastActiveSignal
   };
 };
