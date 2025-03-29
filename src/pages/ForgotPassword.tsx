@@ -31,10 +31,13 @@ const ForgotPassword = () => {
     
     try {
       await sendPasswordResetEmail(auth, email);
+      console.log("E-mail de recuperação enviado para:", email);
+      
       toast({
         title: "E-mail enviado",
         description: "Verifique sua caixa de entrada para redefinir sua senha.",
       });
+      
       // Limpar o campo de e-mail após o envio bem-sucedido
       setEmail('');
     } catch (error: any) {
@@ -49,6 +52,10 @@ const ForgotPassword = () => {
         errorMessage = "O formato do e-mail é inválido.";
       } else if (error.code === 'auth/too-many-requests') {
         errorMessage = "Muitas tentativas. Tente novamente mais tarde.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Falha na conexão de rede. Verifique sua internet.";
+      } else if (error.code === 'auth/internal-error') {
+        errorMessage = "Erro interno do servidor. Tente novamente mais tarde.";
       }
       
       toast({
