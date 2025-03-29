@@ -1,6 +1,6 @@
 
 import { db } from "./firebase";
-import { TradingSignal, StrategyPerformance } from "./types";
+import { TradingSignal, StrategyTypePerformance } from "./types";
 import { fetchBinanceCandles, checkPriceLevels, getTradeResult } from "./binanceService";
 
 /**
@@ -62,7 +62,7 @@ export async function updateStrategyStatistics(signal: TradingSignal): Promise<b
 /**
  * Retrieves strategy performance statistics from Firestore
  */
-export async function getStrategiesPerformance(): Promise<StrategyPerformance[]> {
+export async function getStrategiesPerformance(): Promise<StrategyTypePerformance[]> {
   try {
     // Import these functions here to avoid issues with SSR
     const { collection, getDocs } = await import("firebase/firestore");
@@ -70,7 +70,7 @@ export async function getStrategiesPerformance(): Promise<StrategyPerformance[]>
     const strategiesRef = collection(db, "strategies");
     const querySnapshot = await getDocs(strategiesRef);
     
-    const strategies: StrategyPerformance[] = [];
+    const strategies: StrategyTypePerformance[] = [];
     
     querySnapshot.forEach((doc) => {
       const data = doc.data();

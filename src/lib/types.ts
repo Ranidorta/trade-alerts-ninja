@@ -1,3 +1,4 @@
+
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -47,7 +48,7 @@ export interface TradingSignal {
   technicalIndicators?: TechnicalIndicators;
   result?: number | SignalResult; // Updated to support string result types
   strategy?: string;
-  performance?: StrategyPerformance;
+  performance?: StrategyTypePerformance;
   tpHit?: number;
   hitTargets?: boolean[]; // Added for Binance verification
   verifiedAt?: string;   // Added for Binance verification
@@ -151,6 +152,10 @@ export interface StrategyTypePerformance {
   winRate: number;
   profit?: number;
   avgTradeProfit?: number;
+  totalTrades?: number;
+  avgProfit?: number;
+  sharpeRatio?: number;
+  maxDrawdown?: number;
 }
 
 export interface StrategyDetailedPerformance {

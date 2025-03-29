@@ -9,12 +9,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StrategyPerformance } from "@/lib/types";
+import { StrategyTypePerformance } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from 'lucide-react';
 
 interface StrategyPerformanceTableProps {
-  strategies: StrategyPerformance[];
+  strategies: StrategyTypePerformance[];
   isLoading: boolean;
   onRefresh: () => void;
 }
@@ -72,7 +72,7 @@ export const StrategyPerformanceTable: React.FC<StrategyPerformanceTableProps> =
             strategies.map((strategy) => (
               <TableRow key={strategy.strategy || 'unknown'}>
                 <TableCell className="font-medium">{strategy.strategy || 'unknown'}</TableCell>
-                <TableCell className="text-right">{strategy.totalTrades || 0}</TableCell>
+                <TableCell className="text-right">{strategy.totalTrades || strategy.count || 0}</TableCell>
                 <TableCell className="text-right">{strategy.wins || 0}</TableCell>
                 <TableCell className="text-right">{strategy.losses || 0}</TableCell>
                 <TableCell className="text-right">

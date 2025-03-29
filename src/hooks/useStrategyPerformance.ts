@@ -1,11 +1,11 @@
 
 import { useState, useEffect, useCallback } from "react";
-import { StrategyPerformance } from "@/lib/types";
+import { StrategyTypePerformance } from "@/lib/types";
 import { getStrategiesPerformance, recalculateAllStrategiesStatistics } from "@/lib/firebaseFunctions";
 import { useToast } from "@/components/ui/use-toast";
 
 export const useStrategyPerformance = () => {
-  const [strategies, setStrategies] = useState<StrategyPerformance[]>([]);
+  const [strategies, setStrategies] = useState<StrategyTypePerformance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
