@@ -1,6 +1,7 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
-import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap } from "lucide-react";
+import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,6 +15,7 @@ import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -26,6 +28,7 @@ const SignalsDashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const isMobile = useIsMobile();
   
   const {
@@ -241,9 +244,13 @@ const SignalsDashboard = () => {
     setLastActiveSignal(signal);
   };
   
+  const toggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+  
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-8 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-6 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
           <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base">
@@ -259,18 +266,18 @@ const SignalsDashboard = () => {
           </div>
         </div>
         
-        {!isMobile && (
-          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-            <Button 
-              onClick={handleGenerateSignals} 
-              variant="default" 
-              disabled={isGenerating}
-              className="flex-1 md:flex-auto"
-            >
-              <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
-            </Button>
-            
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <Button 
+            onClick={handleGenerateSignals} 
+            variant="default" 
+            disabled={isGenerating}
+            className="flex-1 md:flex-auto"
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+            {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
+          </Button>
+          
+          {!isMobile && (
             <Button 
               onClick={handleSubscribe} 
               variant="outline"
@@ -279,11 +286,118 @@ const SignalsDashboard = () => {
               <Bell className="mr-2 h-4 w-4" />
               Receber Alertas
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       
-      {!isMobile && (
+      {isMobile ? (
+        <div className="flex items-center justify-between mb-4">
+          <Button
+            onClick={handleManualRefresh}
+            variant="outline"
+            size="sm"
+            className="h-9 p-2"
+            title="Atualizar sinais agora"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 p-2">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[80vw] p-4" side="right">
+              <h3 className="text-lg font-medium mb-4">Filtros</h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Buscar</h4>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                    <Input 
+                      placeholder="Buscar por símbolo ou par..." 
+                      className="pl-10" 
+                      value={searchQuery} 
+                      onChange={handleSearchChange} 
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Status</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant={statusFilter === "ALL" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleStatusFilter("ALL")}
+                      className="w-full"
+                    >
+                      Todos
+                    </Button>
+                    <Button 
+                      variant={statusFilter === "ACTIVE" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleStatusFilter("ACTIVE")}
+                      className="w-full"
+                    >
+                      Ativos
+                    </Button>
+                    <Button 
+                      variant={statusFilter === "WAITING" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleStatusFilter("WAITING")}
+                      className="w-full"
+                    >
+                      Aguardando
+                    </Button>
+                    <Button 
+                      variant={statusFilter === "COMPLETED" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleStatusFilter("COMPLETED")}
+                      className="w-full"
+                    >
+                      Completados
+                    </Button>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Ordenar por</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      variant={sortBy === "newest" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleSort("newest")}
+                      className="w-full"
+                    >
+                      Mais Recentes
+                    </Button>
+                    <Button 
+                      variant={sortBy === "oldest" ? "default" : "outline"} 
+                      size="sm" 
+                      onClick={() => handleSort("oldest")}
+                      className="w-full"
+                    >
+                      Mais Antigos
+                    </Button>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={handleSubscribe} 
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Bell className="mr-2 h-4 w-4" />
+                  Receber Alertas
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      ) : (
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
@@ -358,20 +472,6 @@ const SignalsDashboard = () => {
         </div>
       )}
       
-      {isMobile && (
-        <div className="flex justify-center mb-4">
-          <Button 
-            onClick={handleGenerateSignals} 
-            variant="default" 
-            disabled={isGenerating}
-            className="w-full"
-          >
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
-          </Button>
-        </div>
-      )}
-      
       {!isLoading && signals.length === 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
@@ -390,17 +490,39 @@ const SignalsDashboard = () => {
       
       {signals.length > 0 && (
         <>
-          <div className="grid grid-cols-12 gap-3 sm:gap-6">
-            <div className="col-span-12 md:col-span-4 lg:col-span-3 order-2 md:order-1">
-              <SignalsSidebar 
-                signals={filteredSignals} 
-                activeSignal={activeSignal} 
-                onSelectSignal={handleSelectSignal} 
-                isLoading={isLoading} 
-              />
+          {isMobile ? (
+            <div className="space-y-4">
+              <div className="bg-background border rounded-lg">
+                <div className="p-3 border-b">
+                  <h3 className="font-medium">Sinais Ativos ({filteredSignals.length})</h3>
+                </div>
+                <div className="p-2 max-h-[400px] overflow-y-auto">
+                  {filteredSignals.map((signal) => (
+                    <SignalItem 
+                      key={signal.id} 
+                      signal={signal} 
+                      isActive={activeSignal?.id === signal.id}
+                      onSelect={() => handleSelectSignal(signal)}
+                    />
+                  ))}
+                </div>
+              </div>
+              
+              {activeSignal && (
+                <SignalCard signal={activeSignal} />
+              )}
             </div>
-            
-            {!isMobile && (
+          ) : (
+            <div className="grid grid-cols-12 gap-3 sm:gap-6">
+              <div className="col-span-12 md:col-span-4 lg:col-span-3 order-2 md:order-1">
+                <SignalsSidebar 
+                  signals={filteredSignals} 
+                  activeSignal={activeSignal} 
+                  onSelectSignal={handleSelectSignal} 
+                  isLoading={isLoading} 
+                />
+              </div>
+              
               <div className="col-span-12 md:col-span-8 lg:col-span-9 order-1 md:order-2">
                 <CandlestickChart 
                   symbol={activeSignal?.symbol || ""} 
@@ -409,13 +531,13 @@ const SignalsDashboard = () => {
                   targets={activeSignal?.targets} 
                 />
               </div>
-            )}
-          </div>
-          
-          {activeSignal && (
-            <div className="mt-3 sm:mt-6">
-              <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
-              <SignalCard signal={activeSignal} />
+              
+              {activeSignal && (
+                <div className="col-span-12 mt-3 sm:mt-6">
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
+                  <SignalCard signal={activeSignal} />
+                </div>
+              )}
             </div>
           )}
         </>
