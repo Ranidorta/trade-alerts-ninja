@@ -51,11 +51,15 @@ export interface TradingSignal {
 }
 
 export interface StrategyPerformance {
+  strategy?: string;
+  totalTrades?: number;
+  wins?: number;
+  losses?: number;
   winRate?: number;
+  avgProfit?: number;
   sharpeRatio?: number;
   maxDrawdown?: number;
-  totalTrades?: number;
-  avgProfit?: number;
+  total_signals?: number; // For backward compatibility
 }
 
 export interface Feature {

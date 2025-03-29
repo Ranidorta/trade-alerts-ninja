@@ -1,4 +1,3 @@
-
 import { db } from "./firebase";
 import { TradingSignal, StrategyPerformance } from "./types";
 
@@ -75,13 +74,13 @@ export async function getStrategiesPerformance(): Promise<StrategyPerformance[]>
       const data = doc.data();
       strategies.push({
         strategy: doc.id,
-        total_signals: data.totalTrades || 0,
+        totalTrades: data.totalTrades || 0,
         wins: data.wins || 0,
         losses: data.losses || 0,
         winRate: data.totalTrades > 0 ? (data.wins / data.totalTrades) * 100 : 0,
-        profit: data.totalProfit || 0,
-        sharpe_ratio: data.sharpeRatio || undefined,
-        max_drawdown: data.maxDrawdown || undefined
+        avgProfit: data.totalProfit || 0,
+        sharpeRatio: data.sharpeRatio || undefined,
+        maxDrawdown: data.maxDrawdown || undefined
       });
     });
     

@@ -1,13 +1,13 @@
-import React, { useEffect } from "react";
+
+import React from "react";
 import { useStrategyPerformance } from "@/hooks/useStrategyPerformance";
 import PageHeader from "@/components/signals/PageHeader";
 import StrategyPerformanceTable from "@/components/signals/StrategyPerformanceTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { analyzeSignalsHistory } from "@/lib/signalHistoryService";
-import { recalculateAllStrategiesStatistics } from "@/lib/firebaseFunctions";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Card,
@@ -86,7 +86,7 @@ const PerformanceDashboard = () => {
   const { strategies, loading, fetchStrategyPerformance, recalculateStatistics } = useStrategyPerformance();
   
   // Get performance metrics from local signals history
-  const performanceMetrics = analyzeSignalsHistory();
+  const metrics = analyzeSignalsHistory();
   
   // Function to sync Firebase with local data
   const syncWithFirebase = async () => {
@@ -116,20 +116,27 @@ const PerformanceDashboard = () => {
     }
   };
   
-  // Prepare data for charts
-  const symbolsData = performanceMetrics.symbolsData.sort((a, b) => b.count - a.count).slice(0, 5);
-  const strategyData = performanceMetrics.strategyData.sort((a, b) => b.count - a.count).slice(0, 5);
+  // Prepare data for charts from the metrics
+  const symbolsData = metrics.symbolsData?.slice(0, 5).map(item => ({
+    label: item.symbol,
+    value: item.count
+  })) || [];
+  
+  const strategyData = metrics.strategyData?.slice(0, 5).map(item => ({
+    label: item.strategy,
+    value: item.count
+  })) || [];
   
   return (
     <div className="container py-8">
-      <PageHeader
+      <PageHeader 
         title="Performance Dashboard"
         description="Track your trading performance and strategy metrics"
       />
       
       <div className="mb-4 flex justify-end">
         <Button onClick={syncWithFirebase} variant="outline">
-          <RefreshCcw className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 mr-2" />
           Sync with Firebase
         </Button>
       </div>
@@ -149,7 +156,7 @@ const PerformanceDashboard = () => {
                 <CardTitle>Total Signals</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{performanceMetrics.totalSignals}</div>
+                <div className="text-2xl font-bold">{metrics.totalSignals || 0}</div>
               </CardContent>
             </Card>
             
@@ -158,7 +165,7 @@ const PerformanceDashboard = () => {
                 <CardTitle>Winning Trades</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-500">{performanceMetrics.winningTrades}</div>
+                <div className="text-2xl font-bold text-green-500">{metrics.winningTrades || 0}</div>
               </CardContent>
             </Card>
             
@@ -167,7 +174,7 @@ const PerformanceDashboard = () => {
                 <CardTitle>Losing Trades</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-500">{performanceMetrics.losingTrades}</div>
+                <div className="text-2xl font-bold text-red-500">{metrics.losingTrades || 0}</div>
               </CardContent>
             </Card>
             
@@ -176,7 +183,7 @@ const PerformanceDashboard = () => {
                 <CardTitle>Win Rate</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{performanceMetrics.winRate.toFixed(2)}%</div>
+                <div className="text-2xl font-bold">{metrics.winRate?.toFixed(2) || "0.00"}%</div>
               </CardContent>
             </Card>
           </div>
@@ -190,19 +197,23 @@ const PerformanceDashboard = () => {
             onRefresh={fetchStrategyPerformance}
           />
           
-          <PerformanceBreakdown
-            title="Top Strategies"
-            data={strategyData.map(item => ({ label: item.strategy, value: item.count }))}
-            color="#82ca9d"
-          />
+          {strategyData.length > 0 && (
+            <PerformanceBreakdown
+              title="Top Strategies"
+              data={strategyData}
+              color="#82ca9d"
+            />
+          )}
         </TabsContent>
         
         <TabsContent value="assets" className="space-y-4">
-          <PerformanceBreakdown
-            title="Top Symbols"
-            data={symbolsData.map(item => ({ label: item.symbol, value: item.count }))}
-            color="#8884d8"
-          />
+          {symbolsData.length > 0 && (
+            <PerformanceBreakdown
+              title="Top Symbols"
+              data={symbolsData}
+              color="#8884d8"
+            />
+          )}
         </TabsContent>
         
         <TabsContent value="time" className="space-y-4">

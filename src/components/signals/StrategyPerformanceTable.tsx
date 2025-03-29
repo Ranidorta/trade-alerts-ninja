@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { StrategyPerformance } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ArrowPathIcon } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 interface StrategyPerformanceTableProps {
   strategies: StrategyPerformance[];
@@ -34,7 +34,7 @@ export const StrategyPerformanceTable: React.FC<StrategyPerformanceTableProps> =
           onClick={onRefresh}
           disabled={isLoading}
         >
-          <ArrowPathIcon className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
@@ -70,16 +70,16 @@ export const StrategyPerformanceTable: React.FC<StrategyPerformanceTableProps> =
             </TableRow>
           ) : (
             strategies.map((strategy) => (
-              <TableRow key={strategy.strategy}>
-                <TableCell className="font-medium">{strategy.strategy}</TableCell>
-                <TableCell className="text-right">{strategy.total_signals}</TableCell>
-                <TableCell className="text-right">{strategy.wins}</TableCell>
-                <TableCell className="text-right">{strategy.losses}</TableCell>
+              <TableRow key={strategy.strategy || 'unknown'}>
+                <TableCell className="font-medium">{strategy.strategy || 'unknown'}</TableCell>
+                <TableCell className="text-right">{strategy.totalTrades || 0}</TableCell>
+                <TableCell className="text-right">{strategy.wins || 0}</TableCell>
+                <TableCell className="text-right">{strategy.losses || 0}</TableCell>
                 <TableCell className="text-right">
-                  {strategy.winRate.toFixed(2)}%
+                  {strategy.winRate?.toFixed(2) || '0.00'}%
                 </TableCell>
-                <TableCell className={`text-right ${strategy.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {strategy.profit.toFixed(2)}%
+                <TableCell className={`text-right ${(strategy.avgProfit || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {(strategy.avgProfit || 0).toFixed(2)}%
                 </TableCell>
               </TableRow>
             ))
