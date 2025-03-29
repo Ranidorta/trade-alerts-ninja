@@ -81,18 +81,14 @@ export interface CryptoCoin {
 }
 
 export interface CryptoNews {
-  id?: string;
   title: string;
   description: string;
-  content?: string;
   url: string;
-  urlToImage?: string;
   publishedAt: string;
   source: {
     name: string;
-    id?: string;
   };
-  relatedCoins?: string[];
+  urlToImage?: string;
 }
 
 export interface MarketOverview {

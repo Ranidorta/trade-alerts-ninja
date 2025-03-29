@@ -1,9 +1,13 @@
 
-import React from "react";
-import { TradingSignal, SignalType, SignalStatus } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { TradingSignal } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { formatDistance } from "date-fns";
+import { 
+  ChevronRight, 
+  ArrowUpRight, 
+  ArrowDownRight 
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface SignalItemProps {
   signal: TradingSignal;
@@ -11,74 +15,59 @@ interface SignalItemProps {
   onSelect: () => void;
 }
 
-const SignalItem = ({ signal, isActive, onSelect }: SignalItemProps) => {
-  const isLong = signal.type === "LONG";
-  const badgeVariant = isLong ? "success" : "destructive";
-  const badgeText = isLong ? "LONG" : "SHORT";
-  const signalIcon = isLong ? (
-    <TrendingUp className="h-4 w-4 text-green-500" />
-  ) : (
-    <TrendingDown className="h-4 w-4 text-red-500" />
-  );
+export default function SignalItem({ signal, isActive, onSelect }: SignalItemProps) {
+  const formattedDate = signal.createdAt 
+    ? formatDistance(new Date(signal.createdAt), new Date(), { addSuffix: true })
+    : 'data desconhecida';
   
-  const getStatusBadge = () => {
-    switch (signal.status) {
-      case "ACTIVE":
-        return <div className="status-indicator status-active"></div>;
-      case "COMPLETED":
-        return <div className="status-indicator status-completed"></div>;
-      case "WAITING":
-        return <div className="status-indicator status-waiting"></div>;
-      default:
-        return null;
-    }
-  };
+  const isLong = signal.type === "LONG" || signal.direction === "BUY";
   
-  const formatPrice = (price: number) => {
-    return price < 0.1 ? price.toFixed(4) : price.toFixed(2);
-  };
-
   return (
-    <div
-      className={cn(
-        "p-3 mb-1 rounded-md cursor-pointer transition-all signal-card",
-        isActive ? "bg-primary/10" : "hover:bg-primary/5",
-        isLong ? "long" : "short"
-      )}
+    <Button
+      variant="ghost"
+      className={`w-full justify-start text-left p-2 mb-1 rounded-md hover:bg-accent ${
+        isActive ? 'bg-accent' : ''
+      }`}
       onClick={onSelect}
     >
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-1">
-          {signalIcon}
-          <span className="font-medium">{signal.symbol}</span>
-          <Badge variant={badgeVariant} className="text-xs py-0">
-            {badgeText}
+      <div className="w-full flex flex-col gap-1">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-1">
+            <span className="font-semibold">{signal.symbol}</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <Badge 
+            variant={
+              signal.status === "COMPLETED" ? "secondary" : 
+              signal.status === "ACTIVE" ? "default" : 
+              "outline"
+            }
+            className="text-xs rounded-sm px-1"
+          >
+            {signal.status}
           </Badge>
         </div>
-        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-      </div>
-      
-      <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground">Entrada:</span>
-          <span className="font-medium">${formatPrice(signal.entryPrice || 0)}</span>
+        
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-2">
+            {isLong ? (
+              <Badge variant="success" className="gap-0.5 text-xs font-medium py-0 px-1">
+                <ArrowUpRight className="h-3 w-3" />
+                LONG
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="gap-0.5 text-xs font-medium py-0 px-1">
+                <ArrowDownRight className="h-3 w-3" />
+                SHORT
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground">{formattedDate}</span>
+          </div>
+          <div className="text-xs font-medium">
+            {signal.currentPrice}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground">SL:</span>
-          <span className="font-medium">${formatPrice(signal.stopLoss)}</span>
-        </div>
       </div>
-      
-      <div className="mt-1 flex items-center gap-1 text-xs">
-        <div className="flex items-center gap-1">
-          {getStatusBadge()}
-          <span className="text-muted-foreground">
-            {signal.createdAt ? new Date(signal.createdAt).toLocaleTimeString() : "Agora"}
-          </span>
-        </div>
-      </div>
-    </div>
+    </Button>
   );
-};
-
-export default SignalItem;
+}

@@ -6,10 +6,9 @@ import { TradingSignal } from "@/lib/types";
 
 interface SignalsSummaryProps {
   signals: TradingSignal[];
-  isLoading?: boolean;
 }
 
-const SignalsSummary = ({ signals, isLoading = false }: SignalsSummaryProps) => {
+const SignalsSummary = ({ signals }: SignalsSummaryProps) => {
   // Calculate summary statistics
   const summary = React.useMemo(() => {
     const profitSignals = signals.filter(signal => signal.profit !== undefined && signal.profit > 0);
@@ -27,24 +26,6 @@ const SignalsSummary = ({ signals, isLoading = false }: SignalsSummaryProps) => 
       winRate: signals.length > 0 ? ((profitSignals.length / signals.length) * 100).toFixed(2) : "0.00"
     };
   }, [signals]);
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="bg-card">
-            <CardHeader className="pb-2">
-              <div className="h-5 w-24 bg-muted/30 animate-pulse rounded"></div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-8 w-12 bg-muted/30 animate-pulse rounded mb-2"></div>
-              <div className="h-4 w-32 bg-muted/30 animate-pulse rounded"></div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
