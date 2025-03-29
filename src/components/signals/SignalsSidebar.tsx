@@ -37,6 +37,11 @@ export default function SignalsSidebar({
     );
   }
 
+  const handleSignalClick = (signal: TradingSignal) => {
+    console.log("Signal selected:", signal.id);
+    onSelectSignal(signal);
+  };
+
   return (
     <div className="h-[600px] bg-background border rounded-lg flex flex-col">
       <div className="p-3 border-b">
@@ -49,7 +54,7 @@ export default function SignalsSidebar({
               key={signal.id} 
               signal={signal} 
               isActive={activeSignal?.id === signal.id}
-              onSelect={() => onSelectSignal(signal)}
+              onSelect={() => handleSignalClick(signal)}
             />
           ))}
         </div>

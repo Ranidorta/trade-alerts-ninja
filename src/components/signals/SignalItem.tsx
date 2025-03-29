@@ -8,6 +8,7 @@ import {
   ArrowDownRight 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface SignalItemProps {
   signal: TradingSignal;
@@ -25,15 +26,21 @@ export default function SignalItem({ signal, isActive, onSelect }: SignalItemPro
   return (
     <Button
       variant="ghost"
-      className={`w-full justify-start text-left p-2 mb-1 rounded-md hover:bg-accent ${
-        isActive ? 'bg-accent' : ''
-      }`}
-      onClick={onSelect}
+      className={cn(
+        "w-full justify-start text-left p-2 mb-1 rounded-md hover:bg-accent transition-colors duration-200",
+        isActive ? 'bg-accent border-l-4 border-primary' : ''
+      )}
+      onClick={() => {
+        console.log("Signal item clicked:", signal.id);
+        onSelect();
+      }}
     >
       <div className="w-full flex flex-col gap-1">
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-1">
-            <span className="font-semibold">{signal.symbol}</span>
+            <span className={cn("font-semibold", isActive ? "text-primary" : "")}>
+              {signal.symbol}
+            </span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
           <Badge 
