@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap } from "lucide-react";
@@ -14,6 +15,8 @@ import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
+import { useIsMobile } from "@/hooks/use-mobile";
+
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -25,16 +28,21 @@ const SignalsDashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
+  const isMobile = useIsMobile();
+  
   const {
     toast
   } = useToast();
+  
   const {
     signals: cachedSignals,
     addSignals
   } = useTradingSignals();
+  
   useEffect(() => {
     if (signals.length > 0) return;
   }, [signals.length]);
+  
   const loadSignalsData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -69,6 +77,7 @@ const SignalsDashboard = () => {
       setLastUpdated(new Date());
     }
   }, [toast, addSignals, activeSignal]);
+  
   useEffect(() => {
     if (!autoRefresh) return;
     const DEFAULT_REFRESH_INTERVAL = 60000;
@@ -78,6 +87,7 @@ const SignalsDashboard = () => {
     }, DEFAULT_REFRESH_INTERVAL);
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
+  
   useEffect(() => {
     let result = [...signals];
     if (statusFilter !== "ALL") {
@@ -101,21 +111,26 @@ const SignalsDashboard = () => {
       setActiveSignal(null);
     }
   }, [signals, statusFilter, searchQuery, sortBy, activeSignal]);
+  
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
+  
   const handleStatusFilter = (status: SignalStatus | "ALL") => {
     setStatusFilter(status);
   };
+  
   const handleSort = (type: "newest" | "oldest") => {
     setSortBy(type);
   };
+  
   const handleSubscribe = () => {
     toast({
       title: "Inscrito para notificações",
       description: "Você receberá alertas quando novos sinais forem postados"
     });
   };
+  
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
@@ -164,6 +179,7 @@ const SignalsDashboard = () => {
       setLastUpdated(new Date());
     }
   };
+  
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
@@ -171,6 +187,7 @@ const SignalsDashboard = () => {
       description: `Os dados dos sinais ${!autoRefresh ? 'agora serão atualizados' : 'não serão mais atualizados'} automaticamente`
     });
   };
+  
   const handleManualRefresh = () => {
     toast({
       title: "Atualizando sinais",
@@ -178,60 +195,83 @@ const SignalsDashboard = () => {
     });
     loadSignalsData();
   };
+  
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
+  
   const handleSelectSignal = (signal: TradingSignal) => {
     setActiveSignal(signal);
   };
-  return <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+  
+  return (
+    <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Sinais de Trading</h1>
-          <p className="text-slate-600 dark:text-slate-300">
+          <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
+          <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base">
             Oportunidades de trading utilizando estratégia CLASSIC
           </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
               Usando Dados da API Bybit
             </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
-                Última atualização: {formatLastUpdated()}
-              </span>}
+              Última atualização: {formatLastUpdated()}
+            </span>}
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
-          <Button onClick={handleGenerateSignals} variant="default" disabled={isGenerating}>
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <Button 
+            onClick={handleGenerateSignals} 
+            variant="default" 
+            disabled={isGenerating}
+            className="flex-1 md:flex-auto"
+          >
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais'}
+            {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
           </Button>
           
-          <Button onClick={handleSubscribe} variant="outline">
+          <Button 
+            onClick={handleSubscribe} 
+            variant="outline"
+            className="flex-1 md:flex-auto"
+          >
             <Bell className="mr-2 h-4 w-4" />
             Receber Alertas
           </Button>
         </div>
       </div>
       
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-          <Input placeholder="Buscar por símbolo ou par..." className="pl-10" value={searchQuery} onChange={handleSearchChange} />
+          <Input 
+            placeholder="Buscar por símbolo ou par..." 
+            className="pl-10" 
+            value={searchQuery} 
+            onChange={handleSearchChange} 
+          />
         </div>
         
-        <div className="flex flex-wrap gap-2">
-          
-          
-          <Button onClick={handleManualRefresh} variant="outline" size="icon" className="w-10 h-10" title="Atualizar sinais agora">
-            <RefreshCw className="h-4 w-4" />
+        <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+          <Button 
+            onClick={handleManualRefresh} 
+            variant="outline" 
+            size={isMobile ? "sm" : "default"} 
+            className={isMobile ? "h-9 px-2" : ""}
+            title="Atualizar sinais agora"
+          >
+            <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
+            {!isMobile && "Atualizar"}
           </Button>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <BarChart3 className="mr-2 h-4 w-4" />
-                {statusFilter === "ALL" ? "Todos Status" : statusFilter}
+              <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
+                {!isMobile ? (statusFilter === "ALL" ? "Todos Status" : statusFilter) : "Status"}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -256,9 +296,9 @@ const SignalsDashboard = () => {
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <ArrowUpDown className="mr-2 h-4 w-4" />
-                Ordenar
+              <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                <ArrowUpDown className="h-4 w-4 mr-1 sm:mr-2" />
+                {!isMobile && "Ordenar"}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -277,44 +317,62 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      {!isLoading && signals.length === 0 && <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
-            <Zap className="h-8 w-8" />
+      {!isLoading && signals.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
+            <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
           </div>
-          <h3 className="text-xl font-semibold mb-2">Gere seus primeiros sinais</h3>
-          <p className="text-slate-600 dark:text-slate-300 max-w-md mx-auto mb-6">
+          <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais</h3>
+          <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base max-w-md mx-auto mb-3 sm:mb-6">
             Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
           </p>
           <Button onClick={handleGenerateSignals} disabled={isGenerating}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
             {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
           </Button>
-        </div>}
+        </div>
+      )}
       
-      {signals.length > 0 && <>
-          <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 md:col-span-3">
-              <SignalsSidebar signals={filteredSignals} activeSignal={activeSignal} onSelectSignal={handleSelectSignal} isLoading={isLoading} />
+      {signals.length > 0 && (
+        <>
+          <div className="grid grid-cols-12 gap-3 sm:gap-6">
+            <div className="col-span-12 md:col-span-4 lg:col-span-3 order-2 md:order-1">
+              <SignalsSidebar 
+                signals={filteredSignals} 
+                activeSignal={activeSignal} 
+                onSelectSignal={handleSelectSignal} 
+                isLoading={isLoading} 
+              />
             </div>
             
-            <div className="col-span-12 md:col-span-9">
-              <div className="grid grid-cols-12 gap-6">
-                <div className="col-span-12 md:col-span-8">
-                  <CandlestickChart symbol={activeSignal?.symbol || ""} entryPrice={activeSignal?.entryPrice} stopLoss={activeSignal?.stopLoss} targets={activeSignal?.targets} />
+            <div className="col-span-12 md:col-span-8 lg:col-span-9 order-1 md:order-2">
+              <div className="grid grid-cols-12 gap-3 sm:gap-6">
+                <div className="col-span-12 lg:col-span-8">
+                  <CandlestickChart 
+                    symbol={activeSignal?.symbol || ""} 
+                    entryPrice={activeSignal?.entryPrice} 
+                    stopLoss={activeSignal?.stopLoss} 
+                    targets={activeSignal?.targets} 
+                  />
                 </div>
                 
-                <div className="col-span-12 md:col-span-4">
+                <div className="col-span-12 lg:col-span-4">
                   <CryptoNewsPanel symbol={activeSignal?.symbol || ""} />
                 </div>
               </div>
             </div>
           </div>
           
-          {activeSignal && <div className="mt-6">
-              <h3 className="text-xl font-bold mb-3">Detalhes do Sinal</h3>
+          {activeSignal && (
+            <div className="mt-3 sm:mt-6">
+              <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
               <SignalCard signal={activeSignal} />
-            </div>}
-        </>}
-    </div>;
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 };
+
 export default SignalsDashboard;
