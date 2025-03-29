@@ -87,9 +87,12 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <div className="gamer-theme">
+            <div className="crypto-trading-app bg-gradient-to-b from-background to-background/90">
               <Navbar />
-              <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
+              <div className="pt-16 min-h-screen overflow-x-hidden">
+                <div className="crypto-background">
+                  <div className="crypto-grid"></div>
+                </div>
                 <AppRoutes />
               </div>
             </div>

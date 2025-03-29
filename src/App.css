@@ -1,3 +1,4 @@
+
 body {
   margin: 0;
   padding: 0;
@@ -11,191 +12,212 @@ body {
   min-height: 100vh;
 }
 
-/* Gamer theme specific animations */
-@keyframes glow {
-  0% {
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
-  }
-  100% {
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
-  }
+/* Crypto exchange theme styling */
+.crypto-trading-app {
+  position: relative;
+  background-color: #0c1024;
+  color: #e6e8ec;
 }
 
-@keyframes pulse {
-  0% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.7;
-  }
+.crypto-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 0%, rgba(30, 70, 120, 0.15), transparent 70%),
+              radial-gradient(circle at 10% 80%, rgba(20, 100, 160, 0.1), transparent 50%);
 }
 
-/* Gaming UI enhancements */
-.gamer-card {
-  background: rgba(20, 25, 35, 0.7);
-  border: 1px solid rgba(0, 195, 255, 0.3);
-  box-shadow: 0 0 10px rgba(0, 195, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
+.crypto-grid {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: linear-gradient(rgba(30, 174, 219, 0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(30, 174, 219, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  transform: perspective(500px) rotateX(60deg);
+  transform-origin: center;
+  opacity: 0.4;
+}
+
+/* Card styling */
+.crypto-card {
+  background: rgba(16, 24, 46, 0.6);
+  border: 1px solid rgba(30, 174, 219, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(5px);
   transition: all 0.3s ease;
+  overflow: hidden;
 }
 
-.gamer-card:hover {
-  border-color: rgba(0, 195, 255, 0.6);
-  box-shadow: 0 0 15px rgba(0, 195, 255, 0.4);
+.crypto-card:hover {
+  border-color: rgba(30, 174, 219, 0.4);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3), 0 0 10px rgba(30, 174, 219, 0.2);
   transform: translateY(-2px);
 }
 
-/* Neon text styles */
-.text-neon-primary {
-  color: #00ffff;
-  text-shadow: 0 0 5px #00ffff;
+.crypto-card-header {
+  border-bottom: 1px solid rgba(30, 174, 219, 0.15);
+  padding: 16px;
+  font-weight: 600;
 }
 
-.text-neon-secondary {
-  color: #bf00ff;
-  text-shadow: 0 0 5px #bf00ff;
+/* Button styling */
+.crypto-button {
+  background: linear-gradient(90deg, #1eaedb, #147dab);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 
-.text-neon-blue {
-  color: #0077ff;
-  text-shadow: 0 0 5px #0077ff;
+.crypto-button:hover {
+  background: linear-gradient(90deg, #1eaedb, #1eaedb);
+  box-shadow: 0 0 10px rgba(30, 174, 219, 0.4);
+  transform: translateY(-1px);
 }
 
-.text-neon-green {
-  color: #00ff88;
-  text-shadow: 0 0 5px #00ff88;
+/* Data visualization */
+.data-positive {
+  color: #00c853;
 }
 
-.text-neon-red {
-  color: #ff005d;
-  text-shadow: 0 0 5px #ff005d;
+.data-negative {
+  color: #ff3d71;
 }
 
-.text-neon-yellow {
-  color: #ffb700;
-  text-shadow: 0 0 5px #ffb700;
+.data-neutral {
+  color: #b0bec5;
 }
 
-/* Dashboard Content Styling */
+/* Dashboard layouts */
 .dashboard-container {
-  padding: 1.5rem;
+  padding: 1rem;
   max-width: 1600px;
   margin: 0 auto;
 }
 
-.dashboard-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(0, 195, 255, 0.2);
-}
-
-.dashboard-title {
-  font-family: 'Russo One', sans-serif;
-  font-size: 1.75rem;
-  background: linear-gradient(to right, #00ffff, #0077ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
-  letter-spacing: 0.5px;
-}
-
-/* Grid layouts for dashboards */
 .dashboard-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }
 
 .dashboard-grid-large {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  grid-template-columns: 1fr 3fr;
 }
 
-/* Card hover effects */
-.hover-lift {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+@media (max-width: 1024px) {
+  .dashboard-grid-large {
+    grid-template-columns: 1fr;
+  }
 }
 
-.hover-lift:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+/* Navigation styling */
+.crypto-nav {
+  background: rgba(16, 24, 46, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(30, 174, 219, 0.2);
 }
 
-/* Button styles */
-.gamer-button {
+.crypto-nav-link {
+  color: #b0bec5;
+  transition: all 0.2s ease;
+}
+
+.crypto-nav-link:hover,
+.crypto-nav-link.active {
+  color: #1eaedb;
+}
+
+/* Chart enhancements */
+.chart-container {
   position: relative;
-  overflow: hidden;
-  background: linear-gradient(45deg, rgba(0, 119, 255, 0.2), rgba(0, 255, 255, 0.2));
-  border: 1px solid rgba(0, 195, 255, 0.3);
-  color: #fff;
-  font-weight: 500;
-  letter-spacing: 0.5px;
+  background: rgba(16, 24, 46, 0.4);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Ticker styling */
+.crypto-ticker {
+  background: linear-gradient(90deg, rgba(16, 24, 46, 0.8), rgba(16, 24, 46, 0.6));
+  border-bottom: 1px solid rgba(30, 174, 219, 0.2);
+  padding: 8px 0;
+}
+
+/* Signal cards */
+.signal-card {
+  border-left: 4px solid transparent;
   transition: all 0.3s ease;
 }
 
-.gamer-button:hover {
-  background: linear-gradient(45deg, rgba(0, 119, 255, 0.3), rgba(0, 255, 255, 0.3));
-  border-color: rgba(0, 195, 255, 0.6);
-  box-shadow: 0 0 15px rgba(0, 195, 255, 0.4);
+.signal-card.long {
+  border-left-color: #00c853;
 }
 
-.gamer-button:active {
-  transform: scale(0.98);
+.signal-card.short {
+  border-left-color: #ff3d71;
 }
 
-/* Crypto-specific styles */
-.text-crypto-green {
-  color: #00c853;
+.signal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
-.text-crypto-red {
-  color: #ff3d00;
+/* Custom gradients */
+.bg-gradient-blue-subtle {
+  background: linear-gradient(135deg, rgba(30, 174, 219, 0.1), rgba(19, 68, 106, 0.1));
 }
 
-/* Ticker animation */
-@keyframes ticker {
-  0% {
-    transform: translateX(0);
+.bg-gradient-profit {
+  background: linear-gradient(135deg, rgba(0, 200, 83, 0.1), rgba(0, 150, 60, 0.1));
+}
+
+.bg-gradient-loss {
+  background: linear-gradient(135deg, rgba(255, 61, 113, 0.1), rgba(200, 30, 80, 0.1));
+}
+
+/* Status indicators */
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-active {
+  background-color: #1eaedb;
+  box-shadow: 0 0 8px rgba(30, 174, 219, 0.6);
+}
+
+.status-completed {
+  background-color: #00c853;
+}
+
+.status-failed {
+  background-color: #ff3d71;
+}
+
+/* Responsive fixes */
+@media (max-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
   }
-  100% {
-    transform: translateX(-100%);
+  
+  .chart-container {
+    overflow-x: auto;
   }
-}
-
-.ticker-container {
-  overflow: hidden;
-  white-space: nowrap;
-  width: 100%;
-}
-
-.ticker-content {
-  display: inline-flex;
-  animation: ticker 30s linear infinite;
-}
-
-/* Custom styling for Recharts bars to color based on data values */
-.recharts-bar-custom-color path[fill="#10b981"] {
-  fill: var(--positive-color, #10b981);
-}
-
-.recharts-bar-rectangle.negative-value path {
-  fill: var(--negative-color, #ef4444) !important;
-}
-
-/* Add custom JS to dynamically update chart elements */
-:root {
-  --positive-color: #10b981;
-  --negative-color: #ef4444;
 }

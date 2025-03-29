@@ -3,7 +3,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PriceTarget } from "@/lib/types";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ResponsiveContainer } from "recharts";
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
+  ReferenceLine, ResponsiveContainer, AreaChart, Area
+} from "recharts";
 import { AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -32,7 +35,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
     
     try {
       setRefreshing(true);
-      // Use the Bybit API endpoint that we're already using in network requests
+      // Use the Bybit API endpoint
       const response = await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=50`);
       
       if (!response.ok) {
@@ -174,7 +177,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
 
   if (loading) {
     return (
-      <Card>
+      <Card className="crypto-card border-primary/20 bg-background/80">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl flex items-center justify-between">
             <div>Carregando gráfico...</div>
@@ -189,7 +192,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
 
   if (error) {
     return (
-      <Card>
+      <Card className="crypto-card border-primary/20 bg-background/80">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl flex items-center justify-between">
             <div>Erro ao carregar gráfico</div>
@@ -215,7 +218,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
 
   if (!symbol) {
     return (
-      <Card>
+      <Card className="crypto-card border-primary/20 bg-background/80">
         <CardHeader className="pb-2">
           <CardTitle className="text-xl">Gráfico de Preço</CardTitle>
         </CardHeader>
@@ -231,8 +234,8 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
     const type = targets[0].price > entryPrice ? "LONG" : "SHORT";
     
     return (
-      <Card>
-        <CardHeader className="pb-2">
+      <Card className="crypto-card border-primary/20 bg-background/80">
+        <CardHeader className="pb-2 border-b border-primary/10">
           <CardTitle className="text-xl flex items-center justify-between flex-wrap">
             <div className="flex items-center gap-2">
               {symbol} 
@@ -253,7 +256,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold">
+              <span className={`text-2xl font-bold ${trend === "UP" ? "text-crypto-green" : trend === "DOWN" ? "text-crypto-red" : ""}`}>
                 ${formatPrice(price)}
               </span>
               <Button 
@@ -268,7 +271,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 pt-4">
           <CryptoChart
             symbol={symbol}
             type={type}
@@ -290,10 +293,10 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
     );
   }
 
-  // Fallback to simple LineChart if we don't have entry price or targets
+  // Fallback to simple AreaChart if we don't have entry price or targets
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="crypto-card border-primary/20 bg-background/80">
+      <CardHeader className="pb-2 border-b border-primary/10">
         <CardTitle className="text-xl flex items-center justify-between flex-wrap">
           <div className="flex items-center gap-2">
             {symbol} 
@@ -314,7 +317,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
             </Badge>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold">
+            <span className={`text-2xl font-bold ${trend === "UP" ? "text-crypto-green" : trend === "DOWN" ? "text-crypto-red" : ""}`}>
               ${formatPrice(price)}
             </span>
             <Button 
@@ -329,28 +332,37 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-0 pt-4">
         <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart 
+            <AreaChart 
               data={priceHistory} 
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
+              <defs>
+                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#1EAEDB" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#1EAEDB" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis 
                 dataKey="time" 
                 tick={false}
                 domain={['auto', 'auto']}
+                stroke="rgba(255,255,255,0.2)"
               />
               <YAxis 
                 domain={['auto', 'auto']} 
                 tick={{ fontSize: 12 }} 
                 width={60}
                 tickFormatter={(value) => formatPrice(value)}
+                stroke="rgba(255,255,255,0.2)"
               />
               <Tooltip 
                 labelFormatter={(value) => new Date(value).toLocaleTimeString()} 
                 formatter={(value: any) => [`$${formatPrice(value)}`, "Preço"]}
+                contentStyle={{ backgroundColor: 'rgba(16, 24, 46, 0.9)', borderColor: 'rgba(30, 174, 219, 0.2)' }}
               />
               <Legend />
               
@@ -358,7 +370,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
               {entryPrice && (
                 <ReferenceLine 
                   y={entryPrice} 
-                  stroke="green" 
+                  stroke="rgba(30, 174, 219, 0.8)" 
                   strokeDasharray="3 3"
                   label={{ value: `Entrada: $${formatPrice(entryPrice)}`, position: 'insideTopRight' }}
                 />
@@ -368,7 +380,7 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
               {stopLoss && (
                 <ReferenceLine 
                   y={stopLoss} 
-                  stroke="red" 
+                  stroke="rgba(255, 61, 113, 0.8)" 
                   strokeDasharray="3 3"
                   label={{ value: `SL: $${formatPrice(stopLoss)}`, position: 'insideBottomRight' }}
                 />
@@ -379,25 +391,28 @@ export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets
                 <ReferenceLine 
                   key={`target-${index}`}
                   y={target.price} 
-                  stroke={target.hit ? "#4CAF50" : "blue"} 
+                  stroke={target.hit ? "rgba(0, 200, 83, 0.8)" : "rgba(76, 175, 80, 0.5)"} 
                   strokeDasharray="3 3"
                   label={{ 
                     value: `TP${target.level}${target.hit ? ' ✓' : ''}`, 
                     position: 'insideTopRight',
-                    fill: target.hit ? "#4CAF50" : "blue"
+                    fill: target.hit ? "#00C853" : "#4CAF50"
                   }}
                 />
               ))}
               
-              <Line 
+              <Area 
                 type="monotone" 
                 dataKey="price" 
-                stroke="#8884d8" 
+                stroke="#1EAEDB" 
+                fillOpacity={1}
+                fill="url(#colorPrice)"
                 name="Preço" 
                 dot={false}
+                activeDot={{ r: 5, stroke: '#1EAEDB', strokeWidth: 2, fill: '#fff' }}
                 isAnimationActive={false}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </CardContent>
