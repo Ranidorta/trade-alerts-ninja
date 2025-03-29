@@ -10,7 +10,7 @@ interface CandlestickChartProps {
   targets?: PriceTarget[];
 }
 
-// Agora este componente é apenas um wrapper para o novo componente de gráfico de candle
+// This component is a wrapper for the new candlestick chart component
 export default function CandlestickChart({ symbol, entryPrice, stopLoss, targets }: CandlestickChartProps) {
   return (
     <CandlestickChartNew 

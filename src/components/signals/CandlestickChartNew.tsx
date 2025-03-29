@@ -10,9 +10,8 @@ import {
   Tooltip, 
   Legend, 
   ReferenceLine,
-  BarChart,
-  Bar,
-  Cell
+  ComposedChart,
+  Bar
 } from "recharts";
 import { AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,8 @@ interface CandleData {
   low: number;
   close: number;
   volume: number;
+  value?: number; // For rendering the candle body
+  color?: string; // For candle color
 }
 
 interface CandlestickChartProps {
@@ -32,11 +33,6 @@ interface CandlestickChartProps {
   stopLoss?: number;
   targets?: PriceTarget[];
 }
-
-// Utility function to determine candle color
-const getCandleColor = (open: number, close: number) => {
-  return close >= open ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)";
-};
 
 export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targets }: CandlestickChartProps) {
   const [candleData, setCandleData] = useState<CandleData[]>([]);
@@ -64,14 +60,20 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
       
       if (data.retCode === 0 && data.result && data.result.list && data.result.list.length > 0) {
         // Format the data for our chart
-        const candles = data.result.list.map((item: string[]) => ({
-          time: parseInt(item[0]),
-          open: parseFloat(item[1]),
-          high: parseFloat(item[2]),
-          low: parseFloat(item[3]),
-          close: parseFloat(item[4]),
-          volume: parseFloat(item[5])
-        })).reverse();
+        const candles = data.result.list.map((item: string[]) => {
+          const open = parseFloat(item[1]);
+          const close = parseFloat(item[4]);
+          return {
+            time: parseInt(item[0]),
+            open: open,
+            high: parseFloat(item[2]),
+            low: parseFloat(item[3]),
+            close: close,
+            volume: parseFloat(item[5]),
+            value: Math.abs(close - open), // Height of the candle
+            color: close >= open ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)" // Green if bullish, red if bearish
+          };
+        }).reverse();
         
         setCandleData(candles);
         
@@ -133,7 +135,9 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
         high,
         low,
         close,
-        volume
+        volume,
+        value: Math.abs(close - open),
+        color: close >= open ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)"
       });
       
       currentTime += 5 * 60 * 1000; // Add 5 minutes
@@ -192,6 +196,53 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
     fetchCandleData();
   };
 
+  // Custom renderer for candlestick
+  const renderCandlestick = (props: any) => {
+    const { x, y, width, height, color, datum } = props;
+    
+    if (!datum) return null;
+    
+    // Calculate positions for the candle
+    const open = datum.open;
+    const close = datum.close;
+    const isRising = close >= open;
+    
+    // Calculate y positions for open and close prices
+    const yOpen = datum.high === datum.low ? y + height / 2 : y + height * (1 - (open - datum.low) / (datum.high - datum.low));
+    const yClose = datum.high === datum.low ? y + height / 2 : y + height * (1 - (close - datum.low) / (datum.high - datum.low));
+    
+    // Calculate candle body dimensions
+    const candleY = Math.min(yOpen, yClose);
+    const candleHeight = Math.abs(yClose - yOpen);
+    
+    // Calculate wick positions
+    const xMiddle = x + width / 2;
+    const yHigh = y + height * (1 - (datum.high - datum.low) / (datum.high - datum.low));
+    const yLow = y + height;
+    
+    const candleColor = isRising ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)";
+    
+    return (
+      <g>
+        {/* Upper wick */}
+        <line x1={xMiddle} y1={yHigh} x2={xMiddle} y2={candleY} stroke={candleColor} strokeWidth={1} />
+        
+        {/* Lower wick */}
+        <line x1={xMiddle} y1={candleY + candleHeight} x2={xMiddle} y2={yLow} stroke={candleColor} strokeWidth={1} />
+        
+        {/* Candle body */}
+        <rect 
+          x={x} 
+          y={candleY} 
+          width={width} 
+          height={Math.max(1, candleHeight)} // Ensure at least 1px height
+          fill={candleColor} 
+          stroke={candleColor}
+        />
+      </g>
+    );
+  };
+
   if (loading) {
     return (
       <Card>
@@ -247,7 +298,7 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
   }
 
   return (
-    <Card>
+    <Card className="bg-[#0a0a10]">
       <CardHeader className="pb-2">
         <CardTitle className="text-xl flex items-center justify-between flex-wrap">
           <div className="flex items-center gap-2">
@@ -287,11 +338,10 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
       <CardContent>
         <div className="h-[350px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
+            <ComposedChart 
               data={candleData} 
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              barCategoryGap={1}
-              barGap={0}
+              barCategoryGap={2}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
               <XAxis 
@@ -309,7 +359,7 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
               <Tooltip
                 labelFormatter={(value) => new Date(Number(value)).toLocaleString()}
                 formatter={(value, name) => {
-                  if (name === 'candle') return [`${formatPrice(Number(value))}`, 'Preço'];
+                  if (name === 'value') return [formatPrice(Number(value)), 'Candle'];
                   return [formatPrice(Number(value)), name === 'open' ? 'Abertura' : 
                                                       name === 'close' ? 'Fechamento' : 
                                                       name === 'high' ? 'Máxima' : 'Mínima'];
@@ -321,41 +371,12 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
                 }}
               />
               
-              {/* Candle bodies */}
+              {/* Candles */}
               <Bar 
-                dataKey="candle" 
+                dataKey="value" 
                 name="Candle"
-                fill="rgba(255, 255, 255, 0.8)" 
-                stroke="rgba(255, 255, 255, 0.8)"
-              >
-                {candleData.map((entry, index) => {
-                  // Create a custom data value for the candle body
-                  const height = Math.abs(entry.close - entry.open);
-                  const y = Math.min(entry.open, entry.close);
-                  entry.candle = height;
-                  
-                  return (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={getCandleColor(entry.open, entry.close)} 
-                      stroke={getCandleColor(entry.open, entry.close)}
-                    />
-                  );
-                })}
-              </Bar>
-              
-              {/* High-low wicks (we'll simulate these with reference lines) */}
-              {candleData.map((entry, index) => (
-                <ReferenceLine
-                  key={`wick-${index}`}
-                  x={entry.time}
-                  y1={entry.low}
-                  y2={entry.high}
-                  stroke={getCandleColor(entry.open, entry.close)}
-                  strokeWidth={1}
-                  isFront={false}
-                />
-              ))}
+                shape={renderCandlestick}
+              />
               
               {/* Entry price line */}
               {entryPrice && (
@@ -402,7 +423,7 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
                   }} 
                 />
               ))}
-            </BarChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </CardContent>
