@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
@@ -10,6 +9,7 @@ import { generateAllSignals } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import SignalsSidebar from "@/components/signals/SignalsSidebar";
+import SignalItem from "@/components/signals/SignalItem";
 import CandlestickChart from "@/components/signals/CandlestickChart";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
@@ -425,7 +425,7 @@ const SignalsDashboard = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
                   <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile ? (statusFilter === "ALL" ? "Todos Status" : statusFilter) : "Status"}
+                  {!isMobile && (statusFilter === "ALL" ? "Todos Status" : statusFilter) : "Status"}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
