@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fetchTopCryptos } from "@/lib/apiServices";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/components/ui/use-toast";
 
 const SignalsDashboard = () => {
   const { toast } = useToast();
@@ -22,7 +23,6 @@ const SignalsDashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const isMobile = useIsMobile();
 
-  // Fetch top cryptocurrencies for the ticker
   const { 
     data: topCryptos, 
     isLoading: isLoadingCryptos
@@ -33,7 +33,6 @@ const SignalsDashboard = () => {
   });
 
   useEffect(() => {
-    // Set the first signal as active when signals load
     if (signals && signals.length > 0 && !activeSignal) {
       setActiveSignal(signals[0]);
     }
@@ -80,7 +79,6 @@ const SignalsDashboard = () => {
     }
   };
 
-  // No need to render anything on mobile until we have signals
   if (isMobile && (!signals || signals.length === 0) && !isLoading) {
     return (
       <div className="container py-6">
@@ -111,7 +109,6 @@ const SignalsDashboard = () => {
 
   return (
     <div className="container py-4">
-      {/* Crypto Ticker */}
       <div className="mb-4">
         <CryptoTicker coins={topCryptos || []} isLoading={isLoadingCryptos} />
       </div>
@@ -144,14 +141,11 @@ const SignalsDashboard = () => {
           </div>
         </div>
 
-        {/* Summary cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <SignalsSummary signals={signals || []} isLoading={isLoading} />
         </div>
 
-        {/* Main content */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Sidebar with signal list - only on larger screens */}
           {!isMobile && (
             <div className="lg:col-span-3">
               <SignalsSidebar 
@@ -163,9 +157,7 @@ const SignalsDashboard = () => {
             </div>
           )}
 
-          {/* Chart and signal details */}
           <div className="lg:col-span-9 space-y-4">
-            {/* Chart */}
             <div className="crypto-card">
               {activeSignal ? (
                 <CandlestickChart
@@ -187,7 +179,6 @@ const SignalsDashboard = () => {
               )}
             </div>
 
-            {/* Signal list on mobile */}
             {isMobile && (
               <div className="crypto-card">
                 <div className="p-4 border-b border-primary/10">
@@ -206,7 +197,6 @@ const SignalsDashboard = () => {
               </div>
             )}
 
-            {/* News */}
             <div className="crypto-card">
               <CryptoNewsPanel 
                 symbol={activeSignal?.symbol} 

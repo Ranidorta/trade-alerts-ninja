@@ -26,7 +26,7 @@ const CryptoNewsPanel: React.FC<CryptoNewsPanelProps> = ({ symbol, isLoading = f
     
     const symbolWithoutPair = symbol.replace('USDT', '');
     return news.filter(item => 
-      item.relatedCoins && item.relatedCoins.some(coin => coin === symbolWithoutPair)
+      item.relatedCoins && Array.isArray(item.relatedCoins) && item.relatedCoins.some(coin => coin === symbolWithoutPair)
     ).slice(0, 5);
   }, [news, symbol]);
 
@@ -76,9 +76,9 @@ const CryptoNewsPanel: React.FC<CryptoNewsPanelProps> = ({ symbol, isLoading = f
                   <h3 className="font-medium text-sm">{item.title}</h3>
                   <ExternalLink className="h-3 w-3 flex-shrink-0 text-muted-foreground mt-1" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">{item.summary}</p>
+                <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
                 <div className="flex items-center text-xs text-muted-foreground mt-2">
-                  <span>{item.source}</span>
+                  <span>{item.source.name}</span>
                   <span className="mx-1">•</span>
                   <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
                 </div>

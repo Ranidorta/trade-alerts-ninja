@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useCallback } from 'react';
-import { TradingSignal, SignalStatus, SignalDirection, SignalType } from '@/lib/types';
+import { TradingSignal, SignalStatus, SignalDirection } from '@/lib/types';
 import { fetchSignals } from '@/lib/signalsApi';
 import { mockSignals } from '@/lib/mockData';
 import { toast } from 'sonner';
@@ -20,8 +21,8 @@ export interface UseTradingSignalsReturn {
 // Helper functions
 const generateId = () => Math.random().toString(36).substring(2, 11);
 
-const generateMockSignal = (type: SignalType, symbol: string): TradingSignal => {
-  const isLong = type === 'LONG' as SignalType;
+const generateMockSignal = (type: SignalDirection, symbol: string): TradingSignal => {
+  const isLong = type === 'LONG';
   const basePrice = symbol === 'BTCUSDT' ? 65000 : 
                    symbol === 'ETHUSDT' ? 3500 : 
                    symbol === 'BNBUSDT' ? 550 : 
@@ -114,7 +115,7 @@ export function useTradingSignals(): UseTradingSignalsReturn {
       // If no signals provided, generate some random ones
       if (!newSignals || newSignals.length === 0) {
         const pairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT'];
-        const types: SignalType[] = ['LONG' as SignalType, 'SHORT' as SignalType];
+        const types: SignalDirection[] = ['LONG', 'SHORT'];
         
         newSignals = Array(5).fill(null).map(() => {
           const randomPair = pairs[Math.floor(Math.random() * pairs.length)];
@@ -166,5 +167,3 @@ export function useTradingSignals(): UseTradingSignalsReturn {
     setActiveStrategy
   };
 }
-
-export { useTradingSignals };
