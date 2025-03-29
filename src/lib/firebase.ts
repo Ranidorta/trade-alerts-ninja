@@ -1,8 +1,8 @@
-
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getAnalytics, isSupported } from "firebase/analytics";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { config } from "@/config/env";
 import { updateStrategyStatistics } from "./firebaseFunctions";
 import { TradingSignal } from "./types";
@@ -23,6 +23,17 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Initialize App Check with reCAPTCHA Enterprise
+if (import.meta.env.PROD) {
+  const appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(config.firebase.recaptchaSiteKey || '6Lxxxxxxxxxxxxxxxxxxxxxx'),
+    isTokenAutoRefreshEnabled: true
+  });
+} else {
+  // For non-production environments, you can bypass App Check for development
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
 
 // Initialize analytics only if supported by the browser
 export const analytics = isSupported().then(yes => yes ? getAnalytics(app) : null);

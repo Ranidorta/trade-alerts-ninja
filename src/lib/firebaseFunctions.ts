@@ -1,7 +1,7 @@
-
 import { db } from "./firebase";
 import { TradingSignal, StrategyTypePerformance } from "./types";
 import { fetchBinanceCandles, checkPriceLevels, getTradeResult } from "./binanceService";
+import axios from "axios";
 
 /**
  * Updates the strategy statistics based on trading signal results
@@ -122,14 +122,27 @@ export async function verifyTradingSignal(signal: TradingSignal): Promise<Tradin
       ? new Date(signal.completedAt).getTime() 
       : Math.min(Date.now(), startTime + 7 * 24 * 60 * 60 * 1000);
     
-    // Fetch historical candles from Binance
-    const candles = await fetchBinanceCandles(
-      symbol,
-      timeframe,
-      startTime,
-      endTime,
-      1000 // Get maximum possible candles for this period
-    );
+    // Fetch historical candles with fallback to multiple APIs
+    let candles;
+    try {
+      // Try Binance API first
+      candles = await fetchBinanceCandles(
+        symbol,
+        timeframe,
+        startTime,
+        endTime,
+        1000 // Get maximum possible candles for this period
+      );
+    } catch (binanceError) {
+      console.error("Binance API error:", binanceError);
+      // Fallback to Bybit API
+      candles = await fetchBybitCandles(
+        symbol,
+        timeframe,
+        startTime,
+        endTime
+      );
+    }
     
     if (candles.length === 0) {
       throw new Error("No candle data available for this period");
@@ -320,4 +333,114 @@ export async function batchVerifySignals(signals: TradingSignal[]): Promise<Trad
   
   console.log(`Completed batch verification of ${results.length} signals`);
   return results;
+}
+
+/**
+ * Fetches historical candles from Bybit API as a fallback
+ * This provides redundancy if Binance API is unavailable
+ */
+async function fetchBybitCandles(
+  symbol: string,
+  timeframe: string,
+  startTime: number,
+  endTime: number
+) {
+  console.log(`Fetching Bybit candles for ${symbol}...`);
+  
+  // Convert timeframe to Bybit format
+  const interval = convertTimeframeToBybit(timeframe);
+  
+  try {
+    const response = await axios.get('https://api.bybit.com/v5/market/kline', {
+      params: {
+        category: 'spot',
+        symbol: symbol,
+        interval: interval,
+        start: startTime,
+        end: endTime,
+        limit: 1000
+      }
+    });
+
+    if (response.data.retCode !== 0) {
+      throw new Error(`Bybit API error: ${response.data.retMsg}`);
+    }
+
+    // Map Bybit response to our candle format
+    return response.data.result.list.map((item: any) => ({
+      timestamp: parseInt(item[0], 10),
+      open: parseFloat(item[1]),
+      high: parseFloat(item[2]),
+      low: parseFloat(item[3]),
+      close: parseFloat(item[4]),
+      volume: parseFloat(item[5])
+    })).reverse(); // Bybit returns newest first
+  } catch (error) {
+    console.error("Error fetching from Bybit:", error);
+    throw error;
+  }
+}
+
+/**
+ * Converts standard timeframe format to Bybit specific interval format
+ */
+function convertTimeframeToBybit(timeframe: string): string {
+  const mapping: Record<string, string> = {
+    '1m': '1',
+    '3m': '3',
+    '5m': '5',
+    '15m': '15',
+    '30m': '30',
+    '1h': '60',
+    '2h': '120',
+    '4h': '240',
+    '6h': '360',
+    '12h': '720',
+    '1d': 'D',
+    '1w': 'W',
+    '1M': 'M'
+  };
+  
+  return mapping[timeframe] || '60'; // Default to 1h
+}
+
+/**
+ * Triggers the verification of all unverified signals
+ * This is meant to be run on a schedule (e.g., every hour)
+ */
+export async function scheduledVerification(): Promise<number> {
+  try {
+    console.log("Running scheduled verification of unverified signals...");
+    
+    // Import Firestore functions
+    const { collection, query, where, getDocs } = await import("firebase/firestore");
+    
+    // Get all unverified signals
+    const signalsRef = collection(db, "signals");
+    const unverifiedQuery = query(signalsRef, where("verifiedAt", "==", null));
+    const snapshot = await getDocs(unverifiedQuery);
+    
+    if (snapshot.empty) {
+      console.log("No unverified signals found");
+      return 0;
+    }
+    
+    // Process signals in batches to avoid overloading
+    const signals: TradingSignal[] = [];
+    snapshot.forEach(doc => {
+      const data = doc.data() as TradingSignal;
+      data.id = doc.id;
+      signals.push(data);
+    });
+    
+    console.log(`Found ${signals.length} unverified signals to process`);
+    
+    // Use our existing batch verification function
+    await batchVerifySignals(signals);
+    
+    return signals.length;
+  } catch (error) {
+    console.error("Error in scheduled verification:", error);
+    return 0;
+  }
 }
