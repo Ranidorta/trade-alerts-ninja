@@ -9,6 +9,7 @@ import {
   updateAllSignalsStatus,
   reprocessAllHistory
 } from "@/lib/signalHistoryService";
+import { logTradeSignal } from "@/lib/firebase";
 
 // Using a fallback URL for the backend
 const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
@@ -244,6 +245,15 @@ export const useTradingSignals = () => {
       // Save to localStorage and history
       localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(updatedSignals));
       saveSignalsToHistory(processedNewSignals);
+      
+      // Log new signals to Firebase for analytics and monitoring
+      processedNewSignals.forEach(signal => {
+        logTradeSignal(signal)
+          .then(success => {
+            if (!success) console.warn(`Failed to log signal ${signal.id} to Firebase`);
+          })
+          .catch(err => console.error("Error logging signal to Firebase:", err));
+      });
       
       return updatedSignals;
     });
