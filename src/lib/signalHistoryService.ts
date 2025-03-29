@@ -1,6 +1,8 @@
 
-import { TradingSignal } from "@/lib/types";
+import { TradingSignal, PerformanceMetrics } from "@/lib/types";
 import { logTradeSignal } from "./firebase";
+import { verifyTradingSignal, batchVerifySignals } from "./firebaseFunctions";
+import { toast } from "sonner";
 
 // Local storage key for saved signals
 const SIGNALS_HISTORY_KEY = "trading_signals_history";
@@ -66,7 +68,9 @@ export const updateSignalOutcome = async (
   // Update signal status based on current state
   if (updatedSignal.status === "COMPLETED" && updatedSignal.profit !== undefined) {
     // Determine result from profit
-    updatedSignal.result = updatedSignal.profit > 0 ? 1 : 0; // 1 for win, 0 for loss
+    if (typeof updatedSignal.result !== "string") {
+      updatedSignal.result = updatedSignal.profit > 0 ? 1 : 0; // 1 for win, 0 for loss
+    }
     // Count how many targets were hit
     updatedSignal.tpHit = updatedSignal.targets?.filter(t => t.hit).length || 0;
     
@@ -217,12 +221,12 @@ export const reprocessAllHistory = async (
 /**
  * Analyzes signal history and returns performance metrics
  */
-export const analyzeSignalsHistory = () => {
+export const analyzeSignalsHistory = (): PerformanceMetrics => {
   const signals = getSignalsHistory();
   
   // Count wins and losses
-  const wins = signals.filter(s => s.result === 1).length;
-  const losses = signals.filter(s => s.result === 0).length;
+  const wins = signals.filter(s => s.result === 1 || s.result === "win" || s.result === "partial").length;
+  const losses = signals.filter(s => s.result === 0 || s.result === "loss" || s.result === "missed").length;
   const total = signals.length;
   const completed = signals.filter(s => s.status === "COMPLETED").length;
   
@@ -244,8 +248,8 @@ export const analyzeSignalsHistory = () => {
     }
     
     acc[symbol].total += 1;
-    if (signal.result === 1) acc[symbol].wins += 1;
-    if (signal.result === 0) acc[symbol].losses += 1;
+    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") acc[symbol].wins += 1;
+    if (signal.result === 0 || signal.result === "loss" || signal.result === "missed") acc[symbol].losses += 1;
     
     return acc;
   }, {} as {[symbol: string]: {total: number, wins: number, losses: number}});
@@ -259,8 +263,8 @@ export const analyzeSignalsHistory = () => {
     }
     
     acc[strategy].total += 1;
-    if (signal.result === 1) acc[strategy].wins += 1;
-    if (signal.result === 0) acc[strategy].losses += 1;
+    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") acc[strategy].wins += 1;
+    if (signal.result === 0 || signal.result === "loss" || signal.result === "missed") acc[strategy].losses += 1;
     if (signal.profit !== undefined) acc[strategy].profit += signal.profit;
     
     return acc;
@@ -293,6 +297,47 @@ export const analyzeSignalsHistory = () => {
     winRate,
     avgProfit,
     symbolsData,
-    strategyData
+    strategyData,
+    signalTypesData: [], // Placeholder for now
+    dailyData: [] // Placeholder for now
   };
+};
+
+/**
+ * Verifies all signals using Binance API data
+ */
+export const verifyAllSignalsWithBinance = async (): Promise<TradingSignal[]> => {
+  const signals = getSignalsHistory();
+  
+  // Only process signals that haven't been verified yet or are unresolved
+  const signalsToVerify = signals.filter(signal => 
+    !signal.verifiedAt || 
+    (signal.status !== "COMPLETED" && signal.result !== "win" && signal.result !== "loss")
+  );
+  
+  if (signalsToVerify.length === 0) {
+    toast.info("Não há sinais pendentes para verificação");
+    return signals;
+  }
+  
+  try {
+    toast.info(`Verificando ${signalsToVerify.length} sinais com dados reais da Binance...`);
+    const verifiedSignals = await batchVerifySignals(signalsToVerify);
+    
+    // Update only the signals that were verified
+    const updatedSignals = signals.map(signal => {
+      const verifiedSignal = verifiedSignals.find(vs => vs.id === signal.id);
+      return verifiedSignal || signal;
+    });
+    
+    // Save updated signals back to storage
+    localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
+    
+    toast.success(`Verificação concluída para ${signalsToVerify.length} sinais`);
+    return updatedSignals;
+  } catch (error) {
+    console.error("Error verifying signals with Binance:", error);
+    toast.error("Erro ao verificar sinais: " + (error instanceof Error ? error.message : "Erro desconhecido"));
+    return signals;
+  }
 };

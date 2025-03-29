@@ -1,7 +1,7 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
+export type SignalResult = "win" | "loss" | "partial" | "missed";
 
 export interface PriceTarget {
   level: number;
@@ -45,22 +45,13 @@ export interface TradingSignal {
   reason?: string;
   type?: SignalType;
   technicalIndicators?: TechnicalIndicators;
-  result?: number; // Added result property
-  strategy?: string; // Added strategy property
-  performance?: StrategyPerformance; // Added performance metrics
-  tpHit?: number; // Added tpHit property to track how many targets were hit
-}
-
-export interface StrategyPerformance {
+  result?: number | SignalResult; // Updated to support string result types
   strategy?: string;
-  totalTrades?: number;
-  wins?: number;
-  losses?: number;
-  winRate?: number;
-  avgProfit?: number;
-  sharpeRatio?: number;
-  maxDrawdown?: number;
-  total_signals?: number; // For backward compatibility
+  performance?: StrategyPerformance;
+  tpHit?: number;
+  hitTargets?: boolean[]; // Added for Binance verification
+  verifiedAt?: string;   // Added for Binance verification
+  error?: string;        // Added for error tracking
 }
 
 export interface Feature {
@@ -127,8 +118,8 @@ export interface UserProfile {
   name?: string;
   isAuthenticated: boolean;
   token?: string;
-  password?: string; // Only for mocking - would never store this in a real app
-  photoURL?: string; // Adicionando o campo photoURL como opcional
+  password?: string;
+  photoURL?: string;
 }
 
 export interface PerformanceMetrics {
