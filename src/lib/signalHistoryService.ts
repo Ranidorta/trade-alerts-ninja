@@ -1,4 +1,3 @@
-
 import { TradingSignal } from "@/lib/types";
 
 // Local storage key for saved signals
@@ -152,6 +151,31 @@ export const updateSignalStatus = async (
   }
   
   return updatedSignal;
+};
+
+/**
+ * Updates all signals in history with current status
+ */
+export const updateAllSignalsStatus = async (
+  currentPrices?: {[symbol: string]: number}
+): Promise<TradingSignal[]> => {
+  const signals = getSignalsHistory();
+  
+  const updatedSignals = await Promise.all(
+    signals.map(async signal => {
+      // Only update signals that aren't already completed
+      if (signal.status !== "COMPLETED") {
+        const currentPrice = currentPrices?.[signal.symbol];
+        return await updateSignalStatus(signal, currentPrice);
+      }
+      return signal;
+    })
+  );
+  
+  // Save updated signals back to storage
+  localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
+  
+  return updatedSignals;
 };
 
 /**
