@@ -4,13 +4,12 @@ import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { generateAllSignals } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import SignalsSidebar from "@/components/signals/SignalsSidebar";
 import CandlestickChart from "@/components/signals/CandlestickChart";
-import CryptoNewsPanel from "@/components/signals/CryptoNewsPanel";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
@@ -260,100 +259,118 @@ const SignalsDashboard = () => {
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 w-full md:w-auto">
+        {!isMobile && (
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <Button 
+              onClick={handleGenerateSignals} 
+              variant="default" 
+              disabled={isGenerating}
+              className="flex-1 md:flex-auto"
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+              {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
+            </Button>
+            
+            <Button 
+              onClick={handleSubscribe} 
+              variant="outline"
+              className="flex-1 md:flex-auto"
+            >
+              <Bell className="mr-2 h-4 w-4" />
+              Receber Alertas
+            </Button>
+          </div>
+        )}
+      </div>
+      
+      {!isMobile && (
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+            <Input 
+              placeholder="Buscar por símbolo ou par..." 
+              className="pl-10" 
+              value={searchQuery} 
+              onChange={handleSearchChange} 
+            />
+          </div>
+          
+          <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+            <Button 
+              onClick={handleManualRefresh} 
+              variant="outline" 
+              size={isMobile ? "sm" : "default"} 
+              className={isMobile ? "h-9 px-2" : ""}
+              title="Atualizar sinais agora"
+            >
+              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
+              {!isMobile && "Atualizar"}
+            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                  <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
+                  {!isMobile ? (statusFilter === "ALL" ? "Todos Status" : statusFilter) : "Status"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem className={statusFilter === "ALL" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ALL")}>
+                    Todos Status
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={statusFilter === "ACTIVE" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ACTIVE")}>
+                    Ativos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={statusFilter === "WAITING" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("WAITING")}>
+                    Aguardando
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={statusFilter === "COMPLETED" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("COMPLETED")}>
+                    Completados
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                  <ArrowUpDown className="h-4 w-4 mr-1 sm:mr-2" />
+                  {!isMobile && "Ordenar"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Ordenar Sinais</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem className={sortBy === "newest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("newest")}>
+                    Mais Recentes
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className={sortBy === "oldest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("oldest")}>
+                    Mais Antigos
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      )}
+      
+      {isMobile && (
+        <div className="flex justify-center mb-4">
           <Button 
             onClick={handleGenerateSignals} 
             variant="default" 
             disabled={isGenerating}
-            className="flex-1 md:flex-auto"
+            className="w-full"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
             {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
           </Button>
-          
-          <Button 
-            onClick={handleSubscribe} 
-            variant="outline"
-            className="flex-1 md:flex-auto"
-          >
-            <Bell className="mr-2 h-4 w-4" />
-            Receber Alertas
-          </Button>
         </div>
-      </div>
-      
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-          <Input 
-            placeholder="Buscar por símbolo ou par..." 
-            className="pl-10" 
-            value={searchQuery} 
-            onChange={handleSearchChange} 
-          />
-        </div>
-        
-        <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
-          <Button 
-            onClick={handleManualRefresh} 
-            variant="outline" 
-            size={isMobile ? "sm" : "default"} 
-            className={isMobile ? "h-9 px-2" : ""}
-            title="Atualizar sinais agora"
-          >
-            <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
-            {!isMobile && "Atualizar"}
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
-                <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
-                {!isMobile ? (statusFilter === "ALL" ? "Todos Status" : statusFilter) : "Status"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem className={statusFilter === "ALL" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ALL")}>
-                  Todos Status
-                </DropdownMenuItem>
-                <DropdownMenuItem className={statusFilter === "ACTIVE" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ACTIVE")}>
-                  Ativos
-                </DropdownMenuItem>
-                <DropdownMenuItem className={statusFilter === "WAITING" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("WAITING")}>
-                  Aguardando
-                </DropdownMenuItem>
-                <DropdownMenuItem className={statusFilter === "COMPLETED" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("COMPLETED")}>
-                  Completados
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
-                <ArrowUpDown className="h-4 w-4 mr-1 sm:mr-2" />
-                {!isMobile && "Ordenar"}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Ordenar Sinais</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem className={sortBy === "newest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("newest")}>
-                  Mais Recentes
-                </DropdownMenuItem>
-                <DropdownMenuItem className={sortBy === "oldest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("oldest")}>
-                  Mais Antigos
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      )}
       
       {!isLoading && signals.length === 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
@@ -383,22 +400,16 @@ const SignalsDashboard = () => {
               />
             </div>
             
-            <div className="col-span-12 md:col-span-8 lg:col-span-9 order-1 md:order-2">
-              <div className="grid grid-cols-12 gap-3 sm:gap-6">
-                <div className="col-span-12 lg:col-span-8">
-                  <CandlestickChart 
-                    symbol={activeSignal?.symbol || ""} 
-                    entryPrice={activeSignal?.entryPrice} 
-                    stopLoss={activeSignal?.stopLoss} 
-                    targets={activeSignal?.targets} 
-                  />
-                </div>
-                
-                <div className="col-span-12 lg:col-span-4">
-                  <CryptoNewsPanel symbol={activeSignal?.symbol || ""} />
-                </div>
+            {!isMobile && (
+              <div className="col-span-12 md:col-span-8 lg:col-span-9 order-1 md:order-2">
+                <CandlestickChart 
+                  symbol={activeSignal?.symbol || ""} 
+                  entryPrice={activeSignal?.entryPrice} 
+                  stopLoss={activeSignal?.stopLoss} 
+                  targets={activeSignal?.targets} 
+                />
               </div>
-            </div>
+            )}
           </div>
           
           {activeSignal && (
