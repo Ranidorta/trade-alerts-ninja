@@ -76,6 +76,7 @@ export async function getStrategiesPerformance(): Promise<StrategyTypePerformanc
       const data = doc.data();
       strategies.push({
         strategy: doc.id,
+        count: data.totalTrades || 0, // Add the count property mapped to totalTrades
         totalTrades: data.totalTrades || 0,
         wins: data.wins || 0,
         losses: data.losses || 0,
