@@ -4,12 +4,13 @@ import { getAuth } from "firebase/auth";
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD5jS5CJX521o3ynuQB4zEiGJ65XxvaIkQ",
+  apiKey: "AIzaSyCSL3bHoaf0f9hOqVs0RX6K_CyHagWtYk8",
   authDomain: "trade-alerts-ninja.firebaseapp.com",
   projectId: "trade-alerts-ninja",
-  storageBucket: "trade-alerts-ninja.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+  storageBucket: "trade-alerts-ninja.firebasestorage.app",
+  messagingSenderId: "584965799917",
+  appId: "1:584965799917:web:774adcdbaa1e54e9d631e4",
+  measurementId: "G-1W1L6PTZS5"
 };
 
 // Initialize Firebase
