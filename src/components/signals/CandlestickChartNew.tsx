@@ -11,7 +11,8 @@ import {
   Legend, 
   ReferenceLine,
   ComposedChart,
-  Bar
+  Bar,
+  Line
 } from "recharts";
 import { AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,12 +63,15 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
         // Format the data for our chart
         const candles = data.result.list.map((item: string[]) => {
           const open = parseFloat(item[1]);
+          const high = parseFloat(item[2]);
+          const low = parseFloat(item[3]);
           const close = parseFloat(item[4]);
+          
           return {
             time: parseInt(item[0]),
             open: open,
-            high: parseFloat(item[2]),
-            low: parseFloat(item[3]),
+            high: high,
+            low: low,
             close: close,
             volume: parseFloat(item[5]),
             value: Math.abs(close - open), // Height of the candle
@@ -198,46 +202,50 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
 
   // Custom renderer for candlestick
   const renderCandlestick = (props: any) => {
-    const { x, y, width, height, color, datum } = props;
+    const { x, y, width, height, datum } = props;
     
     if (!datum) return null;
     
-    // Calculate positions for the candle
     const open = datum.open;
     const close = datum.close;
-    const isRising = close >= open;
+    const high = datum.high;
+    const low = datum.low;
     
-    // Calculate y positions for open and close prices
-    const yOpen = datum.high === datum.low ? y + height / 2 : y + height * (1 - (open - datum.low) / (datum.high - datum.low));
-    const yClose = datum.high === datum.low ? y + height / 2 : y + height * (1 - (close - datum.low) / (datum.high - datum.low));
+    // Calculate the domain range for proper positioning
+    const min = Math.min(...candleData.map(d => d.low));
+    const max = Math.max(...candleData.map(d => d.high));
+    const range = max - min;
     
-    // Calculate candle body dimensions
-    const candleY = Math.min(yOpen, yClose);
-    const candleHeight = Math.abs(yClose - yOpen);
+    // Calculate positions for candle elements
+    const candleY = y + height * (1 - (Math.max(open, close) - min) / range);
+    const candleHeight = Math.abs(height * (close - open) / range);
+    const wickY1 = y + height * (1 - (high - min) / range);
+    const wickY2 = y + height * (1 - (low - min) / range);
+    const xCenter = x + width / 2;
     
-    // Calculate wick positions
-    const xMiddle = x + width / 2;
-    const yHigh = y + height * (1 - (datum.high - datum.low) / (datum.high - datum.low));
-    const yLow = y + height;
-    
-    const candleColor = isRising ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)";
+    // Determine if candle is bullish (green) or bearish (red)
+    const isBullish = close >= open;
+    const candleColor = isBullish ? "rgba(0, 255, 136, 0.8)" : "rgba(255, 0, 93, 0.8)";
     
     return (
       <g>
-        {/* Upper wick */}
-        <line x1={xMiddle} y1={yHigh} x2={xMiddle} y2={candleY} stroke={candleColor} strokeWidth={1} />
-        
-        {/* Lower wick */}
-        <line x1={xMiddle} y1={candleY + candleHeight} x2={xMiddle} y2={yLow} stroke={candleColor} strokeWidth={1} />
+        {/* Upper and lower wicks */}
+        <line 
+          x1={xCenter} 
+          y1={wickY1} 
+          x2={xCenter} 
+          y2={wickY2} 
+          stroke={candleColor} 
+          strokeWidth={1} 
+        />
         
         {/* Candle body */}
         <rect 
           x={x} 
           y={candleY} 
           width={width} 
-          height={Math.max(1, candleHeight)} // Ensure at least 1px height
+          height={Math.max(1, candleHeight)} 
           fill={candleColor} 
-          stroke={candleColor}
         />
       </g>
     );
@@ -359,10 +367,13 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
               <Tooltip
                 labelFormatter={(value) => new Date(Number(value)).toLocaleString()}
                 formatter={(value, name) => {
-                  if (name === 'value') return [formatPrice(Number(value)), 'Candle'];
-                  return [formatPrice(Number(value)), name === 'open' ? 'Abertura' : 
-                                                      name === 'close' ? 'Fechamento' : 
-                                                      name === 'high' ? 'Máxima' : 'Mínima'];
+                  if (name === 'value' || name === 'open' || name === 'close' || name === 'high' || name === 'low') {
+                    return [formatPrice(Number(value)), name === 'value' ? 'Candle' : 
+                                                       name === 'open' ? 'Abertura' : 
+                                                       name === 'close' ? 'Fechamento' : 
+                                                       name === 'high' ? 'Máxima' : 'Mínima'];
+                  }
+                  return [value, name];
                 }}
                 contentStyle={{ 
                   backgroundColor: 'rgba(10, 10, 20, 0.9)',
@@ -371,11 +382,28 @@ export default function CandlestickChartNew({ symbol, entryPrice, stopLoss, targ
                 }}
               />
               
-              {/* Candles */}
+              {/* For upper and lower wicks */}
+              <Line 
+                type="monotone" 
+                dataKey="high" 
+                stroke="transparent" 
+                dot={false} 
+                isAnimationActive={false}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="low" 
+                stroke="transparent" 
+                dot={false} 
+                isAnimationActive={false}
+              />
+              
+              {/* Custom candles */}
               <Bar 
                 dataKey="value" 
                 name="Candle"
                 shape={renderCandlestick}
+                isAnimationActive={false}
               />
               
               {/* Entry price line */}
