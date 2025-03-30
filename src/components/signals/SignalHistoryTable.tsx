@@ -12,8 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Target } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
@@ -113,12 +112,7 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
             >
               Data <SortIndicator field="createdAt" />
             </TableHead>
-            <TableHead className="text-center">
-              <div className="flex items-center justify-center">
-                <Target className="h-4 w-4 mr-1" />
-                Alvos
-              </div>
-            </TableHead>
+            <TableHead>Alvos</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -164,33 +158,16 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
                 {signal.createdAt && formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true, locale: ptBR })}
               </TableCell>
               <TableCell>
-                <div className="flex flex-wrap gap-1 justify-center">
+                <div className="flex gap-1">
                   {signal.targets?.map((target, idx) => (
-                    <TooltipProvider key={idx}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge
-                            variant={target.hit ? "success" : "outline"}
-                            className={`text-xs ${target.hit ? 'bg-green-500' : ''}`}
-                          >
-                            TP{idx+1}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Preço: {target.price}</p>
-                          {signal.entryPrice && (
-                            <p>
-                              {((Math.abs(target.price - signal.entryPrice) / signal.entryPrice) * 100).toFixed(2)}% da entrada
-                            </p>
-                          )}
-                          <p>{target.hit ? "Atingido ✓" : "Não atingido"}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Badge
+                      key={idx}
+                      variant={target.hit ? "success" : "outline"}
+                      className="text-xs"
+                    >
+                      TP{target.level}
+                    </Badge>
                   ))}
-                  {!signal.targets?.length && (
-                    <span className="text-xs text-gray-500">—</span>
-                  )}
                 </div>
               </TableCell>
             </TableRow>
