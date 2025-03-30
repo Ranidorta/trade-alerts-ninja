@@ -3,6 +3,7 @@ import React from "react";
 import { useStrategyPerformance } from "@/hooks/useStrategyPerformance";
 import PageHeader from "@/components/signals/PageHeader";
 import StrategyPerformanceTable from "@/components/signals/StrategyPerformanceTable";
+import StrategyPerformanceChart from "@/components/signals/StrategyPerformanceChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { analyzeSignalsHistory } from "@/lib/signalHistoryService";
@@ -187,6 +188,11 @@ const PerformanceDashboard = () => {
               </CardContent>
             </Card>
           </div>
+          
+          {/* Add Performance Chart to Overview */}
+          {strategies.length > 0 && (
+            <StrategyPerformanceChart strategies={strategies} />
+          )}
         </TabsContent>
         
         <TabsContent value="strategies" className="space-y-4">
@@ -196,6 +202,11 @@ const PerformanceDashboard = () => {
             isLoading={loading}
             onRefresh={fetchStrategyPerformance}
           />
+          
+          {/* Add the Chart component here as well */}
+          {strategies.length > 0 && (
+            <StrategyPerformanceChart strategies={strategies} />
+          )}
           
           {strategyData.length > 0 && (
             <PerformanceBreakdown

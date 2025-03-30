@@ -1,343 +1,176 @@
 
-import { TradingSignal, PerformanceMetrics } from "@/lib/types";
-import { logTradeSignal } from "./firebase";
-import { verifyTradingSignal, batchVerifySignals } from "./firebaseFunctions";
-import { toast } from "sonner";
-
-// Local storage key for saved signals
-const SIGNALS_HISTORY_KEY = "trading_signals_history";
+import { getSignalHistory } from "./signal-storage";
+import { TradingSignal } from "./types";
 
 /**
- * Saves signals to local storage history
+ * Analyzes signal history to generate performance metrics
  */
-export const saveSignalsToHistory = (signals: TradingSignal[]): void => {
-  let existingData: TradingSignal[] = [];
+export const analyzeSignalsHistory = () => {
+  const signals = getSignalHistory();
   
-  try {
-    const storedData = localStorage.getItem(SIGNALS_HISTORY_KEY);
-    if (storedData) {
-      existingData = JSON.parse(storedData);
-    }
-  } catch (e) {
-    console.error("Error reading signals history from localStorage:", e);
-  }
+  // Basic metrics
+  const totalSignals = signals.length;
+  const winningTrades = signals.filter(s => s.result === 1 || s.result === "win" || s.result === "partial").length;
+  const losingTrades = signals.filter(s => s.result === 0 || s.result === "loss").length;
+  const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
-  // Filter out duplicate signals based on ID
-  const existingIds = new Set(existingData.map(signal => signal.id));
-  const newSignals = signals.filter(signal => !existingIds.has(signal.id));
+  // Group by symbol
+  const symbolsMap = new Map<string, { count: number, wins: number, losses: number }>();
   
-  if (newSignals.length === 0) {
-    return; // No new signals to save
-  }
-  
-  const updated = [...existingData, ...newSignals];
-  
-  try {
-    localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updated));
-    console.log(`Saved ${newSignals.length} new signals to history. Total: ${updated.length}`);
-  } catch (e) {
-    console.error("Error saving signals history to localStorage:", e);
-  }
-};
-
-/**
- * Get all signals from history
- */
-export const getSignalsHistory = (): TradingSignal[] => {
-  try {
-    const storedData = localStorage.getItem(SIGNALS_HISTORY_KEY);
-    if (storedData) {
-      return JSON.parse(storedData);
-    }
-  } catch (e) {
-    console.error("Error reading signals history from localStorage:", e);
-  }
-  
-  return [];
-};
-
-/**
- * Updates a signal's outcome based on profit and target information
- */
-export const updateSignalOutcome = async (
-  signal: TradingSignal
-): Promise<TradingSignal> => {
-  // Clone the signal to avoid modifying the original object
-  const updatedSignal: TradingSignal = {...signal};
-  
-  // Update signal status based on current state
-  if (updatedSignal.status === "COMPLETED" && updatedSignal.profit !== undefined) {
-    // Determine result from profit
-    if (typeof updatedSignal.result !== "string") {
-      updatedSignal.result = updatedSignal.profit > 0 ? 1 : 0; // 1 for win, 0 for loss
-    }
-    // Count how many targets were hit
-    updatedSignal.tpHit = updatedSignal.targets?.filter(t => t.hit).length || 0;
-    
-    // Also log updated signal to Firebase for tracking
-    try {
-      await logTradeSignal(updatedSignal);
-    } catch (err) {
-      console.error("Error updating signal in Firebase:", err);
-    }
-  } else {
-    // Signal is still active or waiting
-    updatedSignal.result = undefined;
-    updatedSignal.tpHit = 0;
-  }
-  
-  return updatedSignal;
-};
-
-/**
- * Updates a signal's status based on current price and target information
- */
-export const updateSignalStatus = async (
-  signal: TradingSignal, 
-  currentPrice?: number
-): Promise<TradingSignal> => {
-  // Clone the signal to avoid modifying the original object
-  const updatedSignal: TradingSignal = {...signal};
-  
-  // If we don't have a current price, use the signal's current price if available
-  const price = currentPrice || updatedSignal.currentPrice;
-  
-  // If we don't have price information, we can't update the status
-  if (!price) {
-    return updatedSignal;
-  }
-  
-  // Update targets hit status based on current price
-  if (updatedSignal.targets && updatedSignal.targets.length > 0) {
-    updatedSignal.targets = updatedSignal.targets.map(target => {
-      // For BUY signals, target is hit if price goes above target price
-      // For SELL signals, target is hit if price goes below target price
-      const isTargetHit = updatedSignal.direction === "BUY" 
-        ? price >= target.price 
-        : price <= target.price;
-        
-      return {
-        ...target,
-        hit: isTargetHit || target.hit === true // Once hit, always hit
-      };
-    });
-  }
-  
-  // Check if stop loss was hit
-  const isStopLossHit = updatedSignal.direction === "BUY"
-    ? price <= updatedSignal.stopLoss
-    : price >= updatedSignal.stopLoss;
-    
-  // Check if all targets were hit
-  const allTargetsHit = updatedSignal.targets && 
-    updatedSignal.targets.length > 0 && 
-    updatedSignal.targets.every(t => t.hit);
-    
-  // Determine signal status
-  if (isStopLossHit) {
-    updatedSignal.status = "COMPLETED";
-    updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-    // Calculate profit as negative (loss)
-    const entryPrice = updatedSignal.entryPrice || 0;
-    updatedSignal.profit = updatedSignal.direction === "BUY"
-      ? ((updatedSignal.stopLoss / entryPrice) - 1) * 100
-      : ((entryPrice / updatedSignal.stopLoss) - 1) * 100;
-    updatedSignal.result = 0; // 0 for loss
-  } else if (allTargetsHit) {
-    updatedSignal.status = "COMPLETED";
-    updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-    // Calculate average profit from targets
-    if (updatedSignal.targets && updatedSignal.targets.length > 0) {
-      const hitTargets = updatedSignal.targets.filter(t => t.hit);
-      const entryPrice = updatedSignal.entryPrice || 0;
-      // Use the highest target hit for profit calculation
-      const highestTargetHit = hitTargets.reduce(
-        (max, target) => target.level > max.level ? target : max, 
-        hitTargets[0]
-      );
-      
-      updatedSignal.profit = updatedSignal.direction === "BUY"
-        ? ((highestTargetHit.price / entryPrice) - 1) * 100
-        : ((entryPrice / highestTargetHit.price) - 1) * 100;
-    }
-    updatedSignal.result = 1; // 1 for win
-  }
-  
-  return updatedSignal;
-};
-
-/**
- * Updates all signals in history with current status
- */
-export const updateAllSignalsStatus = async (
-  currentPrices?: {[symbol: string]: number}
-): Promise<TradingSignal[]> => {
-  const signals = getSignalsHistory();
-  
-  const updatedSignals = await Promise.all(
-    signals.map(async signal => {
-      // Only update signals that aren't already completed
-      if (signal.status !== "COMPLETED") {
-        const currentPrice = currentPrices?.[signal.symbol];
-        return await updateSignalStatus(signal, currentPrice);
-      }
-      return signal;
-    })
-  );
-  
-  // Save updated signals back to storage
-  localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
-  
-  return updatedSignals;
-};
-
-/**
- * Reprocesses all signals in history
- */
-export const reprocessAllHistory = async (
-  currentPrices?: {[symbol: string]: number}
-): Promise<TradingSignal[]> => {
-  const signals = getSignalsHistory();
-  
-  const updatedSignals = await Promise.all(
-    signals.map(async signal => {
-      const currentPrice = currentPrices?.[signal.symbol];
-      
-      // First update the signal status based on price
-      const statusUpdated = await updateSignalStatus(signal, currentPrice);
-      
-      // Then update the outcome based on the new status
-      return await updateSignalOutcome(statusUpdated);
-    })
-  );
-  
-  // Save updated signals back to storage
-  localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
-  console.log(`Reprocessed ${updatedSignals.length} signals in history`);
-  
-  return updatedSignals;
-};
-
-/**
- * Analyzes signal history and returns performance metrics
- */
-export const analyzeSignalsHistory = (): PerformanceMetrics => {
-  const signals = getSignalsHistory();
-  
-  // Count wins and losses
-  const wins = signals.filter(s => s.result === 1 || s.result === "win" || s.result === "partial").length;
-  const losses = signals.filter(s => s.result === 0 || s.result === "loss" || s.result === "missed").length;
-  const total = signals.length;
-  const completed = signals.filter(s => s.status === "COMPLETED").length;
-  
-  // Calculate win rate
-  const winRate = completed > 0 ? (wins / completed) * 100 : 0;
-  
-  // Calculate average profit
-  const profitSignals = signals.filter(s => s.profit !== undefined);
-  const avgProfit = profitSignals.length > 0
-    ? profitSignals.reduce((sum, s) => sum + (s.profit || 0), 0) / profitSignals.length
-    : 0;
-    
-  // Analyze performance by symbol
-  const symbolPerformance = signals.reduce((acc, signal) => {
-    const symbol = signal.symbol;
-    
-    if (!acc[symbol]) {
-      acc[symbol] = { total: 0, wins: 0, losses: 0 };
+  signals.forEach(signal => {
+    const symbol = signal.symbol || signal.pair || "unknown";
+    if (!symbolsMap.has(symbol)) {
+      symbolsMap.set(symbol, { count: 0, wins: 0, losses: 0 });
     }
     
-    acc[symbol].total += 1;
-    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") acc[symbol].wins += 1;
-    if (signal.result === 0 || signal.result === "loss" || signal.result === "missed") acc[symbol].losses += 1;
+    const data = symbolsMap.get(symbol)!;
+    data.count++;
     
-    return acc;
-  }, {} as {[symbol: string]: {total: number, wins: number, losses: number}});
-  
-  // Analyze strategy performance
-  const strategyPerformance = signals.reduce((acc, signal) => {
-    const strategy = signal.strategy || 'Unknown';
-    
-    if (!acc[strategy]) {
-      acc[strategy] = { total: 0, wins: 0, losses: 0, profit: 0 };
+    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") {
+      data.wins++;
+    } else if (signal.result === 0 || signal.result === "loss") {
+      data.losses++;
     }
-    
-    acc[strategy].total += 1;
-    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") acc[strategy].wins += 1;
-    if (signal.result === 0 || signal.result === "loss" || signal.result === "missed") acc[strategy].losses += 1;
-    if (signal.profit !== undefined) acc[strategy].profit += signal.profit;
-    
-    return acc;
-  }, {} as {[strategy: string]: {total: number, wins: number, losses: number, profit: number}});
+  });
   
-  // Transform the symbolPerformance object into an array
-  const symbolsData = Object.entries(symbolPerformance).map(([symbol, data]) => ({
+  // Convert to array
+  const symbolsData = Array.from(symbolsMap.entries()).map(([symbol, data]) => ({
     symbol,
-    count: data.total,
+    count: data.count,
+    wins: data.wins,
+    losses: data.losses,
+    winRate: data.count > 0 ? (data.wins / data.count) * 100 : 0
+  })).sort((a, b) => b.count - a.count);
+  
+  // Group by strategy
+  const strategyMap = new Map<string, { 
+    count: number, 
+    wins: number, 
+    losses: number,
+    totalProfit: number
+  }>();
+  
+  signals.forEach(signal => {
+    const strategy = signal.strategy || "unknown";
+    if (!strategyMap.has(strategy)) {
+      strategyMap.set(strategy, { 
+        count: 0, 
+        wins: 0, 
+        losses: 0,
+        totalProfit: 0
+      });
+    }
+    
+    const data = strategyMap.get(strategy)!;
+    data.count++;
+    
+    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") {
+      data.wins++;
+    } else if (signal.result === 0 || signal.result === "loss") {
+      data.losses++;
+    }
+    
+    if (typeof signal.profit === 'number') {
+      data.totalProfit += signal.profit;
+    }
+  });
+  
+  // Convert to array
+  const strategyData = Array.from(strategyMap.entries()).map(([strategy, data]) => ({
+    strategy,
+    count: data.count,
+    wins: data.wins,
+    losses: data.losses,
+    winRate: data.count > 0 ? (data.wins / data.count) * 100 : 0,
+    avgProfit: data.count > 0 ? data.totalProfit / data.count : 0
+  })).sort((a, b) => b.count - a.count);
+  
+  // Group by day
+  const dailyMap = new Map<string, { 
+    total: number, 
+    wins: number, 
+    losses: number 
+  }>();
+  
+  signals.forEach(signal => {
+    const date = new Date(signal.createdAt).toISOString().split('T')[0];
+    if (!dailyMap.has(date)) {
+      dailyMap.set(date, { total: 0, wins: 0, losses: 0 });
+    }
+    
+    const data = dailyMap.get(date)!;
+    data.total++;
+    
+    if (signal.result === 1 || signal.result === "win" || signal.result === "partial") {
+      data.wins++;
+    } else if (signal.result === 0 || signal.result === "loss") {
+      data.losses++;
+    }
+  });
+  
+  // Convert to array
+  const dailyData = Array.from(dailyMap.entries()).map(([date, data]) => ({
+    date,
+    total: data.total,
     wins: data.wins,
     losses: data.losses,
     winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0
-  }));
-  
-  // Transform the strategyPerformance object into an array
-  const strategyData = Object.entries(strategyPerformance).map(([strategy, data]) => ({
-    strategy,
-    count: data.total,
-    wins: data.wins,
-    losses: data.losses,
-    winRate: data.total > 0 ? (data.wins / data.total) * 100 : 0,
-    profit: data.profit,
-    avgTradeProfit: data.total > 0 ? data.profit / data.total : 0
-  }));
+  })).sort((a, b) => a.date.localeCompare(b.date));
   
   return {
-    totalSignals: total,
-    winningTrades: wins,
-    losingTrades: losses,
+    totalSignals,
+    winningTrades,
+    losingTrades,
     winRate,
-    avgProfit,
     symbolsData,
     strategyData,
-    signalTypesData: [], // Placeholder for now
-    dailyData: [] // Placeholder for now
+    dailyData
   };
 };
 
 /**
- * Verifies all signals using Binance API data
+ * Calculate estimated profit for a signal based on targets hit or stop loss
  */
-export const verifyAllSignalsWithBinance = async (): Promise<TradingSignal[]> => {
-  const signals = getSignalsHistory();
+export const calculateSignalProfit = (signal: TradingSignal): number => {
+  if (!signal.entryPrice) return 0;
   
-  // Only process signals that haven't been verified yet or are unresolved
-  const signalsToVerify = signals.filter(signal => 
-    !signal.verifiedAt || 
-    (signal.status !== "COMPLETED" && signal.result !== "win" && signal.result !== "loss")
-  );
+  // If profit is already calculated, return it
+  if (typeof signal.profit === 'number') return signal.profit;
   
-  if (signalsToVerify.length === 0) {
-    toast.info("Não há sinais pendentes para verificação");
-    return signals;
+  const entryPrice = signal.entryPrice;
+  const leverage = signal.leverage || 1;
+  
+  // Check if stop loss was hit
+  if (signal.result === 0 || signal.result === "loss") {
+    // Calculate loss based on stop loss
+    if (signal.stopLoss) {
+      const stopLossPct = signal.direction === "BUY" || signal.direction === "LONG"
+        ? ((signal.stopLoss / entryPrice) - 1) * 100 * leverage
+        : ((entryPrice / signal.stopLoss) - 1) * 100 * leverage;
+      return stopLossPct;
+    }
+    return -5 * leverage; // Default loss if no stop loss
   }
   
-  try {
-    toast.info(`Verificando ${signalsToVerify.length} sinais com dados reais da Binance...`);
-    const verifiedSignals = await batchVerifySignals(signalsToVerify);
+  // Check if any targets were hit
+  if ((signal.result === 1 || signal.result === "win" || signal.result === "partial") && signal.targets) {
+    // Find the highest hit target
+    const highestHitTarget = signal.targets
+      .filter(t => t.hit)
+      .sort((a, b) => b.level - a.level)[0];
     
-    // Update only the signals that were verified
-    const updatedSignals = signals.map(signal => {
-      const verifiedSignal = verifiedSignals.find(vs => vs.id === signal.id);
-      return verifiedSignal || signal;
-    });
-    
-    // Save updated signals back to storage
-    localStorage.setItem(SIGNALS_HISTORY_KEY, JSON.stringify(updatedSignals));
-    
-    toast.success(`Verificação concluída para ${signalsToVerify.length} sinais`);
-    return updatedSignals;
-  } catch (error) {
-    console.error("Error verifying signals with Binance:", error);
-    toast.error("Erro ao verificar sinais: " + (error instanceof Error ? error.message : "Erro desconhecido"));
-    return signals;
+    if (highestHitTarget) {
+      const targetPct = signal.direction === "BUY" || signal.direction === "LONG"
+        ? ((highestHitTarget.price / entryPrice) - 1) * 100 * leverage
+        : ((entryPrice / highestHitTarget.price) - 1) * 100 * leverage;
+      return targetPct;
+    }
   }
+  
+  return 0; // No profit calculated
+};
+
+export default {
+  analyzeSignalsHistory,
+  calculateSignalProfit
 };
