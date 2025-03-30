@@ -10,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import SignalsSidebar from "@/components/signals/SignalsSidebar";
 import SignalItem from "@/components/signals/SignalItem";
-import CandlestickChart from "@/components/signals/CandlestickChart";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
@@ -515,7 +514,7 @@ const SignalsDashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-12 gap-3 sm:gap-6">
-              <div className="col-span-12 md:col-span-4 lg:col-span-3 order-2 md:order-1">
+              <div className="col-span-12 md:col-span-4 lg:col-span-3">
                 <SignalsSidebar 
                   signals={filteredSignals} 
                   activeSignal={activeSignal} 
@@ -524,27 +523,18 @@ const SignalsDashboard = () => {
                 />
               </div>
               
-              <div className="col-span-12 md:col-span-8 lg:col-span-9 order-1 md:order-2">
+              <div className="col-span-12 md:col-span-8 lg:col-span-9">
                 {activeSignal ? (
-                  <CandlestickChart 
-                    symbol={activeSignal.symbol || ""} 
-                    entryPrice={activeSignal.entryPrice} 
-                    stopLoss={activeSignal.stopLoss} 
-                    targets={activeSignal.targets} 
-                  />
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
+                    <SignalCard signal={activeSignal} />
+                  </div>
                 ) : (
                   <div className="h-[400px] flex items-center justify-center bg-background border rounded-lg p-4">
-                    <p className="text-muted-foreground">Selecione um sinal para ver o gráfico</p>
+                    <p className="text-muted-foreground">Selecione um sinal para ver detalhes</p>
                   </div>
                 )}
               </div>
-              
-              {activeSignal && (
-                <div className="col-span-12 mt-3 sm:mt-6">
-                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
-                  <SignalCard signal={activeSignal} />
-                </div>
-              )}
             </div>
           )}
         </>
