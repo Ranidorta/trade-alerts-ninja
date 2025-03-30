@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
@@ -187,7 +186,6 @@ export const useTradingSignals = () => {
         localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
         
         // Save to both history systems for now to ensure smooth transition
-        saveSignalsToHistory(processedSignals);
         saveSignalsToHistory(processedSignals);
       }
       
