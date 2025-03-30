@@ -1,4 +1,3 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -53,6 +52,12 @@ export interface TradingSignal {
   hitTargets?: boolean[]; // Added for Binance verification
   verifiedAt?: string;   // Added for Binance verification
   error?: string;        // Added for error tracking
+  
+  entryTime?: string;
+  exitPrice?: number;
+  exitTime?: string;
+  maxDrawdown?: number;
+  pnlPercentage?: number;
 }
 
 export interface Feature {
@@ -134,6 +139,11 @@ export interface PerformanceMetrics {
   dailyData: DailyPerformance[];
   strategyPerformance?: StrategyDetailedPerformance[];
   avgProfit?: number;
+  
+  profitFactor?: number;
+  maxDrawdown?: number;
+  sharpeRatio?: number;
+  totalPnl?: number;
 }
 
 export interface SymbolPerformance {
@@ -156,6 +166,11 @@ export interface StrategyTypePerformance {
   avgProfit?: number;
   sharpeRatio?: number;
   maxDrawdown?: number;
+  
+  status?: "active" | "inactive";
+  profitFactor?: number;
+  description?: string;
+  lastUpdated?: string;
 }
 
 export interface StrategyDetailedPerformance {
@@ -174,4 +189,36 @@ export interface DailyPerformance {
   total: number;
   wins: number;
   losses: number;
+}
+
+export interface BacktestResult {
+  strategyName: string;
+  period: string;
+  startDate: string;
+  endDate: string;
+  totalTrades: number;
+  winRate: number;
+  profitFactor: number;
+  maxDrawdown: number;
+  sharpeRatio: number;
+  totalPnl: number;
+  trades: TradingSignal[];
+  annualizedReturn?: number;
+}
+
+export interface HistoricalSignal {
+  id: string;
+  asset: string;
+  entryPrice: number;
+  entryTime: string;
+  exitPrice?: number;
+  exitTime?: string;
+  direction: "long" | "short";
+  strategy: string;
+  result?: "win" | "loss" | "neutral";
+  pnlPercentage?: number;
+  hitTPs?: boolean[];
+  maxDrawdown?: number;
+  leverage?: number;
+  notes?: string;
 }

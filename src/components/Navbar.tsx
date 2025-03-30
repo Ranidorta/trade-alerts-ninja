@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +8,12 @@ import {
   Clock,
   LineChart,
   Menu,
-  X
+  X,
+  Home,
+  BarChart,
+  ClipboardList,
+  TrendingUp,
+  Globe
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,9 +21,10 @@ import { cn } from "@/lib/utils";
 import AuthButton from "@/components/AuthButton";
 import { useAuth } from "@/hooks/useAuth";
 
-const Navbar = () => {
+export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
@@ -26,23 +32,16 @@ const Navbar = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const navLinks = [
-    { path: "/signals", name: "Sinais", icon: <BarChart4 size={18} /> },
-    { path: "/history", name: "Histórico", icon: <Clock size={18} /> },
-    { 
-      path: "/performance", 
-      name: "Performance", 
-      icon: <LineChart size={18} /> 
-    },
-    { 
-      path: "/market", 
-      name: "Mercado", 
-      icon: <Presentation size={18} /> 
-    },
+  const menuItems = [
+    { name: "Home", path: "/", icon: <Home className="h-4 w-4 mr-2" /> },
+    { name: "Sinais", path: "/signals", icon: <BarChart className="h-4 w-4 mr-2" /> },
+    { name: "Histórico", path: "/history", icon: <ClipboardList className="h-4 w-4 mr-2" /> },
+    { name: "Performance", path: "/performance", icon: <TrendingUp className="h-4 w-4 mr-2" /> },
+    { name: "Backtest", path: "/backtest", icon: <LineChart className="h-4 w-4 mr-2" /> },
+    { name: "Mercado", path: "/market", icon: <Globe className="h-4 w-4 mr-2" /> },
   ];
 
-  // For non-authenticated users, don't show any links
-  const visibleNavLinks = user ? navLinks : [];
+  const visibleNavLinks = user ? menuItems : [];
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-background/95 backdrop-blur z-50 border-b border-border transition-all duration-200">
@@ -125,5 +124,3 @@ const Navbar = () => {
     </nav>
   );
 };
-
-export default Navbar;
