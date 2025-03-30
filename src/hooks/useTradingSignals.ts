@@ -4,12 +4,12 @@ import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
 import { 
-  saveSignalsToHistory, 
-  getSignalsHistory,
+  getSignalsHistory, 
   updateAllSignalsStatus,
   reprocessAllHistory
 } from "@/lib/signalHistoryService";
 import { logTradeSignal } from "@/lib/firebase";
+import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
 
 // Using a fallback URL for the backend
 const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
@@ -185,6 +185,9 @@ export const useTradingSignals = () => {
       // Save to localStorage and history
       if (processedSignals.length > 0) {
         localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
+        
+        // Save to both history systems for now to ensure smooth transition
+        saveSignalsToHistory(processedSignals);
         saveSignalsToHistory(processedSignals);
       }
       
@@ -242,12 +245,15 @@ export const useTradingSignals = () => {
       // Combine existing and new signals
       const updatedSignals = [...processedNewSignals, ...currentSignals];
       
-      // Save to localStorage and history
+      // Save to localStorage and both history systems
       localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(updatedSignals));
       saveSignalsToHistory(processedNewSignals);
       
       // Log new signals to Firebase for analytics and monitoring
       processedNewSignals.forEach(signal => {
+        // Also save each individual signal to our new history system
+        saveSignalToHistory(signal);
+        
         logTradeSignal(signal)
           .then(success => {
             if (!success) console.warn(`Failed to log signal ${signal.id} to Firebase`);
