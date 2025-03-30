@@ -144,7 +144,7 @@ export const calculateSignalProfit = (signal: TradingSignal): number => {
   if (signal.result === 0 || signal.result === "loss") {
     // Calculate loss based on stop loss
     if (signal.stopLoss) {
-      const stopLossPct = signal.direction === "BUY" || signal.direction === "LONG"
+      const stopLossPct = (signal.direction === "BUY" || signal.type === "LONG")
         ? ((signal.stopLoss / entryPrice) - 1) * 100 * leverage
         : ((entryPrice / signal.stopLoss) - 1) * 100 * leverage;
       return stopLossPct;
@@ -155,14 +155,14 @@ export const calculateSignalProfit = (signal: TradingSignal): number => {
   // Check if any targets were hit
   if ((signal.result === 1 || signal.result === "win" || signal.result === "partial") && signal.targets) {
     // Find the highest hit target
-    const highestHitTarget = signal.targets
+    const hitTargets = signal.targets
       .filter(t => t.hit)
       .sort((a, b) => b.level - a.level)[0];
     
-    if (highestHitTarget) {
-      const targetPct = signal.direction === "BUY" || signal.direction === "LONG"
-        ? ((highestHitTarget.price / entryPrice) - 1) * 100 * leverage
-        : ((entryPrice / highestHitTarget.price) - 1) * 100 * leverage;
+    if (hitTargets) {
+      const targetPct = (signal.direction === "BUY" || signal.type === "LONG")
+        ? ((hitTargets.price / entryPrice) - 1) * 100 * leverage
+        : ((entryPrice / hitTargets.price) - 1) * 100 * leverage;
       return targetPct;
     }
   }
