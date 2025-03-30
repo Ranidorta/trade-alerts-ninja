@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
@@ -61,9 +60,16 @@ const SignalsDashboard = () => {
       const fetchedSignals = await fetchSignals(params);
       if (fetchedSignals.length > 0) {
         setSignals(fetchedSignals);
-        setFilteredSignals(fetchedSignals);
+        
+        // Get only the most recent signal
+        const sortedSignals = [...fetchedSignals].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        const latestSignal = sortedSignals[0];
+        setFilteredSignals([latestSignal]);
+        
         if (!activeSignal) {
-          setActiveSignal(fetchedSignals[0]);
+          setActiveSignal(latestSignal);
         }
         addSignals(fetchedSignals);
         saveSignalsToHistory(fetchedSignals);
@@ -114,7 +120,13 @@ const SignalsDashboard = () => {
     
     if (cachedSignals && cachedSignals.length > 0) {
       setSignals(cachedSignals);
-      setFilteredSignals(cachedSignals);
+      
+      // Get only the most recent signal
+      const sortedSignals = [...cachedSignals].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestSignal = sortedSignals[0];
+      setFilteredSignals([latestSignal]);
       
       const lastActive = getLastActiveSignal();
       if (lastActive) {
@@ -122,12 +134,12 @@ const SignalsDashboard = () => {
         if (signalExists) {
           setActiveSignal(lastActive);
         } else {
-          setActiveSignal(cachedSignals[0]);
-          setLastActiveSignal(cachedSignals[0]);
+          setActiveSignal(latestSignal);
+          setLastActiveSignal(latestSignal);
         }
       } else if (cachedSignals.length > 0) {
-        setActiveSignal(cachedSignals[0]);
-        setLastActiveSignal(cachedSignals[0]);
+        setActiveSignal(latestSignal);
+        setLastActiveSignal(latestSignal);
       }
     }
   }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal, signalsGeneratedBefore]);
@@ -145,28 +157,23 @@ const SignalsDashboard = () => {
   
   // Apply filters and sort whenever signals, filters, or sort order changes
   useEffect(() => {
-    let result = [...signals];
-    if (statusFilter !== "ALL") {
-      result = result.filter(signal => signal.status === statusFilter);
+    if (signals.length === 0) {
+      setFilteredSignals([]);
+      return;
     }
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(signal => signal.symbol?.toLowerCase().includes(query) || signal.pair?.toLowerCase().includes(query));
+    
+    // Always get only the latest signal regardless of filters
+    const sortedSignals = [...signals].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const latestSignal = sortedSignals[0];
+    
+    setFilteredSignals([latestSignal]);
+    
+    if (activeSignal?.id !== latestSignal.id) {
+      setActiveSignal(latestSignal);
     }
-    result.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      } else {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-    });
-    setFilteredSignals(result);
-    if (activeSignal && !result.some(s => s.id === activeSignal.id) && result.length > 0) {
-      setActiveSignal(result[0]);
-    } else if (result.length === 0) {
-      setActiveSignal(null);
-    }
-  }, [signals, statusFilter, searchQuery, sortBy, activeSignal]);
+  }, [signals, activeSignal, statusFilter, searchQuery, sortBy]);
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -205,15 +212,24 @@ const SignalsDashboard = () => {
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
           if (uniqueNewSignals.length > 0) {
             addSignals(uniqueNewSignals);
-            if (!activeSignal) {
-              setActiveSignal(uniqueNewSignals[0]);
-            }
+            
+            // Sort signals by date to get the latest one
+            const allSignals = [...uniqueNewSignals, ...prevSignals];
+            const sortedSignals = allSignals.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            const latestSignal = sortedSignals[0];
+            
+            // Set the latest signal as the active one
+            setFilteredSignals([latestSignal]);
+            setActiveSignal(latestSignal);
+            
             toast({
-              title: "Novos sinais gerados",
-              description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`
+              title: "Novo sinal gerado",
+              description: "Nova oportunidade de trading encontrada"
             });
             saveSignalsToHistory(uniqueNewSignals);
-            return [...uniqueNewSignals, ...prevSignals];
+            return allSignals;
           }
           toast({
             title: "Nenhum novo sinal",
@@ -511,9 +527,9 @@ const SignalsDashboard = () => {
         filteredSignals.length > 0 && (
           <>
             <div className="mb-4">
-              <h2 className="text-xl font-semibold">Sinais ({filteredSignals.length})</h2>
+              <h2 className="text-xl font-semibold">Último Sinal de Trading</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               {filteredSignals.map((signal) => (
                 <SignalCard key={signal.id} signal={signal} />
               ))}
