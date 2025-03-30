@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
@@ -8,8 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { generateAllSignals } from "@/lib/apiServices";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
-import SignalsSidebar from "@/components/signals/SignalsSidebar";
-import SignalItem from "@/components/signals/SignalItem";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
@@ -238,15 +237,109 @@ const SignalsDashboard = () => {
     return lastUpdated.toLocaleTimeString();
   };
   
-  const handleSelectSignal = (signal: TradingSignal) => {
-    console.log("Signal selected in dashboard:", signal.id);
-    setActiveSignal(signal);
-    setLastActiveSignal(signal);
-  };
+  const loadSignalsData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: any = {
+        days: 30,
+        strategy: "CLASSIC"
+      };
+      const fetchedSignals = await fetchSignals(params);
+      if (fetchedSignals.length > 0) {
+        setSignals(fetchedSignals);
+        setFilteredSignals(fetchedSignals);
+        if (!activeSignal) {
+          setActiveSignal(fetchedSignals[0]);
+        }
+        addSignals(fetchedSignals);
+        saveSignalsToHistory(fetchedSignals);
+      } else {
+        toast({
+          title: "Nenhum sinal encontrado",
+          description: "Nenhum sinal de trading foi encontrado com os filtros atuais."
+        });
+      }
+    } catch (error) {
+      console.error("Error loading signals:", error);
+      toast({
+        title: "Erro ao carregar sinais",
+        description: "Falha ao carregar sinais da API.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+      setLastUpdated(new Date());
+    }
+  }, [toast, addSignals, activeSignal]);
   
-  const toggleFilters = () => {
-    setShowFilters(!showFilters);
-  };
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const DEFAULT_REFRESH_INTERVAL = 60000;
+    const intervalId = setInterval(() => {
+      console.log("Auto-refreshing signals data...");
+      loadSignalsData();
+    }, DEFAULT_REFRESH_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, [autoRefresh, loadSignalsData]);
+  
+  useEffect(() => {
+    if (signals.length > 0) {
+      if (!activeSignal) {
+        const lastActiveSignal = getLastActiveSignal();
+        if (lastActiveSignal) {
+          const signalExists = signals.some(s => s.id === lastActiveSignal.id);
+          if (signalExists) {
+            setActiveSignal(lastActiveSignal);
+          } else if (signals.length > 0) {
+            setActiveSignal(signals[0]);
+            setLastActiveSignal(signals[0]);
+          }
+        } else if (signals.length > 0) {
+          setActiveSignal(signals[0]);
+          setLastActiveSignal(signals[0]);
+        }
+      }
+      return;
+    }
+    
+    if (cachedSignals && cachedSignals.length > 0) {
+      setSignals(cachedSignals);
+      setFilteredSignals(cachedSignals);
+      
+      const lastActive = getLastActiveSignal();
+      if (lastActive) {
+        const signalExists = cachedSignals.some(s => s.id === lastActive.id);
+        if (signalExists) {
+          setActiveSignal(lastActive);
+        } else {
+          setActiveSignal(cachedSignals[0]);
+          setLastActiveSignal(cachedSignals[0]);
+        }
+      } else if (cachedSignals.length > 0) {
+        setActiveSignal(cachedSignals[0]);
+        setLastActiveSignal(cachedSignals[0]);
+      }
+    }
+  }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal]);
+  
+  useEffect(() => {
+    let result = [...signals];
+    if (statusFilter !== "ALL") {
+      result = result.filter(signal => signal.status === statusFilter);
+    }
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(signal => signal.symbol?.toLowerCase().includes(query) || signal.pair?.toLowerCase().includes(query));
+    }
+    result.sort((a, b) => {
+      if (sortBy === "newest") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      } else {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+    });
+    setFilteredSignals(result);
+  }, [signals, statusFilter, searchQuery, sortBy]);
   
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
@@ -425,7 +518,7 @@ const SignalsDashboard = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
                   <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile && (statusFilter === "ALL" ? "Todos Status" : statusFilter) || "Status"}
+                  {!isMobile && (statusFilter === "ALL" ? "Todos Status" : statusFilter)}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -488,56 +581,23 @@ const SignalsDashboard = () => {
         </div>
       )}
       
-      {signals.length > 0 && (
-        <>
-          {isMobile ? (
-            <div className="space-y-4">
-              <div className="bg-background border rounded-lg">
-                <div className="p-3 border-b">
-                  <h3 className="font-medium">Sinais Ativos ({filteredSignals.length})</h3>
-                </div>
-                <div className="p-2 max-h-[400px] overflow-y-auto">
-                  {filteredSignals.map((signal) => (
-                    <SignalItem 
-                      key={signal.id} 
-                      signal={signal} 
-                      isActive={activeSignal?.id === signal.id}
-                      onSelect={() => handleSelectSignal(signal)}
-                    />
-                  ))}
-                </div>
-              </div>
-              
-              {activeSignal && (
-                <SignalCard signal={activeSignal} />
-              )}
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      ) : (
+        filteredSignals.length > 0 && (
+          <>
+            <div className="mb-4">
+              <h2 className="text-xl font-semibold">Sinais ({filteredSignals.length})</h2>
             </div>
-          ) : (
-            <div className="grid grid-cols-12 gap-3 sm:gap-6">
-              <div className="col-span-12 md:col-span-4 lg:col-span-3">
-                <SignalsSidebar 
-                  signals={filteredSignals} 
-                  activeSignal={activeSignal} 
-                  onSelectSignal={handleSelectSignal} 
-                  isLoading={isLoading} 
-                />
-              </div>
-              
-              <div className="col-span-12 md:col-span-8 lg:col-span-9">
-                {activeSignal ? (
-                  <div>
-                    <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">Detalhes do Sinal</h3>
-                    <SignalCard signal={activeSignal} />
-                  </div>
-                ) : (
-                  <div className="h-[400px] flex items-center justify-center bg-background border rounded-lg p-4">
-                    <p className="text-muted-foreground">Selecione um sinal para ver detalhes</p>
-                  </div>
-                )}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredSignals.map((signal) => (
+                <SignalCard key={signal.id} signal={signal} />
+              ))}
             </div>
-          )}
-        </>
+          </>
+        )
       )}
     </div>
   );
