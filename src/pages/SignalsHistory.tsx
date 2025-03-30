@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
@@ -14,7 +15,8 @@ import {
   Database,
   Filter,
   Search,
-  SlidersHorizontal 
+  SlidersHorizontal,
+  List 
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -44,7 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import SignalHistoryItem from "@/components/signals/SignalHistoryItem";
+import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import { getSignalHistory } from "@/lib/signal-storage";
 
 const SignalsHistory = () => {
@@ -347,7 +349,7 @@ const SignalsHistory = () => {
               value="signals" 
               className="flex items-center gap-1"
             >
-              <Calendar className="w-4 h-4" />
+              <List className="w-4 h-4" />
               Sinais
             </TabsTrigger>
             <TabsTrigger 
@@ -423,11 +425,11 @@ const SignalsHistory = () => {
               <p className="text-muted-foreground">Nenhum sinal encontrado. Gere sinais na aba "Sinais" primeiro.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSignals.map((signal) => (
-                <SignalHistoryItem key={signal.id} signal={signal} />
-              ))}
-            </div>
+            <Card>
+              <CardContent className="p-0">
+                <SignalHistoryTable signals={filteredSignals} />
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 

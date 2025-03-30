@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
@@ -123,7 +123,8 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
             }>
               <TableCell className="font-medium">{signal.symbol}</TableCell>
               <TableCell>
-                <Badge variant={signal.direction === "BUY" ? "default" : "destructive"}>
+                <Badge variant={signal.direction === "BUY" ? "default" : "destructive"} className="flex items-center gap-1">
+                  {signal.direction === "BUY" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
                   {signal.direction}
                 </Badge>
               </TableCell>
