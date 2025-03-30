@@ -5,7 +5,8 @@ import { formatDistance } from "date-fns";
 import { 
   ChevronRight, 
   ArrowUpRight, 
-  ArrowDownRight 
+  ArrowDownRight,
+  Target
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,24 @@ export default function SignalItem({ signal, isActive, onSelect }: SignalItemPro
             {signal.currentPrice}
           </div>
         </div>
+        
+        {/* Add targets preview */}
+        {signal.targets && signal.targets.length > 0 && (
+          <div className="flex items-center gap-1 mt-1">
+            <Target className="h-3 w-3 text-muted-foreground" />
+            <div className="flex gap-1">
+              {signal.targets.map((target, idx) => (
+                <Badge 
+                  key={idx}
+                  variant={target.hit ? "success" : "outline"} 
+                  className="px-1 py-0 text-[10px]"
+                >
+                  TP{idx+1}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </Button>
   );
