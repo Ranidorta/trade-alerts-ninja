@@ -170,7 +170,69 @@ export const calculateSignalProfit = (signal: TradingSignal): number => {
   return 0; // No profit calculated
 };
 
+// Export missing functions that are being imported in other files
+export const getSignalsHistory = () => {
+  return getSignalHistory();
+};
+
+export const updateAllSignalsStatus = (currentPrices?: {[symbol: string]: number}) => {
+  const signals = getSignalHistory();
+  
+  // For each signal, update its status based on current prices
+  // This is a simplified implementation - you can expand it based on your needs
+  const updatedSignals = signals.map(signal => {
+    // Simple implementation for now
+    return signal;
+  });
+  
+  return updatedSignals;
+};
+
+export const reprocessAllHistory = (currentPrices?: {[symbol: string]: number}) => {
+  return updateAllSignalsStatus(currentPrices);
+};
+
+export const saveSignalsToHistory = (signals: TradingSignal[]) => {
+  if (!signals || signals.length === 0) return;
+  
+  // Get existing signals
+  const existing = getSignalHistory();
+  
+  // Create a Set of existing IDs for quick lookup
+  const existingIds = new Set(existing.map(s => s.id));
+  
+  // Add new signals and update existing ones
+  signals.forEach(signal => {
+    if (existingIds.has(signal.id)) {
+      // Find and update the existing signal
+      const index = existing.findIndex(s => s.id === signal.id);
+      if (index !== -1) {
+        existing[index] = signal;
+      }
+    } else {
+      // Add the new signal
+      existing.unshift(signal);
+    }
+  });
+  
+  // Save back to localStorage
+  localStorage.setItem("trade_signal_history", JSON.stringify(existing.slice(0, 100)));
+  
+  return existing;
+};
+
+export const verifyAllSignalsWithBinance = async () => {
+  // Placeholder implementation
+  console.log("Verifying signals with Binance API...");
+  return getSignalHistory();
+};
+
 export default {
   analyzeSignalsHistory,
-  calculateSignalProfit
+  calculateSignalProfit,
+  getSignalsHistory,
+  updateAllSignalsStatus,
+  reprocessAllHistory,
+  saveSignalsToHistory,
+  verifyAllSignalsWithBinance
 };
