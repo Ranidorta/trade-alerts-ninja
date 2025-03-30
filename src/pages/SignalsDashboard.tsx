@@ -40,6 +40,43 @@ const SignalsDashboard = () => {
     setLastActiveSignal
   } = useTradingSignals();
   
+  // Load signals data from API or cache
+  const loadSignalsData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: any = {
+        days: 30,
+        strategy: "CLASSIC"
+      };
+      const fetchedSignals = await fetchSignals(params);
+      if (fetchedSignals.length > 0) {
+        setSignals(fetchedSignals);
+        setFilteredSignals(fetchedSignals);
+        if (!activeSignal) {
+          setActiveSignal(fetchedSignals[0]);
+        }
+        addSignals(fetchedSignals);
+        saveSignalsToHistory(fetchedSignals);
+      } else {
+        toast({
+          title: "Nenhum sinal encontrado",
+          description: "Nenhum sinal de trading foi encontrado com os filtros atuais."
+        });
+      }
+    } catch (error) {
+      console.error("Error loading signals:", error);
+      toast({
+        title: "Erro ao carregar sinais",
+        description: "Falha ao carregar sinais da API.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+      setLastUpdated(new Date());
+    }
+  }, [toast, addSignals, activeSignal]);
+  
+  // Initialize signals from cache or API
   useEffect(() => {
     if (signals.length > 0) {
       if (!activeSignal) {
@@ -80,41 +117,7 @@ const SignalsDashboard = () => {
     }
   }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal]);
   
-  const loadSignalsData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: any = {
-        days: 30,
-        strategy: "CLASSIC"
-      };
-      const fetchedSignals = await fetchSignals(params);
-      if (fetchedSignals.length > 0) {
-        setSignals(fetchedSignals);
-        setFilteredSignals(fetchedSignals);
-        if (!activeSignal) {
-          setActiveSignal(fetchedSignals[0]);
-        }
-        addSignals(fetchedSignals);
-        saveSignalsToHistory(fetchedSignals);
-      } else {
-        toast({
-          title: "Nenhum sinal encontrado",
-          description: "Nenhum sinal de trading foi encontrado com os filtros atuais."
-        });
-      }
-    } catch (error) {
-      console.error("Error loading signals:", error);
-      toast({
-        title: "Erro ao carregar sinais",
-        description: "Falha ao carregar sinais da API.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-      setLastUpdated(new Date());
-    }
-  }, [toast, addSignals, activeSignal]);
-  
+  // Set up auto-refresh interval if enabled
   useEffect(() => {
     if (!autoRefresh) return;
     const DEFAULT_REFRESH_INTERVAL = 60000;
@@ -125,6 +128,7 @@ const SignalsDashboard = () => {
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
   
+  // Apply filters and sort whenever signals, filters, or sort order changes
   useEffect(() => {
     let result = [...signals];
     if (statusFilter !== "ALL") {
@@ -236,110 +240,6 @@ const SignalsDashboard = () => {
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
-  
-  const loadSignalsData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: any = {
-        days: 30,
-        strategy: "CLASSIC"
-      };
-      const fetchedSignals = await fetchSignals(params);
-      if (fetchedSignals.length > 0) {
-        setSignals(fetchedSignals);
-        setFilteredSignals(fetchedSignals);
-        if (!activeSignal) {
-          setActiveSignal(fetchedSignals[0]);
-        }
-        addSignals(fetchedSignals);
-        saveSignalsToHistory(fetchedSignals);
-      } else {
-        toast({
-          title: "Nenhum sinal encontrado",
-          description: "Nenhum sinal de trading foi encontrado com os filtros atuais."
-        });
-      }
-    } catch (error) {
-      console.error("Error loading signals:", error);
-      toast({
-        title: "Erro ao carregar sinais",
-        description: "Falha ao carregar sinais da API.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-      setLastUpdated(new Date());
-    }
-  }, [toast, addSignals, activeSignal]);
-  
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const DEFAULT_REFRESH_INTERVAL = 60000;
-    const intervalId = setInterval(() => {
-      console.log("Auto-refreshing signals data...");
-      loadSignalsData();
-    }, DEFAULT_REFRESH_INTERVAL);
-    return () => clearInterval(intervalId);
-  }, [autoRefresh, loadSignalsData]);
-  
-  useEffect(() => {
-    if (signals.length > 0) {
-      if (!activeSignal) {
-        const lastActiveSignal = getLastActiveSignal();
-        if (lastActiveSignal) {
-          const signalExists = signals.some(s => s.id === lastActiveSignal.id);
-          if (signalExists) {
-            setActiveSignal(lastActiveSignal);
-          } else if (signals.length > 0) {
-            setActiveSignal(signals[0]);
-            setLastActiveSignal(signals[0]);
-          }
-        } else if (signals.length > 0) {
-          setActiveSignal(signals[0]);
-          setLastActiveSignal(signals[0]);
-        }
-      }
-      return;
-    }
-    
-    if (cachedSignals && cachedSignals.length > 0) {
-      setSignals(cachedSignals);
-      setFilteredSignals(cachedSignals);
-      
-      const lastActive = getLastActiveSignal();
-      if (lastActive) {
-        const signalExists = cachedSignals.some(s => s.id === lastActive.id);
-        if (signalExists) {
-          setActiveSignal(lastActive);
-        } else {
-          setActiveSignal(cachedSignals[0]);
-          setLastActiveSignal(cachedSignals[0]);
-        }
-      } else if (cachedSignals.length > 0) {
-        setActiveSignal(cachedSignals[0]);
-        setLastActiveSignal(cachedSignals[0]);
-      }
-    }
-  }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal]);
-  
-  useEffect(() => {
-    let result = [...signals];
-    if (statusFilter !== "ALL") {
-      result = result.filter(signal => signal.status === statusFilter);
-    }
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(signal => signal.symbol?.toLowerCase().includes(query) || signal.pair?.toLowerCase().includes(query));
-    }
-    result.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      } else {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      }
-    });
-    setFilteredSignals(result);
-  }, [signals, statusFilter, searchQuery, sortBy]);
   
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
