@@ -20,9 +20,7 @@ import "./App.css";
 
 // Import gamer theme styles
 import "./styles/gamer-theme.css";
-
-// Create a client
-const queryClient = new QueryClient();
+import { useState } from "react";
 
 // Protected route component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -81,25 +79,30 @@ const AppRoutes = () => {
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="dark">
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <div className="gamer-theme font-rajdhani">
-              <Navbar />
-              <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
-                <AppRoutes />
+const App = () => {
+  // Move the QueryClient initialization inside the component
+  const [queryClient] = useState(() => new QueryClient());
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider defaultTheme="dark">
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <div className="gamer-theme font-rajdhani">
+                <Navbar />
+                <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
+                  <AppRoutes />
+                </div>
               </div>
-            </div>
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
