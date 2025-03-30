@@ -15,6 +15,9 @@ import SignalCard from "@/components/SignalCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
+// Key for storing whether signals have been generated before
+const SIGNALS_GENERATED_KEY = "signals_generated_before";
+
 const SignalsDashboard = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -27,6 +30,7 @@ const SignalsDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [signalsGeneratedBefore, setSignalsGeneratedBefore] = useState(false);
   const isMobile = useIsMobile();
   
   const {
@@ -39,6 +43,12 @@ const SignalsDashboard = () => {
     getLastActiveSignal,
     setLastActiveSignal
   } = useTradingSignals();
+  
+  // Check if signals have been generated before
+  useEffect(() => {
+    const generated = localStorage.getItem(SIGNALS_GENERATED_KEY) === "true";
+    setSignalsGeneratedBefore(generated);
+  }, []);
   
   // Load signals data from API or cache
   const loadSignalsData = useCallback(async () => {
@@ -78,6 +88,11 @@ const SignalsDashboard = () => {
   
   // Initialize signals from cache or API
   useEffect(() => {
+    // Only initialize with cached signals if signals have been generated before
+    if (!signalsGeneratedBefore) {
+      return;
+    }
+    
     if (signals.length > 0) {
       if (!activeSignal) {
         const lastActiveSignal = getLastActiveSignal();
@@ -115,7 +130,7 @@ const SignalsDashboard = () => {
         setLastActiveSignal(cachedSignals[0]);
       }
     }
-  }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal]);
+  }, [signals, cachedSignals, activeSignal, getLastActiveSignal, setLastActiveSignal, signalsGeneratedBefore]);
   
   // Set up auto-refresh interval if enabled
   useEffect(() => {
@@ -181,6 +196,10 @@ const SignalsDashboard = () => {
     try {
       const newSignals = await generateAllSignals();
       if (newSignals.length > 0) {
+        // Mark that signals have been generated before
+        localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
+        setSignalsGeneratedBefore(true);
+        
         setSignals(prevSignals => {
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
@@ -240,6 +259,9 @@ const SignalsDashboard = () => {
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
+  
+  // Show empty state based on whether signals have been generated before
+  const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0);
   
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
@@ -465,7 +487,7 @@ const SignalsDashboard = () => {
         </div>
       )}
       
-      {!isLoading && signals.length === 0 && (
+      {!isLoading && showEmptyState && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
             <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
