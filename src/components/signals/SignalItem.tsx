@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Progress } from "@/components/ui/progress";
 
 interface SignalItemProps {
   signal: TradingSignal;
@@ -24,17 +23,12 @@ export default function SignalItem({ signal, isActive, onSelect }: SignalItemPro
     : 'data desconhecida';
   
   const isLong = signal.type === "LONG" || signal.direction === "BUY";
-
-  // Calculate the percentage of hit targets
-  const totalTargets = signal.targets?.length || 0;
-  const hitTargets = signal.targets?.filter(t => t.hit)?.length || 0;
-  const targetProgress = totalTargets > 0 ? (hitTargets / totalTargets) * 100 : 0;
   
   return (
     <Button
       variant="ghost"
       className={cn(
-        "w-full justify-start text-left p-3 mb-1 rounded-md hover:bg-accent transition-colors duration-200",
+        "w-full justify-start text-left p-2 mb-1 rounded-md hover:bg-accent transition-colors duration-200",
         isActive ? 'bg-accent border-l-4 border-primary' : ''
       )}
       onClick={() => {
@@ -82,20 +76,11 @@ export default function SignalItem({ signal, isActive, onSelect }: SignalItemPro
           </div>
         </div>
         
-        {/* Add targets preview with progress bar */}
+        {/* Add targets preview */}
         {signal.targets && signal.targets.length > 0 && (
-          <div className="mt-2 space-y-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Target className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Alvos ({hitTargets}/{totalTargets})</span>
-              </div>
-              <span className="text-xs font-medium">
-                {targetProgress.toFixed(0)}%
-              </span>
-            </div>
-            <Progress value={targetProgress} className="h-1.5" />
-            <div className="flex gap-1 mt-1">
+          <div className="flex items-center gap-1 mt-1">
+            <Target className="h-3 w-3 text-muted-foreground" />
+            <div className="flex gap-1">
               {signal.targets.map((target, idx) => (
                 <Badge 
                   key={idx}
