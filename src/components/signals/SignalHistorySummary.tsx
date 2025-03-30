@@ -1,14 +1,80 @@
 
+import { useEffect, useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, TrendingUp, TrendingDown, History, BarChart3 } from "lucide-react";
+import { getSignalHistory } from "@/lib/signal-storage";
 
 interface SignalHistorySummaryProps {
   signal: TradingSignal | null;
 }
 
 export default function SignalHistorySummary({ signal }: SignalHistorySummaryProps) {
+  const [historicalData, setHistoricalData] = useState<{
+    successRate: number;
+    totalSignals: number;
+    wins: number;
+    losses: number;
+    avgProfit: number;
+    recentResults: boolean[];
+  }>({
+    successRate: 0,
+    totalSignals: 0,
+    wins: 0,
+    losses: 0,
+    avgProfit: 0,
+    recentResults: []
+  });
+
+  useEffect(() => {
+    if (!signal) return;
+    
+    // Obter todos os sinais para este símbolo
+    const allSignals = getSignalHistory();
+    const symbolSignals = allSignals.filter(s => 
+      (s.symbol === signal.symbol || s.pair === signal.symbol) && 
+      (s.result === 1 || s.result === 0 || s.result === "win" || s.result === "loss" || s.result === "partial")
+    );
+    
+    if (symbolSignals.length === 0) return;
+    
+    // Calcular métricas
+    const wins = symbolSignals.filter(s => 
+      s.result === 1 || s.result === "win" || s.result === "partial"
+    ).length;
+    
+    const losses = symbolSignals.filter(s => 
+      s.result === 0 || s.result === "loss"
+    ).length;
+    
+    const successRate = symbolSignals.length > 0 ? (wins / symbolSignals.length) * 100 : 0;
+    
+    // Calcular lucro médio
+    const signalsWithProfit = symbolSignals.filter(s => typeof s.profit === 'number');
+    const avgProfit = signalsWithProfit.length > 0 
+      ? signalsWithProfit.reduce((sum, s) => sum + (s.profit || 0), 0) / signalsWithProfit.length 
+      : 0;
+    
+    // Obter 5 resultados mais recentes (ordenados por data)
+    const recentSignals = [...symbolSignals]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+    
+    const recentResults = recentSignals.map(s => 
+      s.result === 1 || s.result === "win" || s.result === "partial"
+    );
+    
+    setHistoricalData({
+      successRate,
+      totalSignals: symbolSignals.length,
+      wins,
+      losses,
+      avgProfit,
+      recentResults
+    });
+  }, [signal]);
+
   if (!signal) {
     return (
       <Card>
@@ -27,9 +93,7 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
     );
   }
 
-  // Calculate success rate for the pair
-  const successRate = Math.random() * 100; // In a real app, this would come from historical data
-  const isSuccessful = successRate > 50;
+  const isSuccessful = historicalData.successRate > 50;
 
   return (
     <Card>
@@ -52,7 +116,7 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
                   <CheckCircle2 className="h-3 w-3" /> : 
                   <XCircle className="h-3 w-3" />
                 }
-                {successRate.toFixed(1)}%
+                {historicalData.successRate.toFixed(1)}%
               </Badge>
             </div>
             
@@ -75,7 +139,7 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Últimos Sinais</span>
               <span className="text-sm font-medium">
-                {Math.floor(Math.random() * 10) + 1} sinais
+                {historicalData.totalSignals} sinais
               </span>
             </div>
             
@@ -84,10 +148,10 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
               <Badge
                 variant="outline"
                 className={`${
-                  isSuccessful ? "text-green-500" : "text-red-500"
+                  historicalData.avgProfit >= 0 ? "text-green-500" : "text-red-500"
                 }`}
               >
-                {isSuccessful ? "+" : "-"}{(Math.random() * 5 + 1).toFixed(2)}%
+                {historicalData.avgProfit >= 0 ? "+" : ""}{historicalData.avgProfit.toFixed(2)}%
               </Badge>
             </div>
           </div>
@@ -96,9 +160,8 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
         <div className="mt-4">
           <h4 className="text-sm font-medium mb-2">Resultados Recentes</h4>
           <div className="flex gap-1">
-            {Array.from({ length: 5 }).map((_, i) => {
-              const win = Math.random() > 0.4;
-              return (
+            {historicalData.recentResults.length > 0 ? (
+              historicalData.recentResults.map((win, i) => (
                 <div
                   key={i}
                   className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -110,8 +173,10 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
                     <XCircle className="h-4 w-4" />
                   }
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground">Sem resultados recentes</p>
+            )}
           </div>
         </div>
       </CardContent>
