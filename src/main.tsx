@@ -1,3 +1,4 @@
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
@@ -17,13 +18,14 @@ import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { config } from "./config/env";
 import BacktestingDashboard from "./pages/BacktestingDashboard";
 
+// Use the firebase config object directly from the config file
 const firebaseConfig = {
-  apiKey: config.firebaseApiKey,
-  authDomain: config.firebaseAuthDomain,
-  projectId: config.firebaseProjectId,
-  storageBucket: config.firebaseStorageBucket,
-  messagingSenderId: config.firebaseMessagingSenderId,
-  appId: config.firebaseAppId,
+  apiKey: config.firebase.apiKey,
+  authDomain: config.firebase.authDomain,
+  projectId: config.firebase.projectId,
+  storageBucket: config.firebase.storageBucket,
+  messagingSenderId: config.firebase.messagingSenderId,
+  appId: config.firebase.appId,
 };
 
 const app = initializeApp(firebaseConfig);
