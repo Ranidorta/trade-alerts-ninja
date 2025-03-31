@@ -55,7 +55,7 @@ BYBIT_SYMBOLS_URL = "https://api.bybit.com/v5/market/instruments"
 MODEL_PATH = "model.pkl"
 DB_PATH = "signals.db"
 RAW_DATA_DIR = "raw_data"
-INTERVAL = "1h"
+INTERVAL = "15m"
 CANDLE_LIMIT = 200
 CONFIG_PATH = "config/signal_priority.yml"
 
@@ -987,4 +987,3 @@ def process_symbol(symbol):
         'count': total_signals,
         'strategies': strategies_results
     }
-
