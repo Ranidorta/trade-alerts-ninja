@@ -21,4 +21,8 @@ export const config = {
   // Add additional environment variables as needed
   isDevelopment: import.meta.env.DEV,
   isProduction: import.meta.env.PROD,
+  
+  // ML Signal Generator Config
+  mlSignalSymbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+  mlSignalInterval: "15"
 };

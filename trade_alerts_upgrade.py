@@ -859,4 +859,20 @@ def process_strategy(df, symbol, strategy_name, strategy_function):
             if 'upper_band' in row and 'lower_band' in row and not pd.isna(row['upper_band']):
                 band_width = (row['upper_band'] - row['lower_band']) / row['middle_band']
                 if band_width > 0.05:  # Bandas largas, mais volatilidade
-                    confidence -=
+                    confidence -= 0.1
+            signals_data.append({
+                'symbol': symbol,
+                'strategy': strategy_name,
+                'signal': row['signal'],
+                'result': row['result'],
+                'position_size': row['position_size'],
+                'entry_price': row['entry_price'],
+                'confidence': confidence,
+                'volume_zscore': row['volume_zscore'],
+                'timestamp': row['timestamp'],
+                'fingerprint': row['fingerprint'],
+                'leverage': row['leverage']
+            })
+            signals_count += 1
+    
+    return {'count': signals_count, 'symbol': symbol, 'strategy': strategy_name, 'signals': signals_data}

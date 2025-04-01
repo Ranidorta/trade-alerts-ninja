@@ -11,5 +11,9 @@ from signals.volume_analyzer import VolumeAnalyzer
 from signals.diversifier import SignalDiversifier
 from signals.generator_v2 import SignalGenerator
 
-__all__ = ['ConflictResolver', 'VolumeAnalyzer', 'SignalDiversifier', 'SignalGenerator']
+# Make sure to create the directory structure for ML signals
+import os
+os.makedirs("ml", exist_ok=True)
+os.makedirs("signals", exist_ok=True)
 
+__all__ = ['ConflictResolver', 'VolumeAnalyzer', 'SignalDiversifier', 'SignalGenerator']

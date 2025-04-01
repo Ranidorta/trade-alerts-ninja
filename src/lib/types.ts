@@ -53,6 +53,11 @@ export interface TradingSignal {
   hitTargets?: boolean[]; // Added for Binance verification
   verifiedAt?: string;   // Added for Binance verification
   error?: string;        // Added for error tracking
+  confidence?: number;   // Added for ML signal confidence
+  conf_nivel?: string;   // Added for confidence level (alta, média, baixa)
+  tp1?: number;          // Added for target price 1
+  tp2?: number;          // Added for target price 2
+  tp3?: number;          // Added for target price 3
 }
 
 export interface Feature {
@@ -174,4 +179,18 @@ export interface DailyPerformance {
   total: number;
   wins: number;
   losses: number;
+}
+
+export interface MLSignal {
+  symbol: string;
+  timestamp: string;
+  entry: number;
+  direction: "long" | "short";
+  confidence: number;
+  conf_nivel: "alta" | "média" | "baixa";
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  stop_loss: number;
+  resultado?: string | null;
 }
