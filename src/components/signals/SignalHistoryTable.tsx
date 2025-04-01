@@ -12,7 +12,19 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, ArrowUp, ArrowDown } from "lucide-react";
+import { 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  ChevronDown, 
+  ChevronUp, 
+  ArrowUp, 
+  ArrowDown,
+  AlertCircle,
+  CheckCircle2,
+  Diff
+} from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
@@ -60,6 +72,33 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     return sortDirection === "asc" ? 
       <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
       <ChevronDown className="inline-block ml-1 h-4 w-4" />;
+  };
+  
+  // Format date with verification
+  const formatDate = (dateStr?: string, verifiedAt?: string) => {
+    if (!dateStr) return "—";
+    
+    const formattedDate = formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
+    
+    if (verifiedAt) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex items-center">
+                {formattedDate}
+                <CheckCircle2 className="ml-1 h-3 w-3 text-green-500" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Verificado em {new Date(verifiedAt).toLocaleString('pt-BR')}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+    
+    return formattedDate;
   };
   
   // Handle empty state
@@ -121,7 +160,39 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
               signal.result === 1 ? "bg-green-50 dark:bg-green-950/20" : 
               signal.result === 0 ? "bg-red-50 dark:bg-red-950/20" : ""
             }>
-              <TableCell className="font-medium">{signal.symbol}</TableCell>
+              <TableCell className="font-medium">
+                {signal.error ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex items-center">
+                          {signal.symbol}
+                          <AlertCircle className="ml-1 h-3 w-3 text-amber-500" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Erro na verificação: {signal.error}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : signal.verifiedAt ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex items-center">
+                          {signal.symbol}
+                          <Diff className="ml-1 h-3 w-3 text-blue-500" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Verificado com dados da Binance</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  signal.symbol
+                )}
+              </TableCell>
               <TableCell>
                 <Badge variant={signal.direction === "BUY" ? "default" : "destructive"} className="flex items-center gap-1">
                   {signal.direction === "BUY" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -156,7 +227,7 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
                 {signal.profit !== undefined ? `${signal.profit > 0 ? '+' : ''}${signal.profit.toFixed(2)}%` : "—"}
               </TableCell>
               <TableCell>
-                {signal.createdAt && formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true, locale: ptBR })}
+                {formatDate(signal.createdAt, signal.verifiedAt)}
               </TableCell>
               <TableCell>
                 <div className="flex gap-1">

@@ -1,6 +1,6 @@
-
 import { getSignalHistory } from "./signal-storage";
 import { TradingSignal } from "./types";
+import { verifySignal } from "./signalVerification";
 
 /**
  * Analyzes signal history to generate performance metrics
@@ -178,10 +178,10 @@ export const calculateSignalProfit = (signal: TradingSignal): number => {
 };
 
 /**
- * Determina se um sinal é vencedor ou perdedor com base em seus alvos e preço atual
+ * Determines if a signal is a winner or loser based on its targets and current price
  */
 export const determineSignalResult = (signal: TradingSignal, currentPrice?: number): TradingSignal => {
-  // Se já tem resultado definido e status completado, não alterar
+  // If already has result and status completed, don't alter
   if (signal.status === "COMPLETED" && 
       (signal.result === 1 || signal.result === 0 || 
        signal.result === "win" || signal.result === "loss" || 
@@ -190,10 +190,10 @@ export const determineSignalResult = (signal: TradingSignal, currentPrice?: numb
     return signal;
   }
   
-  // Clone o sinal para não modificar o original
+  // Clone the signal to not modify the original
   const updatedSignal = { ...signal };
   
-  // Se não temos preço atual ou entrada, não podemos calcular
+  // If no current price or entry price, can't calculate
   if (!currentPrice && !updatedSignal.currentPrice) {
     return updatedSignal;
   }
@@ -203,7 +203,7 @@ export const determineSignalResult = (signal: TradingSignal, currentPrice?: numb
   
   if (!entryPrice) return updatedSignal;
   
-  // Verificar se o stop loss foi atingido
+  // Check if stop loss was hit
   if (updatedSignal.stopLoss) {
     const isStopLossHit = updatedSignal.direction === "BUY" || updatedSignal.type === "LONG"
       ? price <= updatedSignal.stopLoss
@@ -218,7 +218,7 @@ export const determineSignalResult = (signal: TradingSignal, currentPrice?: numb
     }
   }
   
-  // Verificar se os alvos foram atingidos
+  // Check if any targets were hit
   if (updatedSignal.targets && updatedSignal.targets.length > 0) {
     let anyTargetHit = false;
     let allTargetsHit = true;
@@ -246,7 +246,7 @@ export const determineSignalResult = (signal: TradingSignal, currentPrice?: numb
       } else {
         updatedSignal.result = "partial";
         
-        // Se pelo menos o primeiro alvo foi atingido, mas não todos
+        // If at least the first target was hit but not all
         const firstTargetHit = updatedSignal.targets[0].hit;
         if (firstTargetHit) {
           updatedSignal.status = "COMPLETED";
@@ -341,32 +341,14 @@ export const saveSignalsToHistory = (signals: TradingSignal[]) => {
  * Verify all signals with Binance API
  */
 export const verifyAllSignalsWithBinance = async () => {
-  // Placeholder implementation
-  console.log("Verificando sinais com a API do Binance...");
-  
-  // Get all signals
-  const signals = getSignalHistory();
-  
-  // Process each signal to update its result
-  const updatedSignals = signals.map(signal => {
-    // Add verification timestamp
-    const verifiedSignal = {
-      ...signal,
-      verifiedAt: new Date().toISOString()
-    };
-    
-    // If signal doesn't have a result yet, attempt to determine it
-    if (!verifiedSignal.result) {
-      return determineSignalResult(verifiedSignal);
-    }
-    
-    return verifiedSignal;
-  });
-  
-  // Save updated signals
-  localStorage.setItem("trade_signal_history", JSON.stringify(updatedSignals));
-  
-  return updatedSignals;
+  try {
+    // Import the verification function to avoid circular imports
+    const { verifyAllSignals } = await import('./signalVerification');
+    return await verifyAllSignals();
+  } catch (error) {
+    console.error("Error verifying signals:", error);
+    throw error;
+  }
 };
 
 /**

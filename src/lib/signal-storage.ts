@@ -1,3 +1,4 @@
+
 import { TradingSignal } from "./types";
 
 // Key for localStorage
@@ -119,6 +120,9 @@ export const updateSignalTargets = (signal: TradingSignal, currentPrice: number)
     updatedSignal.result = 1;
   }
   
+  // Add verification timestamp
+  updatedSignal.verifiedAt = new Date().toISOString();
+  
   return updatedSignal;
 };
 
@@ -142,3 +146,6 @@ export const processSignalHistory = (currentPrices: Record<string, number>): Tra
   
   return updatedSignals;
 };
+
+// Export the functions for verification
+export { verifyAllSignals } from "./signalVerification";

@@ -16,6 +16,7 @@ import {
   Filter,
   Search,
   SlidersHorizontal,
+  CheckCircle,
   List 
 } from "lucide-react";
 import {
@@ -34,9 +35,9 @@ import { config } from "@/config/env";
 import { 
   getSignalsHistory, 
   updateAllSignalsStatus, 
-  analyzeSignalsHistory,
-  verifyAllSignalsWithBinance
+  analyzeSignalsHistory
 } from "@/lib/signalHistoryService";
+import { verifyAllSignals } from "@/lib/signalVerification";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { 
@@ -63,6 +64,7 @@ const SignalsHistory = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "profit" | "symbol">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadSignalsHistory();
@@ -102,21 +104,34 @@ const SignalsHistory = () => {
   };
 
   const handleVerify = async () => {
+    setVerifying(true);
     toast({
       title: "Verificando sinais",
-      description: "Verificando sinais com dados da Binance...",
+      description: "Verificando sinais com dados atuais da Binance...",
     });
     
     try {
-      await verifyAllSignalsWithBinance();
-      await loadSignalsHistory();
+      const verifiedSignals = await verifyAllSignals();
+      setSignals(verifiedSignals);
+      
+      // Update performance metrics after verification
+      const metrics = analyzeSignalsHistory();
+      setPerformanceMetrics(metrics);
+      
+      toast({
+        title: "Verificação concluída",
+        description: `${verifiedSignals.length} sinais verificados e atualizados.`,
+        variant: "success",
+      });
     } catch (err) {
       console.error("Error verifying signals:", err);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Erro ao verificar sinais",
+        description: "Erro ao verificar sinais com dados da Binance.",
       });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -246,9 +261,10 @@ const SignalsHistory = () => {
             onClick={handleVerify}
             variant="outline"
             className="flex items-center gap-2"
+            disabled={verifying}
           >
-            <Database className="h-5 w-5" />
-            Verificar com Binance
+            <CheckCircle className="h-5 w-5" />
+            {verifying ? 'Verificando...' : 'Verificar Resultados'}
           </Button>
           
           <Button 
