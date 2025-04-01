@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
@@ -121,7 +120,7 @@ const SignalsHistory = () => {
       toast({
         title: "Verificação concluída",
         description: `${verifiedSignals.length} sinais verificados e atualizados.`,
-        variant: "success",
+        variant: "default",
       });
     } catch (err) {
       console.error("Error verifying signals:", err);
