@@ -23,10 +23,14 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from strategies.bollinger_bands import strategy_bollinger_bands
 from backtesting.performance import generate_performance_report
 from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
+from routes import signal_evaluation_bp
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Register blueprints
+app.register_blueprint(signal_evaluation_bp)
 
 # Database configuration
 DB_PATH = "signals.db"
@@ -241,64 +245,6 @@ def get_signals():
         signal['stopLoss'] = signal['entry_price'] * 0.97
     
     return jsonify(signals)
-
-@app.route('/api/signals/evaluate/<int:signal_id>', methods=['GET'])
-@optional_auth
-def evaluate_single_signal(signal_id):
-    """
-    Evaluates a specific signal by its ID and updates its result
-    
-    Args:
-        signal_id: ID of the signal to evaluate
-        
-    Returns:
-        JSON with the evaluation result
-    """
-    session = Session()
-    signal = session.query(Signal).filter(Signal.id == signal_id).first()
-    
-    if not signal:
-        session.close()
-        return jsonify({"error": "Sinal não encontrado"}), 404
-    
-    # If signal already has a result, just return it without recalculating
-    if signal.resultado:
-        result = signal.resultado
-        session.close()
-        return jsonify({"id": signal_id, "symbol": signal.symbol, "resultado": result})
-    
-    # Calculate signal result based on candle data
-    start = signal.timestamp
-    end = start + timedelta(hours=24)
-    start_ms = int(start.timestamp() * 1000)
-    end_ms = int(end.timestamp() * 1000)
-    
-    candles = get_candles(signal.symbol, start_ms, end_ms)
-    if not candles:
-        session.close()
-        return jsonify({"error": "Não foi possível obter dados de candles"}), 500
-    
-    resultado = evaluate_signal(
-        signal.entry, signal.tp1, signal.tp2, signal.tp3,
-        signal.stop_loss, signal.direction, candles
-    )
-    
-    # Update signal result in database
-    signal.resultado = resultado
-    session.commit()
-    session.close()
-    
-    return jsonify({
-        "id": signal_id, 
-        "symbol": signal.symbol,
-        "direction": signal.direction,
-        "resultado": resultado,
-        "entry": signal.entry,
-        "tp1": signal.tp1,
-        "tp2": signal.tp2,
-        "tp3": signal.tp3,
-        "stop_loss": signal.stop_loss
-    })
 
 @app.route('/api/strategies', methods=['GET'])
 @optional_auth
