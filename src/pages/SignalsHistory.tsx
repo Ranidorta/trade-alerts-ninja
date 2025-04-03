@@ -305,7 +305,7 @@ const SignalsHistory = () => {
       );
     }
     
-    if (symbolFilter) {
+    if (symbolFilter && symbolFilter !== "all") {
       filtered = filtered.filter(signal => signal.symbol === symbolFilter);
     }
     
