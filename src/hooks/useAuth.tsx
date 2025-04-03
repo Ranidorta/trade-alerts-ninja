@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { 
   User, 
@@ -105,10 +106,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // Fetch additional user data from Firestore
           const userData = await fetchUserData(firebaseUser.uid);
           
+          // Validate role to ensure it's one of the allowed values
+          const validRole = validateRole(userData.role);
+          
           // Combine auth user with Firestore data
-          const enrichedUser = {
+          const enrichedUser: UserProfile & Partial<UserRole> = {
             ...formattedUser,
-            role: userData.role,
+            role: validRole,
             assinaturaAtiva: userData.assinaturaAtiva
           };
           
@@ -137,6 +141,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Cleanup subscription on unmount
     return () => unsubscribe();
   }, []);
+
+  // Helper function to validate role
+  const validateRole = (role: any): 'user' | 'admin' | 'premium' => {
+    if (role === 'admin' || role === 'premium' || role === 'user') {
+      return role;
+    }
+    return 'user'; // Default role if invalid
+  };
 
   const login = async (email: string, password: string) => {
     try {
