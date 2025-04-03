@@ -8,6 +8,6 @@ export function usePerformanceMetrics(days: number = 30, refetchInterval: number
     queryFn: fetchPerformanceMetrics,
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: refetchInterval, // Refetch a cada x milissegundos (padrão: 60s)
+    refetchInterval: refetchInterval, // Refetch every x milliseconds (default: 60s)
   });
 }

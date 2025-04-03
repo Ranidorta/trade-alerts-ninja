@@ -67,9 +67,9 @@ const SignalsHistory = () => {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [verifying, setVerifying] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60); // em segundos
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60); // in seconds
 
-  // Função modificada para carregar o histórico de sinais
+  // Function to load the signals history
   const loadSignalsHistory = useCallback(async () => {
     setLoading(true);
     try {
@@ -86,11 +86,11 @@ const SignalsHistory = () => {
       const metrics = analyzeSignalsHistory();
       setPerformanceMetrics(metrics);
       
-      // Exibe toast apenas quando acionado manualmente, não durante refresh automático
+      // Only show toast when manually triggered, not during auto-refresh
       if (loading) {
         toast({
-          title: "Histórico atualizado",
-          description: "Os dados dos sinais foram atualizados com sucesso.",
+          title: "History updated",
+          description: "Signal data has been successfully updated.",
         });
       }
     } catch (err: any) {
@@ -99,26 +99,26 @@ const SignalsHistory = () => {
       
       toast({
         variant: "destructive",
-        title: "Erro ao carregar histórico",
-        description: err.message || "Ocorreu um erro ao atualizar o histórico de sinais.",
+        title: "Error loading history",
+        description: err.message || "An error occurred while updating the signal history.",
       });
     } finally {
       setLoading(false);
     }
   }, [toast, loading]);
 
-  // Atualização inicial ao carregar a página
+  // Initial update when loading the page
   useEffect(() => {
     loadSignalsHistory();
   }, []);
 
-  // Configuração do intervalo de atualização automática
+  // Auto-refresh interval setup
   useEffect(() => {
     let intervalId: number | undefined;
     
     if (autoRefresh) {
       intervalId = window.setInterval(() => {
-        console.log("Atualizando histórico automaticamente...");
+        console.log("Automatically updating history...");
         loadSignalsHistory();
       }, autoRefreshInterval * 1000);
     }
@@ -132,8 +132,8 @@ const SignalsHistory = () => {
 
   const handleRefresh = async () => {
     toast({
-      title: "Atualizando dados",
-      description: "Atualizando status dos sinais históricos...",
+      title: "Updating data",
+      description: "Updating signal history status...",
     });
     
     await loadSignalsHistory();
@@ -142,10 +142,10 @@ const SignalsHistory = () => {
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
-      title: autoRefresh ? "Atualização automática desativada" : "Atualização automática ativada",
+      title: autoRefresh ? "Auto-update disabled" : "Auto-update enabled",
       description: autoRefresh 
-        ? "Os sinais não serão mais atualizados automaticamente." 
-        : `Os sinais serão atualizados a cada ${autoRefreshInterval} segundos.`,
+        ? "Signals will no longer be updated automatically." 
+        : `Signals will be updated every ${autoRefreshInterval} seconds.`,
     });
   };
 
@@ -346,10 +346,10 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Histórico de Sinais</h1>
+          <h1 className="text-3xl font-bold">Signal History</h1>
           <p className="text-muted-foreground">
-            Histórico detalhado dos sinais gerados com informações sobre alvos atingidos
-            {forcingLocalMode && <span className="ml-2 text-amber-500">(Modo Local)</span>}
+            Detailed history of generated signals with target hit information
+            {forcingLocalMode && <span className="ml-2 text-amber-500">(Local Mode)</span>}
           </p>
         </div>
         
@@ -363,7 +363,7 @@ const SignalsHistory = () => {
               className="px-4 py-2 bg-amber-500 text-white rounded-md flex items-center gap-2"
             >
               <RefreshCw className="h-5 w-5" />
-              Tentar API Novamente
+              Try API Again
             </button>
           )}
           
@@ -374,7 +374,7 @@ const SignalsHistory = () => {
             disabled={verifying || signals.every(s => s.result !== undefined)}
           >
             <CheckCircle className="h-5 w-5" />
-            {verifying ? 'Verificando...' : 'Verificar Resultados'}
+            {verifying ? 'Verifying...' : 'Verify Results'}
           </Button>
           
           <Button 
@@ -383,7 +383,7 @@ const SignalsHistory = () => {
             className="flex items-center gap-2"
           >
             <Clock className="h-5 w-5" />
-            {autoRefresh ? 'Auto (Ligado)' : 'Auto (Desligado)'}
+            {autoRefresh ? 'Auto (On)' : 'Auto (Off)'}
           </Button>
           
           <Button 
@@ -392,12 +392,12 @@ const SignalsHistory = () => {
             disabled={loading}
           >
             <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Atualizando...' : 'Atualizar Histórico'}
+            {loading ? 'Updating...' : 'Update History'}
           </Button>
         </div>
       </div>
 
-      {/* Status do auto-refresh */}
+      {/* Auto-refresh status */}
       {autoRefresh && (
         <div className="mb-6">
           <Card className="bg-primary/10 border-primary/20">
@@ -405,7 +405,7 @@ const SignalsHistory = () => {
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 text-primary" />
                 <p>
-                  Atualização automática ativa. Próxima atualização em {autoRefreshInterval} segundos.
+                  Auto-update active. Next update in {autoRefreshInterval} seconds.
                 </p>
               </div>
             </CardContent>

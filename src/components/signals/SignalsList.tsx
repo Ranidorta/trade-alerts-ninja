@@ -18,7 +18,7 @@ interface SignalsListProps {
   viewMode?: "cards" | "table";
   onRefresh?: () => void;
   autoRefresh?: boolean;
-  autoRefreshInterval?: number; // em segundos
+  autoRefreshInterval?: number; // in seconds
 }
 
 const SignalsList = ({ 
