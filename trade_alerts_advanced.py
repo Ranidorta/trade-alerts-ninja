@@ -7,27 +7,32 @@ import numpy as np
 import pandas as pd
 import os
 from datetime import datetime
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.exceptions import NotFittedError
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+from services.evaluate_signals_pg import Signal
+from services.evaluate_signals_pg import Base
+
+load_dotenv()
 
 BYBIT_ENDPOINT = "https://api.bybit.com/v5/market/kline"
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-INTERVAL = "15"  # Agora em 15 minutos, para equilíbrio entre velocidade e estabilidade
+INTERVAL = "15"
 LOOKBACK = 100
-MODEL_PATH = "ml/rf_model.pkl"
-SIGNALS_PATH = "signals/signals_history.csv"
+MODEL_PATH = "ml/rf_hybrid_model.pkl"
 
-# Carrega modelo ou inicia novo
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
+
+# Ensure database tables exist
+Base.metadata.create_all(engine)
+
+# Load the hybrid model
 if os.path.exists(MODEL_PATH):
-    try:
-        model = joblib.load(MODEL_PATH)
-    except Exception:
-        model = RandomForestClassifier(n_estimators=100)
+    model = joblib.load(MODEL_PATH)
 else:
-    model = RandomForestClassifier(n_estimators=100)
-
-# Flag para saber se o modelo foi treinado
-model_fitted = os.path.exists(MODEL_PATH)
+    raise Exception("Modelo híbrido não encontrado. Treine usando train_hybrid_model.py")
 
 def fetch_ohlcv(symbol):
     params = {
@@ -46,101 +51,178 @@ def fetch_ohlcv(symbol):
     df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
     return df
 
-def extract_features(df):
-    df["returns"] = df["close"].pct_change()
-    df["volatility"] = df["returns"].rolling(10).std()
-    df["sma"] = df["close"].rolling(20).mean()
-    df["distance_sma"] = df["close"] - df["sma"]
-    df["rsi"] = compute_rsi(df["close"], 14)
-    df.dropna(inplace=True)
-    return df
-
 def compute_rsi(series, period=14):
     delta = series.diff()
     gain = np.where(delta > 0, delta, 0)
     loss = np.where(delta < 0, -delta, 0)
-    avg_gain = pd.Series(gain).rolling(period).mean()
-    avg_loss = pd.Series(loss).rolling(period).mean()
+    avg_gain = pd.Series(gain).rolling(period).mean().fillna(0)
+    avg_loss = pd.Series(loss).rolling(period).mean().fillna(0)
     rs = avg_gain / (avg_loss + 1e-9)
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
-def predict_signal(features):
-    X = features[["returns", "volatility", "distance_sma", "rsi"]].values[-1].reshape(1, -1)
+def predict_with_hybrid(df, direction, entry, tp1, stop):
+    """
+    Predict signal success using the hybrid model
+    
+    Args:
+        df: DataFrame with price data
+        direction: "long" or "short"
+        entry: Entry price
+        tp1: Take profit level 1
+        stop: Stop loss level
+        
+    Returns:
+        win_prob: Probability of winning signal
+        all_probs: All probabilities (loss, partial, win)
+    """
     try:
-        prob = model.predict_proba(X)[0][1]  # probabilidade de alta
-    except NotFittedError:
-        prob = 0.6  # valor neutro para gerar sinal mesmo sem modelo
-    return prob
+        # Calculate technical indicators
+        sma = df["close"].rolling(20).mean().fillna(0).iloc[-1]
+        volatility = df["close"].pct_change().rolling(10).std().fillna(0).iloc[-1]
+        rsi = compute_rsi(df["close"]).fillna(0).iloc[-1]
 
-def train_model(df):
-    global model_fitted
-    df["future_return"] = df["close"].pct_change().shift(-3)
-    df["target"] = (df["future_return"] > 0).astype(int)
-    df.dropna(inplace=True)
-    X = df[["returns", "volatility", "distance_sma", "rsi"]]
-    y = df["target"]
-    model.fit(X, y)
-    joblib.dump(model, MODEL_PATH)
-    model_fitted = True
+        # Normalize features as percentages like in the training
+        X = pd.DataFrame([{
+            "entry": entry,
+            "direction": 1 if direction == "long" else 0,
+            "tp_dist": abs(tp1 - entry) / entry,  # Normalized as percentage
+            "sl_dist": abs(stop - entry) / entry,  # Normalized as percentage
+            "volatility": volatility,
+            "distance_sma": (entry - sma) / entry,  # Normalized as percentage
+            "rsi": rsi
+        }])
+        
+        # Get prediction probabilities
+        proba = model.predict_proba(X)[0]
+        
+        # Map probabilities to outcomes
+        # proba[0] = chance of perdedor (0)
+        # proba[1] = chance of parcial (1)
+        # proba[2] = chance of vencedor (2)
+        
+        # Check if the model returns 3 classes (should match training)
+        if len(proba) >= 3:
+            win_prob = proba[2]  # Probability of full win
+        else:
+            # Handle case where model might only return 2 classes
+            win_prob = proba[-1]  # Use last class as win
+            
+        return win_prob, proba
+    except Exception as e:
+        print(f"Erro na predição: {e}")
+        return 0, [1, 0, 0]  # Assume loss in case of error
 
 def save_signals(signals):
-    df = pd.DataFrame(signals)
-    if not df.empty:
-        os.makedirs(os.path.dirname(SIGNALS_PATH), exist_ok=True)
-        if os.path.exists(SIGNALS_PATH):
-            df.to_csv(SIGNALS_PATH, mode='a', index=False, header=False)
-        else:
-            df.to_csv(SIGNALS_PATH, index=False)
+    """
+    Save signals to database
+    """
+    if not signals:
+        print("Nenhum sinal para salvar.")
+        return
+        
+    session = Session()
+    try:
+        for s in signals:
+            # Check if signal already exists
+            exists = session.query(Signal).filter_by(
+                symbol=s["symbol"], 
+                timestamp=datetime.fromisoformat(s["timestamp"])
+            ).first()
+            
+            if not exists:
+                new_signal = Signal(
+                    symbol=s["symbol"],
+                    timestamp=datetime.fromisoformat(s["timestamp"]),
+                    direction=s["direction"],
+                    entry=s["entry"],
+                    tp1=s["tp1"],
+                    tp2=s["tp2"],
+                    tp3=s["tp3"],
+                    stop_loss=s["stop_loss"],
+                    resultado=None
+                )
+                session.add(new_signal)
+                print(f"💾 Sinal salvo para {s['symbol']}")
+        
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Erro ao salvar sinais: {e}")
+    finally:
+        session.close()
 
 def generate_signals():
+    """
+    Generate signals using hybrid model
+    """
     signals = []
+    
+    print(f"🔍 Analisando {len(SYMBOLS)} símbolos com modelo híbrido...")
+    
     for symbol in SYMBOLS:
-        df = fetch_ohlcv(symbol)
-        if df.empty:
-            continue
-        df = extract_features(df)
+        try:
+            df = fetch_ohlcv(symbol)
+            if df.empty:
+                print(f"⚠️ Sem dados para {symbol}")
+                continue
 
-        if len(df) > 100 and not model_fitted:
-            train_model(df)  # treino inicial
+            price = df["close"].iloc[-1]
+            
+            # Generate signals for both directions
+            for direction in ["long", "short"]:
+                # Set take profits and stop loss based on direction
+                if direction == "long":
+                    tp1 = round(price * 1.01, 2)
+                    tp2 = round(price * 1.02, 2)
+                    tp3 = round(price * 1.03, 2)
+                    sl = round(price * 0.995, 2)
+                else:
+                    tp1 = round(price * 0.99, 2)
+                    tp2 = round(price * 0.98, 2)
+                    tp3 = round(price * 0.97, 2)
+                    sl = round(price * 1.005, 2)
 
-        prob = predict_signal(df)
-        price = df["close"].iloc[-1]
+                # Predict with hybrid model
+                chance_vencedor, probs = predict_with_hybrid(df, direction, price, tp1, sl)
+                
+                # Format probabilities for output
+                probs_formatted = {
+                    "perdedor": f"{probs[0]*100:.1f}%",
+                    "parcial": f"{probs[1]*100:.1f}%" if len(probs) > 1 else "N/A",
+                    "vencedor": f"{probs[2]*100:.1f}%" if len(probs) > 2 else "N/A"
+                }
+                
+                # Generate signal if probability is above threshold
+                if chance_vencedor > 0.5:
+                    signal = {
+                        "symbol": symbol,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "entry": price,
+                        "direction": direction,
+                        "tp1": tp1,
+                        "tp2": tp2,
+                        "tp3": tp3,
+                        "stop_loss": sl,
+                        "confidence": round(chance_vencedor, 4),
+                        "conf_nivel": "alta" if chance_vencedor > 0.7 else "média",
+                        "resultado": None
+                    }
+                    signals.append(signal)
+                    print(f"✅ Sinal {direction.upper()} gerado para {symbol} com {round(chance_vencedor*100, 1)}% chance de vitória")
+                    print(f"   Probabilidades: {json.dumps(probs_formatted)}")
+                else:
+                    print(f"❌ Sinal {direction.upper()} rejeitado para {symbol} ({round(chance_vencedor*100, 1)}% < threshold)")
+        except Exception as e:
+            print(f"Erro processando {symbol}: {e}")
 
-        if prob > 0.7:
-            direction = "long"
-        elif prob < 0.45:
-            direction = "short"
-        else:
-            continue  # ignora sinais neutros
-
-        tp1 = round(price * 1.01, 2)
-        tp2 = round(price * 1.02, 2)
-        tp3 = round(price * 1.03, 2)
-        sl  = round(price * 0.995, 2) if direction == "long" else round(price * 1.005, 2)
-
-        nivel_conf = "alta" if prob > 0.85 else "média" if prob > 0.7 else "baixa"
-
-        signal = {
-            "symbol": symbol,
-            "timestamp": datetime.utcnow().isoformat(),
-            "entry": price,
-            "direction": direction,
-            "confidence": round(prob, 4),
-            "conf_nivel": nivel_conf,
-            "tp1": tp1,
-            "tp2": tp2,
-            "tp3": tp3,
-            "stop_loss": sl,
-            "resultado": None  # será atualizado depois
-        }
-        signals.append(signal)
-
-        if len(df) > 100:
-            train_model(df)
-
-    print(json.dumps(signals, indent=2))
+    # Save signals to database
     save_signals(signals)
+    print(f"📊 Gerados {len(signals)} sinais no total.")
+    
+    return signals
 
 if __name__ == "__main__":
-    generate_signals()
+    print("🚀 Iniciando geração de sinais com modelo híbrido...")
+    signals = generate_signals()
+    print(json.dumps(signals, indent=2))
