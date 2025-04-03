@@ -70,7 +70,7 @@ const SignalsHistory = () => {
   );
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [symbolFilter, setSymbolFilter] = useState<string>("");
+  const [symbolFilter, setSymbolFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"date" | "profit" | "symbol">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [verifying, setVerifying] = useState(false);
@@ -284,7 +284,7 @@ const SignalsHistory = () => {
 
   const clearFilters = () => {
     setSearchTerm("");
-    setSymbolFilter("");
+    setSymbolFilter("all");
     setResultFilter("all");
     setDateFrom(undefined);
     setDateTo(undefined);
@@ -557,7 +557,7 @@ const SignalsHistory = () => {
                         </div>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todos os símbolos</SelectItem>
+                        <SelectItem value="all">Todos os símbolos</SelectItem>
                         {availableSymbols.map(symbol => (
                           <SelectItem key={symbol} value={symbol}>{symbol}</SelectItem>
                         ))}
