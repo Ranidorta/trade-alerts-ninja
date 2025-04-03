@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
@@ -27,11 +28,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
+  onVerifySingleSignal?: (signalId: string) => Promise<void>;
 }
 
-export default function SignalHistoryTable({ signals }: SignalHistoryTableProps) {
+export default function SignalHistoryTable({ signals, onVerifySingleSignal }: SignalHistoryTableProps) {
   const [sortField, setSortField] = useState<keyof TradingSignal>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [verifyingSignal, setVerifyingSignal] = useState<string | null>(null);
   
   const handleSort = (field: keyof TradingSignal) => {
     if (sortField === field) {
@@ -39,6 +42,17 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     } else {
       setSortField(field);
       setSortDirection("desc");
+    }
+  };
+  
+  const handleVerifySignal = async (signalId: string) => {
+    if (!onVerifySingleSignal) return;
+    
+    setVerifyingSignal(signalId);
+    try {
+      await onVerifySingleSignal(signalId);
+    } finally {
+      setVerifyingSignal(null);
     }
   };
   
@@ -97,20 +111,57 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     return formattedDate;
   };
   
+  const getResultColor = (result: string | number | undefined) => {
+    if (result === 1 || result === "win" || result === "vencedor") {
+      return "text-green-600 dark:text-green-400";
+    } else if (result === 0 || result === "loss" || result === "perdedor") {
+      return "text-red-600 dark:text-red-400";
+    } else if (result === "falso") {
+      return "text-gray-500";
+    } else if (result === "parcial") {
+      return "text-amber-500";
+    }
+    return "";
+  };
+  
+  const formatResult = (result: string | number | undefined) => {
+    if (result === 1 || result === "win") return "Vencedor";
+    if (result === 0 || result === "loss") return "Perdedor";
+    if (result === "vencedor") return "Vencedor";
+    if (result === "perdedor") return "Perdedor";
+    if (result === "parcial") return "Parcial";
+    if (result === "falso") return "Falso";
+    return result ? String(result) : "—";
+  };
+  
   const getStatusBadge = (signal: TradingSignal) => {
     if (signal.status === "COMPLETED") {
-      if (signal.result === 1) {
+      if (signal.result === 1 || signal.result === "win" || signal.result === "vencedor") {
         return (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Vencedor
           </Badge>
         );
-      } else if (signal.result === 0) {
+      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "perdedor") {
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Perdedor
+          </Badge>
+        );
+      } else if (signal.result === "parcial") {
+        return (
+          <Badge variant="warning" className="flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Parcial
+          </Badge>
+        );
+      } else if (signal.result === "falso") {
+        return (
+          <Badge variant="outline" className="flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            Falso
           </Badge>
         );
       } else {
@@ -181,13 +232,18 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
               Data <SortIndicator field="createdAt" />
             </TableHead>
             <TableHead>Alvos</TableHead>
+            {onVerifySingleSignal && (
+              <TableHead>Ação</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedSignals.map((signal) => (
             <TableRow key={signal.id} className={
-              signal.result === 1 ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 ? "bg-red-50 dark:bg-red-950/20" : ""
+              signal.result === 1 || signal.result === "win" || signal.result === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
+              signal.result === 0 || signal.result === "loss" || signal.result === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
+              signal.result === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
+              signal.result === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
             }>
               <TableCell className="font-medium">
                 {signal.error ? (
@@ -232,11 +288,8 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
               <TableCell>
                 {getStatusBadge(signal)}
               </TableCell>
-              <TableCell className={
-                signal.profit && signal.profit > 0 ? "text-green-600 dark:text-green-400 font-semibold" : 
-                signal.profit && signal.profit < 0 ? "text-red-600 dark:text-red-400 font-semibold" : ""
-              }>
-                {signal.profit !== undefined ? `${signal.profit > 0 ? '+' : ''}${signal.profit.toFixed(2)}%` : "—"}
+              <TableCell className={getResultColor(signal.result)}>
+                {formatResult(signal.result)}
               </TableCell>
               <TableCell>
                 {formatDate(signal.createdAt, signal.verifiedAt)}
@@ -254,6 +307,18 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
                   ))}
                 </div>
               </TableCell>
+              {onVerifySingleSignal && (
+                <TableCell>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleVerifySignal(signal.id)}
+                    disabled={verifyingSignal === signal.id || signal.result !== undefined}
+                  >
+                    {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

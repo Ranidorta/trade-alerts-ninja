@@ -8,6 +8,12 @@ import { verifyTradingSignal } from "./firebaseFunctions";
  */
 export async function verifySingleSignal(signal: TradingSignal): Promise<TradingSignal> {
   try {
+    // Skip verification if result already exists
+    if (signal.result !== undefined) {
+      console.log(`Signal ${signal.id} already has a result. Skipping verification.`);
+      return signal;
+    }
+    
     // Verify the signal using Firebase Function (or local simulation)
     const verifiedSignal = await verifyTradingSignal(signal);
     

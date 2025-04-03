@@ -34,9 +34,10 @@ import { config } from "@/config/env";
 import { 
   getSignalsHistory, 
   updateAllSignalsStatus, 
-  analyzeSignalsHistory
+  analyzeSignalsHistory,
+  updateSignalInHistory
 } from "@/lib/signalHistoryService";
-import { verifyAllSignals } from "@/lib/signalVerification";
+import { verifySingleSignal } from "@/lib/signalVerification";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { 
@@ -161,6 +162,53 @@ const SignalsHistory = () => {
     });
     
     window.location.reload();
+  };
+
+  const handleVerifySingleSignal = async (signalId: string) => {
+    try {
+      const signalToVerify = signals.find(s => s.id === signalId);
+      
+      if (!signalToVerify) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Sinal não encontrado."
+        });
+        return;
+      }
+      
+      if (signalToVerify.result !== undefined) {
+        toast({
+          variant: "default",
+          title: "Informação",
+          description: "Este sinal já possui um resultado."
+        });
+        return;
+      }
+      
+      const verifiedSignal = await verifySingleSignal(signalToVerify);
+      
+      if (verifiedSignal) {
+        const updatedSignal = updateSignalInHistory(signalId, verifiedSignal);
+        
+        setSignals(prevSignals => prevSignals.map(signal => 
+          signal.id === signalId ? { ...signal, ...verifiedSignal } : signal
+        ));
+        
+        toast({
+          variant: "default",
+          title: "Verificação concluída",
+          description: `Sinal ${signalId} verificado com sucesso.`
+        });
+      }
+    } catch (err: any) {
+      console.error("Error verifying single signal:", err);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: `Erro ao verificar o sinal: ${err.message || "Erro desconhecido"}`
+      });
+    }
   };
 
   const getFilteredSignals = () => {
@@ -459,7 +507,10 @@ const SignalsHistory = () => {
           ) : (
             <Card>
               <CardContent className="p-0">
-                <SignalHistoryTable signals={filteredSignals} />
+                <SignalHistoryTable 
+                  signals={filteredSignals} 
+                  onVerifySingleSignal={handleVerifySingleSignal} 
+                />
               </CardContent>
             </Card>
           )}
