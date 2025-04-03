@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,7 +72,7 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
     ).length;
     
     const missed = symbolSignals.filter(s => 
-      s.result === "missed" || s.result === "falso"
+      s.result === "missed"
     ).length;
     
     const successRate = symbolSignals.length > 0 ? ((wins + partials) / symbolSignals.length) * 100 : 0;

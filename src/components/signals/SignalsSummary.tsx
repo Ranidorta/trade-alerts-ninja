@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Ban, Target } from "lucide-react";
@@ -27,8 +26,7 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
     );
     
     const falsoSignals = signals.filter(signal => 
-      signal.result === "missed" || 
-      signal.result === "falso"
+      signal.result === "missed" 
     );
     
     const pendingSignals = signals.filter(signal => 
