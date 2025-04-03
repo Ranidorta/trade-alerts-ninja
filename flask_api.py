@@ -23,7 +23,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from strategies.bollinger_bands import strategy_bollinger_bands
 from backtesting.performance import generate_performance_report
 from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
-from routes import signal_evaluation_bp
+from routes import signal_evaluation_bp, performance_api_bp
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -31,6 +31,7 @@ CORS(app)  # Enable CORS for all routes
 
 # Register blueprints
 app.register_blueprint(signal_evaluation_bp)
+app.register_blueprint(performance_api_bp)
 
 # Database configuration
 DB_PATH = "signals.db"
