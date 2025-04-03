@@ -1,186 +1,85 @@
-
-import { TradingSignal } from "./types";
-import { getSignalHistory } from "./signal-storage";
+import { TradingSignal } from "@/lib/types";
+import { getSignalHistory, saveSignalHistory } from "@/lib/signal-storage";
+import { verifyTradingSignal } from "./firebaseFunctions";
 
 /**
- * Verifies a signal against real market data
- * @param signal The signal to verify
- * @param currentPrice The current price of the symbol
- * @returns The updated signal with verification data
+ * Verifies a single trading signal against current market data
  */
-export const verifySignal = (signal: TradingSignal, currentPrice: number): TradingSignal => {
-  // Clone the signal to avoid modifying the original
-  const updatedSignal = { ...signal };
-  
-  if (!currentPrice || !signal.entryPrice) {
+export async function verifySingleSignal(signal: TradingSignal): Promise<TradingSignal> {
+  try {
+    // Verify the signal using Firebase Function (or local simulation)
+    const verifiedSignal = await verifyTradingSignal(signal);
+    
+    // Log the verification result
+    console.log(`Signal ${signal.id} verification result: ${verifiedSignal.result}`);
+    
+    return verifiedSignal;
+  } catch (error) {
+    console.error(`Error verifying signal ${signal.id}:`, error);
     return {
-      ...updatedSignal,
-      verifiedAt: new Date().toISOString(),
-      error: "Missing price data for verification"
+      ...signal,
+      error: error instanceof Error ? error.message : "Unknown error during verification"
     };
   }
-  
-  // Update targets hit status based on current price
-  if (updatedSignal.targets) {
-    updatedSignal.targets = updatedSignal.targets.map(target => {
-      // For BUY signals, target is hit if price rose above target price
-      // For SELL signals, target is hit if price fell below target price
-      const isHit = signal.direction === "BUY" || signal.type === "LONG"
-        ? currentPrice >= target.price
-        : currentPrice <= target.price;
-        
-      return {
-        ...target,
-        hit: isHit || target.hit === true // Once hit, always hit
-      };
-    });
-    
-    // Record which targets were hit (for display purposes)
-    updatedSignal.hitTargets = updatedSignal.targets.map(target => !!target.hit);
-  }
-  
-  // Check if stop loss was hit
-  const isStopLossHit = signal.direction === "BUY" || signal.type === "LONG"
-    ? currentPrice <= signal.stopLoss
-    : currentPrice >= signal.stopLoss;
-    
-  // Update signal status based on verification
-  if (isStopLossHit) {
-    updatedSignal.status = "COMPLETED";
-    updatedSignal.result = 0; // Loss
-    updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-    
-    // Calculate loss percentage
-    const entryPrice = signal.entryPrice || 0;
-    updatedSignal.profit = signal.direction === "BUY" || signal.type === "LONG"
-      ? ((signal.stopLoss / entryPrice) - 1) * 100
-      : ((entryPrice / signal.stopLoss) - 1) * 100;
-  } 
-  // Check if any targets were hit
-  else if (updatedSignal.targets && updatedSignal.targets.some(t => t.hit)) {
-    // If all targets hit, mark as completed win
-    if (updatedSignal.targets.every(t => t.hit)) {
-      updatedSignal.status = "COMPLETED";
-      updatedSignal.result = 1; // Win
-      updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-    } 
-    // If some targets hit, mark as partial win
-    else {
-      updatedSignal.status = "COMPLETED";
-      updatedSignal.result = 1; // Still a win even if partial
-      updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-    }
-    
-    // Calculate profit based on highest hit target
-    const hitTargets = updatedSignal.targets.filter(t => t.hit);
-    if (hitTargets.length > 0) {
-      const highestHitTarget = hitTargets.reduce((highest, current) => 
-        current.level > highest.level ? current : highest, hitTargets[0]);
-      
-      const entryPrice = signal.entryPrice || 0;
-      updatedSignal.profit = signal.direction === "BUY" || signal.type === "LONG"
-        ? ((highestHitTarget.price / entryPrice) - 1) * 100
-        : ((entryPrice / highestHitTarget.price) - 1) * 100;
-    }
-  }
-  
-  // Add verification timestamp
-  updatedSignal.verifiedAt = new Date().toISOString();
-  
-  return updatedSignal;
-};
+}
 
 /**
- * Fetches current prices for a list of symbols
- * @param symbols List of symbols to get prices for
- * @returns Object mapping symbols to their current prices
+ * Verifies the status of all signals against current market data
  */
-export const fetchCurrentPrices = async (symbols: string[]): Promise<Record<string, number>> => {
+export async function verifyAllSignals(signalsToVerify?: TradingSignal[]): Promise<TradingSignal[]> {
   try {
-    // Create a unique list of symbols
-    const uniqueSymbols = [...new Set(symbols)];
+    // Get signals to verify - either provided signals or from storage
+    const signals = signalsToVerify || getSignalHistory();
     
-    // Fetch prices from Binance API (free, no API key needed for spot prices)
-    const results = await Promise.all(
-      uniqueSymbols.map(async (symbol) => {
-        try {
-          // For USDT pairs
-          const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-          
-          if (response.ok) {
-            const data = await response.json();
-            return { symbol, price: parseFloat(data.price) };
-          }
-          
-          // Try with BUSD pair if USDT pair fails
-          const altResponse = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol.replace('USDT', 'BUSD')}`);
-          
-          if (altResponse.ok) {
-            const data = await altResponse.json();
-            return { symbol, price: parseFloat(data.price) };
-          }
-          
-          console.warn(`Could not fetch price for ${symbol}`);
-          return { symbol, price: null };
-        } catch (error) {
-          console.error(`Error fetching price for ${symbol}:`, error);
-          return { symbol, price: null };
-        }
-      })
+    if (!signals || signals.length === 0) {
+      return [];
+    }
+    
+    // Filter to only verify signals that don't have results yet
+    const signalsNeedingVerification = signals.filter(
+      signal => signal.result === undefined
     );
     
-    // Convert results to a symbol -> price map
-    const priceMap: Record<string, number> = {};
-    results.forEach(result => {
-      if (result.price !== null) {
-        priceMap[result.symbol] = result.price;
-      }
-    });
-    
-    return priceMap;
-  } catch (error) {
-    console.error("Error fetching current prices:", error);
-    return {};
-  }
-};
-
-/**
- * Verifies all signals in history against current market data
- * @returns Updated list of signals
- */
-export const verifyAllSignals = async (): Promise<TradingSignal[]> => {
-  // Get all signals from history
-  const signals = getSignalHistory();
-  
-  if (!signals || signals.length === 0) {
-    return [];
-  }
-  
-  // Get unique symbols from the signals
-  const symbols = [...new Set(signals.map(s => s.symbol))];
-  
-  // Fetch current prices for all symbols
-  const currentPrices = await fetchCurrentPrices(symbols);
-  
-  // Verify each signal with the current price
-  const verifiedSignals = signals.map(signal => {
-    const currentPrice = currentPrices[signal.symbol];
-    
-    // Skip verification if we couldn't get a price
-    if (!currentPrice) {
-      return {
-        ...signal,
-        verifiedAt: new Date().toISOString(),
-        error: "Could not fetch current price"
-      };
+    if (signalsNeedingVerification.length === 0) {
+      console.log("No signals need verification - all already have results");
+      return signals;
     }
     
-    // Verify the signal
-    return verifySignal(signal, currentPrice);
-  });
-  
-  // Save verified signals back to storage
-  localStorage.setItem("trade_signal_history", JSON.stringify(verifiedSignals));
-  
-  return verifiedSignals;
-};
+    console.log(`Verifying ${signalsNeedingVerification.length} signals without results...`);
+    
+    // Process signals in small batches to avoid overwhelming the API
+    const batchSize = 5;
+    const verifiedSignals: TradingSignal[] = [];
+    
+    for (let i = 0; i < signalsNeedingVerification.length; i += batchSize) {
+      const batch = signalsNeedingVerification.slice(i, i + batchSize);
+      console.log(`Processing batch ${i/batchSize + 1}/${Math.ceil(signalsNeedingVerification.length/batchSize)}`);
+      
+      // Process batch in parallel
+      const batchResults = await Promise.all(
+        batch.map(signal => verifySingleSignal(signal))
+      );
+      
+      verifiedSignals.push(...batchResults);
+      
+      // Add a small delay between batches to be kind to the API
+      if (i + batchSize < signalsNeedingVerification.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // Merge verified signals back with original signals list
+    const updatedSignals = signals.map(signal => {
+      const verifiedSignal = verifiedSignals.find(vs => vs.id === signal.id);
+      return verifiedSignal || signal;
+    });
+    
+    // Save the updated signals to local storage
+    saveSignalHistory(updatedSignals);
+    
+    return updatedSignals;
+  } catch (error) {
+    console.error("Error verifying signals:", error);
+    throw error;
+  }
+}

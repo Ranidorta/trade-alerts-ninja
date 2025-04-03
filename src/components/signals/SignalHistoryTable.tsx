@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import {
@@ -47,7 +46,6 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     let aValue = a[sortField];
     let bValue = b[sortField];
     
-    // Handle special cases for sorting
     if (sortField === "createdAt") {
       aValue = new Date(a.createdAt || 0).getTime();
       bValue = new Date(b.createdAt || 0).getTime();
@@ -65,7 +63,6 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     return sortDirection === "asc" ? comparison : -comparison;
   });
   
-  // Sort indicator component
   const SortIndicator = ({ field }: { field: keyof TradingSignal }) => {
     if (sortField !== field) return null;
     
@@ -74,7 +71,6 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
       <ChevronDown className="inline-block ml-1 h-4 w-4" />;
   };
   
-  // Format date with verification
   const formatDate = (dateStr?: string, verifiedAt?: string) => {
     if (!dateStr) return "—";
     
@@ -101,7 +97,40 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
     return formattedDate;
   };
   
-  // Handle empty state
+  const getStatusBadge = (signal: TradingSignal) => {
+    if (signal.status === "COMPLETED") {
+      if (signal.result === 1) {
+        return (
+          <Badge variant="success" className="flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />
+            Vencedor
+          </Badge>
+        );
+      } else if (signal.result === 0) {
+        return (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <XCircle className="h-3 w-3" />
+            Perdedor
+          </Badge>
+        );
+      } else {
+        return (
+          <Badge variant="outline" className="flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Concluído
+          </Badge>
+        );
+      }
+    } else {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Clock className="h-3 w-3" />
+          {signal.status || "PENDING"}
+        </Badge>
+      );
+    }
+  };
+  
   if (signals.length === 0) {
     return (
       <div className="text-center py-8">
@@ -201,24 +230,7 @@ export default function SignalHistoryTable({ signals }: SignalHistoryTableProps)
               </TableCell>
               <TableCell>${signal.entryPrice?.toFixed(2)}</TableCell>
               <TableCell>
-                {signal.status === "COMPLETED" ? (
-                  signal.result === 1 ? (
-                    <Badge variant="success" className="flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Vencedor
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="flex items-center gap-1">
-                      <XCircle className="h-3 w-3" />
-                      Perdedor
-                    </Badge>
-                  )
-                ) : (
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {signal.status}
-                  </Badge>
-                )}
+                {getStatusBadge(signal)}
               </TableCell>
               <TableCell className={
                 signal.profit && signal.profit > 0 ? "text-green-600 dark:text-green-400 font-semibold" : 

@@ -106,20 +106,37 @@ const SignalsHistory = () => {
     setVerifying(true);
     toast({
       title: "Verificando sinais",
-      description: "Verificando sinais com dados atuais da Binance...",
+      description: "Verificando apenas sinais sem resultado...",
     });
     
     try {
-      const verifiedSignals = await verifyAllSignals();
-      setSignals(verifiedSignals);
+      const signalsToVerify = signals.filter(signal => signal.result === undefined);
       
-      // Update performance metrics after verification
+      if (signalsToVerify.length === 0) {
+        toast({
+          title: "Nenhum sinal para verificar",
+          description: "Todos os sinais já possuem resultados.",
+          variant: "default",
+        });
+        setVerifying(false);
+        return;
+      }
+      
+      const verifiedSignals = await verifyAllSignals(signalsToVerify);
+      
+      const updatedSignals = signals.map(signal => {
+        const verifiedSignal = verifiedSignals.find(vs => vs.id === signal.id);
+        return verifiedSignal || signal;
+      });
+      
+      setSignals(updatedSignals);
+      
       const metrics = analyzeSignalsHistory();
       setPerformanceMetrics(metrics);
       
       toast({
         title: "Verificação concluída",
-        description: `${verifiedSignals.length} sinais verificados e atualizados.`,
+        description: `${signalsToVerify.length} sinais verificados e atualizados.`,
         variant: "default",
       });
     } catch (err) {
@@ -260,7 +277,7 @@ const SignalsHistory = () => {
             onClick={handleVerify}
             variant="outline"
             className="flex items-center gap-2"
-            disabled={verifying}
+            disabled={verifying || signals.every(s => s.result !== undefined)}
           >
             <CheckCircle className="h-5 w-5" />
             {verifying ? 'Verificando...' : 'Verificar Resultados'}

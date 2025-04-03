@@ -1,4 +1,3 @@
-
 import React from "react";
 import { TradingSignal } from "@/lib/types";
 import { format } from "date-fns";
@@ -28,13 +27,11 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
     }
   };
 
-  // Calculate profit percentage if not already calculated
   const calculateProfit = () => {
     if (signal.profit !== undefined) return signal.profit.toFixed(2) + "%";
     
     if (signal.status !== "COMPLETED" || !signal.entryPrice) return "Pendente";
     
-    // Calculate based on hit targets or stop loss
     if (isLoss && signal.stopLoss) {
       const profitVal = signal.direction === "BUY" 
         ? ((signal.stopLoss / signal.entryPrice) - 1) * 100
@@ -65,7 +62,6 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
       isLoss ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-900/30" :
       "bg-card border-border hover:border-primary/30"
     )}>
-      {/* Header with Symbol, Direction and Date */}
       <div className="flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
           <div className={cn(
@@ -89,7 +85,6 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
         </div>
       </div>
       
-      {/* Prices section */}
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="text-sm">
           <div className="text-muted-foreground mb-1">Entrada</div>
@@ -101,7 +96,6 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
         </div>
       </div>
       
-      {/* Targets section */}
       <div className="mb-3">
         <div className="text-sm text-muted-foreground mb-2">Alvos de Preço</div>
         <div className="flex gap-2">
@@ -133,7 +127,6 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
         </div>
       </div>
       
-      {/* Status and Result */}
       <div className="flex justify-between items-center mt-4">
         <div>
           <div className="text-xs text-muted-foreground mb-1">Status</div>
@@ -143,7 +136,7 @@ export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
               ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"
               : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
           )}>
-            {signal.status === "COMPLETED" ? "Concluído" : signal.status}
+            {signal.status === "COMPLETED" ? "Concluído" : signal.status || "Pendente"}
           </div>
         </div>
         
