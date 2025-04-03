@@ -72,7 +72,7 @@ def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
     elif hit_tp1:
         return "parcial"
     else:
-        return "indefinido"
+        return "falso"  # Atualizado: nenhum alvo ou stop foi atingido
 
 def main():
     # Create tables if they don't exist
