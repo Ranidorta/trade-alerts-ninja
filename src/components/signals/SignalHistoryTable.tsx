@@ -136,50 +136,50 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   };
   
   const getResultColor = (result: string | number | undefined) => {
-    if (result === 1 || result === "win" || result === "vencedor") {
+    if (result === 1 || result === "win") {
       return "text-green-600 dark:text-green-400";
-    } else if (result === 0 || result === "loss" || result === "perdedor") {
+    } else if (result === 0 || result === "loss") {
       return "text-red-600 dark:text-red-400";
-    } else if (result === "missed" || result === "falso") {
+    } else if (result === "missed") {
       return "text-gray-500";
-    } else if (result === "partial" || result === "parcial") {
+    } else if (result === "partial") {
       return "text-amber-500";
     }
     return "";
   };
   
   const formatResult = (result: string | number | undefined) => {
-    if (result === 1 || result === "win" || result === "vencedor") return "Vencedor";
-    if (result === 0 || result === "loss" || result === "perdedor") return "Perdedor";
-    if (result === "partial" || result === "parcial") return "Parcial";
-    if (result === "missed" || result === "falso") return "Falso";
+    if (result === 1 || result === "win") return "Vencedor";
+    if (result === 0 || result === "loss") return "Perdedor";
+    if (result === "partial") return "Parcial";
+    if (result === "missed") return "Falso";
     return result ? String(result) : "—";
   };
   
   const getStatusBadge = (signal: TradingSignal) => {
     if (signal.status === "COMPLETED") {
-      if (signal.result === 1 || signal.result === "win" || signal.result === "vencedor") {
+      if (signal.result === 1 || signal.result === "win") {
         return (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Vencedor
           </Badge>
         );
-      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "perdedor") {
+      } else if (signal.result === 0 || signal.result === "loss") {
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Perdedor
           </Badge>
         );
-      } else if (signal.result === "partial" || signal.result === "parcial") {
+      } else if (signal.result === "partial") {
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Parcial
           </Badge>
         );
-      } else if (signal.result === "missed" || signal.result === "falso") {
+      } else if (signal.result === "missed") {
         return (
           <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
@@ -267,10 +267,10 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
         <TableBody>
           {sortedSignals.map((signal) => (
             <TableRow key={signal.id} className={
-              signal.result === 1 || signal.result === "win" || signal.result === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 || signal.result === "loss" || signal.result === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
-              signal.result === "missed" || signal.result === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
-              signal.result === "partial" || signal.result === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
+              signal.result === 1 || signal.result === "win" ? "bg-green-50 dark:bg-green-950/20" : 
+              signal.result === 0 || signal.result === "loss" ? "bg-red-50 dark:bg-red-950/20" :
+              signal.result === "missed" ? "bg-gray-50 dark:bg-gray-900/20" :
+              signal.result === "partial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
             }>
               <TableCell className="font-medium">
                 {signal.error ? (
