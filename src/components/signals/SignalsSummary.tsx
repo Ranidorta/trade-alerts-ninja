@@ -40,6 +40,9 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
     };
   }, [signals]);
 
+  // Parse winRate to number for comparison
+  const winRateNumber = parseFloat(summary.winRate);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <Card className="bg-card">
@@ -88,7 +91,7 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
         </CardHeader>
         <CardContent>
           <p className="text-3xl font-bold">
-            <span className={summary.winRate >= 60 ? 'text-crypto-green' : summary.winRate >= 45 ? 'text-amber-500' : 'text-crypto-red'}>
+            <span className={winRateNumber >= 60 ? 'text-crypto-green' : winRateNumber >= 45 ? 'text-amber-500' : 'text-crypto-red'}>
               {summary.winRate}%
             </span>
           </p>

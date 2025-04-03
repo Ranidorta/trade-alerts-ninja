@@ -116,7 +116,7 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   
   try {
     console.log(`Fetching performance data for ${days} days from: ${API_BASE_URL}/performance?days=${days}`);
-    const response = await fetch(`${API_BASE_URL}/performance`);
+    const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
