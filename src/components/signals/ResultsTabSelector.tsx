@@ -7,9 +7,16 @@ import { InfoIcon, TrendingUp, TrendingDown } from "lucide-react";
 interface ResultsTabSelectorProps {
   resultTab: string;
   onValueChange: (value: string) => void;
+  totalWinners: number;
+  totalLosers: number;
 }
 
-const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProps) => {
+const ResultsTabSelector = ({ 
+  resultTab, 
+  onValueChange, 
+  totalWinners, 
+  totalLosers 
+}: ResultsTabSelectorProps) => {
   return (
     <Tabs defaultValue="all" value={resultTab} onValueChange={onValueChange} className="mb-8">
       <TabsList>
@@ -19,7 +26,7 @@ const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProp
             <TooltipTrigger asChild>
               <TabsTrigger value="profit" className="flex items-center">
                 <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
-                Lucro <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
+                Lucro ({totalWinners}) <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent>
@@ -32,7 +39,7 @@ const ResultsTabSelector = ({ resultTab, onValueChange }: ResultsTabSelectorProp
             <TooltipTrigger asChild>
               <TabsTrigger value="loss" className="flex items-center">
                 <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
-                Perda <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
+                Perda ({totalLosers}) <InfoIcon className="ml-1 h-3 w-3 opacity-70" />
               </TabsTrigger>
             </TooltipTrigger>
             <TooltipContent>

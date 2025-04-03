@@ -43,6 +43,11 @@ const SignalsList = ({
       intervalId = window.setInterval(() => {
         console.log("Auto-refreshing signals list...");
         onRefresh();
+        toast({
+          title: "Lista atualizada",
+          description: `Atualizando automaticamente a cada ${autoRefreshInterval} segundos.`,
+          variant: "default",
+        });
       }, autoRefreshInterval * 1000);
     }
     
@@ -51,7 +56,7 @@ const SignalsList = ({
         clearInterval(intervalId);
       }
     };
-  }, [autoRefresh, autoRefreshInterval, onRefresh]);
+  }, [autoRefresh, autoRefreshInterval, onRefresh, toast]);
 
   // Function to handle switching to local mode
   const handleLocalModeClick = () => {
