@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { 
   User, 
@@ -10,19 +9,27 @@ import {
   signOut,
   updateProfile
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { UserProfile } from '@/lib/types';
 import { setAuthToken, clearAuthToken } from '@/lib/signalsApi';
 import { useToast } from '@/components/ui/use-toast';
 
+interface UserRole {
+  role: 'user' | 'admin' | 'premium';
+  assinaturaAtiva: boolean;
+}
+
 interface AuthContextType {
-  user: UserProfile | null;
+  user: (UserProfile & Partial<UserRole>) | null;
   isLoading: boolean;
   isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
+  hasActiveSubscription: () => boolean;
+  isAdmin: () => boolean;
 }
 
 // Create context with default values
@@ -34,6 +41,8 @@ const AuthContext = createContext<AuthContextType>({
   loginWithGoogle: async () => {},
   logout: async () => {},
   register: async () => {},
+  hasActiveSubscription: () => false,
+  isAdmin: () => false,
 });
 
 // Hook to use the auth context
@@ -41,7 +50,7 @@ export const useAuth = () => useContext(AuthContext);
 
 // Auth provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<(UserProfile & Partial<UserRole>) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
@@ -58,6 +67,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
+  // Fetch user role and subscription data from Firestore
+  const fetchUserData = async (uid: string) => {
+    try {
+      const userRef = doc(db, "users", uid);
+      const userSnapshot = await getDoc(userRef);
+      
+      if (userSnapshot.exists()) {
+        return userSnapshot.data() as UserRole;
+      } else {
+        // If user document doesn't exist, create it with default values
+        const defaultUserRole: UserRole = {
+          role: 'user',
+          assinaturaAtiva: false
+        };
+        
+        await setDoc(userRef, defaultUserRole);
+        return defaultUserRole;
+      }
+    } catch (error) {
+      console.error("Error fetching user data:", error);
+      return { role: 'user', assinaturaAtiva: false };
+    }
+  };
+
   useEffect(() => {
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -69,11 +102,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const formattedUser = formatUser(firebaseUser);
           formattedUser.token = token;
           
-          setUser(formattedUser);
+          // Fetch additional user data from Firestore
+          const userData = await fetchUserData(firebaseUser.uid);
+          
+          // Combine auth user with Firestore data
+          const enrichedUser = {
+            ...formattedUser,
+            role: userData.role,
+            assinaturaAtiva: userData.assinaturaAtiva
+          };
+          
+          setUser(enrichedUser);
           setAuthToken(token);
           
           // Store in localStorage for persistence
-          localStorage.setItem('trading-ninja-user', JSON.stringify(formattedUser));
+          localStorage.setItem('trading-ninja-user', JSON.stringify(enrichedUser));
         } else {
           // User is signed out
           setUser(null);
@@ -204,6 +247,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   };
+  
+  // Helper function to check if user has an active subscription
+  const hasActiveSubscription = () => {
+    return user?.assinaturaAtiva === true;
+  };
+  
+  // Helper function to check if user is admin
+  const isAdmin = () => {
+    return user?.role === 'admin';
+  };
 
   return (
     <AuthContext.Provider
@@ -214,7 +267,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         loginWithGoogle,
         logout,
-        register
+        register,
+        hasActiveSubscription,
+        isAdmin
       }}
     >
       {children}

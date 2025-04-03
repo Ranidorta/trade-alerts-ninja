@@ -16,13 +16,14 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
+import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
 import "./App.css";
 
 // Import gamer theme styles
 import "./styles/gamer-theme.css";
 import { useState } from "react";
 
-// Protected route component
+// Protected route component for basic authentication
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isLoading } = useAuth();
   
@@ -47,7 +48,7 @@ const AppRoutes = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       
-      {/* Protected routes */}
+      {/* Protected routes - require authentication only */}
       <Route path="/signals" element={
         <ProtectedRoute>
           <SignalsDashboard />
@@ -63,15 +64,19 @@ const AppRoutes = () => {
           <CryptoMarket />
         </ProtectedRoute>
       } />
+      
+      {/* Premium routes - require active subscription */}
       <Route path="/performance" element={
-        <ProtectedRoute>
+        <ProtectedPremiumRoute>
           <PerformanceDashboard />
-        </ProtectedRoute>
+        </ProtectedPremiumRoute>
       } />
+      
+      {/* Admin routes - require admin role */}
       <Route path="/admin" element={
-        <ProtectedRoute>
+        <ProtectedPremiumRoute requireAdmin={true}>
           <Admin />
-        </ProtectedRoute>
+        </ProtectedPremiumRoute>
       } />
       
       <Route path="*" element={<NotFound />} />

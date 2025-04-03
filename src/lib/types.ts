@@ -1,4 +1,3 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -121,11 +120,12 @@ export interface CryptoChartDataPoint {
 export interface UserProfile {
   uid: string;
   email: string;
-  name?: string;
+  name: string;
+  photoURL?: string | null;
   isAuthenticated: boolean;
   token?: string;
-  password?: string;
-  photoURL?: string;
+  role?: 'user' | 'admin' | 'premium';
+  assinaturaAtiva?: boolean;
 }
 
 export interface PerformanceMetrics {
