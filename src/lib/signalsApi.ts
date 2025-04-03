@@ -1,4 +1,3 @@
-
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
@@ -107,8 +106,7 @@ export const fetchSignals = async (params?: {
 };
 
 /**
- * Fetches performance metrics from the API
- * This has been refactored to work properly with React Query
+ * Fetches signal performance metrics from the API
  * @returns Promise with performance data
  */
 export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[] }) => {
@@ -118,7 +116,7 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   
   try {
     console.log(`Fetching performance data for ${days} days from: ${API_BASE_URL}/performance?days=${days}`);
-    const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
+    const response = await fetch(`${API_BASE_URL}/performance`);
     
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
