@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
@@ -16,6 +16,9 @@ interface SignalsListProps {
   strategies: string[];
   onSelectStrategy: (strategy: string) => void;
   viewMode?: "cards" | "table";
+  onRefresh?: () => void;
+  autoRefresh?: boolean;
+  autoRefreshInterval?: number; // em segundos
 }
 
 const SignalsList = ({ 
@@ -25,9 +28,30 @@ const SignalsList = ({
   activeStrategy, 
   strategies,
   onSelectStrategy,
-  viewMode = "cards"
+  viewMode = "cards",
+  onRefresh,
+  autoRefresh = false,
+  autoRefreshInterval = 60
 }: SignalsListProps) => {
   const { toast } = useToast();
+
+  // Auto-refresh
+  useEffect(() => {
+    let intervalId: number | undefined;
+    
+    if (autoRefresh && onRefresh) {
+      intervalId = window.setInterval(() => {
+        console.log("Auto-refreshing signals list...");
+        onRefresh();
+      }, autoRefreshInterval * 1000);
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [autoRefresh, autoRefreshInterval, onRefresh]);
 
   // Function to handle switching to local mode
   const handleLocalModeClick = () => {

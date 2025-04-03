@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -66,12 +66,11 @@ const SignalsHistory = () => {
   const [sortBy, setSortBy] = useState<"date" | "profit" | "symbol">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [verifying, setVerifying] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60); // em segundos
 
-  useEffect(() => {
-    loadSignalsHistory();
-  }, []);
-
-  const loadSignalsHistory = async () => {
+  // Função modificada para carregar o histórico de sinais
+  const loadSignalsHistory = useCallback(async () => {
     setLoading(true);
     try {
       let historySignals = getSignalHistory();
@@ -87,13 +86,49 @@ const SignalsHistory = () => {
       const metrics = analyzeSignalsHistory();
       setPerformanceMetrics(metrics);
       
+      // Exibe toast apenas quando acionado manualmente, não durante refresh automático
+      if (loading) {
+        toast({
+          title: "Histórico atualizado",
+          description: "Os dados dos sinais foram atualizados com sucesso.",
+        });
+      }
     } catch (err: any) {
       console.error("Error loading signal history:", err);
       setError(err);
+      
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar histórico",
+        description: err.message || "Ocorreu um erro ao atualizar o histórico de sinais.",
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, loading]);
+
+  // Atualização inicial ao carregar a página
+  useEffect(() => {
+    loadSignalsHistory();
+  }, []);
+
+  // Configuração do intervalo de atualização automática
+  useEffect(() => {
+    let intervalId: number | undefined;
+    
+    if (autoRefresh) {
+      intervalId = window.setInterval(() => {
+        console.log("Atualizando histórico automaticamente...");
+        loadSignalsHistory();
+      }, autoRefreshInterval * 1000);
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [autoRefresh, autoRefreshInterval, loadSignalsHistory]);
 
   const handleRefresh = async () => {
     toast({
@@ -102,6 +137,16 @@ const SignalsHistory = () => {
     });
     
     await loadSignalsHistory();
+  };
+
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(!autoRefresh);
+    toast({
+      title: autoRefresh ? "Atualização automática desativada" : "Atualização automática ativada",
+      description: autoRefresh 
+        ? "Os sinais não serão mais atualizados automaticamente." 
+        : `Os sinais serão atualizados a cada ${autoRefreshInterval} segundos.`,
+    });
   };
 
   const handleVerify = async () => {
@@ -333,14 +378,40 @@ const SignalsHistory = () => {
           </Button>
           
           <Button 
-            onClick={handleRefresh}
+            onClick={toggleAutoRefresh}
+            variant={autoRefresh ? "default" : "outline"}
             className="flex items-center gap-2"
           >
-            <RefreshCw className="h-5 w-5" />
-            Atualizar Status
+            <Clock className="h-5 w-5" />
+            {autoRefresh ? 'Auto (Ligado)' : 'Auto (Desligado)'}
+          </Button>
+          
+          <Button 
+            onClick={handleRefresh}
+            className="flex items-center gap-2"
+            disabled={loading}
+          >
+            <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Atualizando...' : 'Atualizar Histórico'}
           </Button>
         </div>
       </div>
+
+      {/* Status do auto-refresh */}
+      {autoRefresh && (
+        <div className="mb-6">
+          <Card className="bg-primary/10 border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <p>
+                  Atualização automática ativa. Próxima atualização em {autoRefreshInterval} segundos.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {error && !error.message.includes("fetch") && !error.message.includes("network") && (
         <Card className="bg-destructive/10 border-destructive/20 mb-6">
@@ -364,6 +435,7 @@ const SignalsHistory = () => {
         </Card>
       )}
 
+      {/* Resto do código permanece o mesmo */}
       {forcingLocalMode && (
         <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30 mb-6">
           <CardContent className="p-4">
@@ -377,6 +449,7 @@ const SignalsHistory = () => {
         </Card>
       )}
 
+      {/* Resto do conteúdo permanece o mesmo */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
