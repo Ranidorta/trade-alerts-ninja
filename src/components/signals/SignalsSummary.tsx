@@ -14,19 +14,16 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
   const summary = React.useMemo(() => {
     const vencedorSignals = signals.filter(signal => 
       signal.result === "win" || 
-      (typeof signal.result === "number" && signal.result === 1) ||
-      signal.result === "vencedor"
+      (typeof signal.result === "number" && signal.result === 1)
     );
     
     const parcialSignals = signals.filter(signal => 
-      signal.result === "partial" ||
-      signal.result === "parcial"
+      signal.result === "partial"
     );
     
     const perdedorSignals = signals.filter(signal => 
       signal.result === "loss" ||
-      (typeof signal.result === "number" && signal.result === 0) ||
-      signal.result === "perdedor"
+      (typeof signal.result === "number" && signal.result === 0)
     );
     
     const falsoSignals = signals.filter(signal => 
@@ -191,19 +188,19 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
                   <td className="border px-4 py-2">{summary.vencedorSignals}</td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 1 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 2 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 3 && t.hit))
                       .length}
                   </td>
@@ -218,19 +215,19 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
                   <td className="border px-4 py-2">{summary.parcialSignals}</td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial" || s.result === "parcial")
+                      .filter(s => s.result === "partial")
                       .filter(s => s.targets?.some(t => t.level === 1 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial" || s.result === "parcial")
+                      .filter(s => s.result === "partial")
                       .filter(s => s.targets?.some(t => t.level === 2 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial" || s.result === "parcial")
+                      .filter(s => s.result === "partial")
                       .filter(s => s.targets?.some(t => t.level === 3 && t.hit))
                       .length}
                   </td>

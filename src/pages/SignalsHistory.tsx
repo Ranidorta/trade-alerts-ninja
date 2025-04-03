@@ -80,6 +80,21 @@ const SignalsHistory = () => {
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
 
+  const getPerformanceData = () => {
+    if (!performanceMetrics) return [];
+    
+    return [
+      { name: 'Vencedores', value: performanceMetrics.winningTrades, color: '#10b981' },
+      { name: 'Parciais', value: performanceMetrics.winningTrades - performanceMetrics.losingTrades, color: '#f59e0b' },
+      { name: 'Perdedores', value: performanceMetrics.losingTrades, color: '#ef4444' },
+      { name: 'Falsos', value: signals.filter(s => s.result === "missed").length, color: '#9ca3af' }
+    ];
+  };
+
+  const getDailyPerformanceData = () => {
+    return performanceMetrics?.dailyData?.slice(-30) || [];
+  };
+
   const loadSignalsHistory = useCallback(async () => {
     setLoading(true);
     try {
@@ -297,19 +312,16 @@ const SignalsHistory = () => {
     if (resultFilter === "win") {
       filtered = filtered.filter(signal => 
         signal.result === 1 || 
-        signal.result === "win" || 
-        signal.result === "vencedor"
+        signal.result === "win"
       );
     } else if (resultFilter === "loss") {
       filtered = filtered.filter(signal => 
         signal.result === 0 || 
-        signal.result === "loss" || 
-        signal.result === "perdedor"
+        signal.result === "loss"
       );
     } else if (resultFilter === "partial") {
       filtered = filtered.filter(signal => 
-        signal.result === "partial" || 
-        signal.result === "parcial"
+        signal.result === "partial"
       );
     } else if (resultFilter === "missed") {
       filtered = filtered.filter(signal => signal.result === "missed");
@@ -745,7 +757,7 @@ const SignalsHistory = () => {
                       </div>
                     </div>
                   </div>
-
+                  
                   {performanceMetrics && performanceMetrics.symbolPerformance && (
                     <div className="mt-8">
                       <h3 className="text-lg font-medium mb-4">Desempenho por Símbolo</h3>
@@ -754,7 +766,7 @@ const SignalsHistory = () => {
                           <thead className="bg-muted/50">
                             <tr>
                               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                                Símbolo
+                                S��mbolo
                               </th>
                               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                 Total
@@ -803,7 +815,7 @@ const SignalsHistory = () => {
                       </div>
                     </div>
                   )}
-
+                  
                   <div className="mt-8">
                     <h3 className="text-lg font-medium mb-4">Estatísticas Gerais</h3>
                     <div className="overflow-x-auto">
