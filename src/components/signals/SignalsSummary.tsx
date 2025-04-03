@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Ban, Target } from "lucide-react";
@@ -9,20 +10,23 @@ interface SignalsSummaryProps {
 }
 
 const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) => {
-  // Calculate summary statistics
+  // Calcula estatísticas de resumo
   const summary = React.useMemo(() => {
     const vencedorSignals = signals.filter(signal => 
       signal.result === "win" || 
-      (typeof signal.result === "number" && signal.result === 1)
+      (typeof signal.result === "number" && signal.result === 1) ||
+      signal.result === "vencedor"
     );
     
     const parcialSignals = signals.filter(signal => 
-      signal.result === "partial"
+      signal.result === "partial" ||
+      signal.result === "parcial"
     );
     
     const perdedorSignals = signals.filter(signal => 
       signal.result === "loss" ||
-      (typeof signal.result === "number" && signal.result === 0)
+      (typeof signal.result === "number" && signal.result === 0) ||
+      signal.result === "perdedor"
     );
     
     const falsoSignals = signals.filter(signal => 
@@ -164,7 +168,7 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
       
       {showDetails && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Detalhes dos Targets</h3>
+          <h3 className="text-lg font-medium">Detalhes dos Alvos</h3>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
@@ -187,19 +191,19 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
                   <td className="border px-4 py-2">{summary.vencedorSignals}</td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 1 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 2 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "win" || (typeof s.result === "number" && s.result === 1))
+                      .filter(s => s.result === "win" || s.result === "vencedor" || (typeof s.result === "number" && s.result === 1))
                       .filter(s => s.targets?.some(t => t.level === 3 && t.hit))
                       .length}
                   </td>
@@ -214,19 +218,19 @@ const SignalsSummary = ({ signals, showDetails = false }: SignalsSummaryProps) =
                   <td className="border px-4 py-2">{summary.parcialSignals}</td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial")
+                      .filter(s => s.result === "partial" || s.result === "parcial")
                       .filter(s => s.targets?.some(t => t.level === 1 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial")
+                      .filter(s => s.result === "partial" || s.result === "parcial")
                       .filter(s => s.targets?.some(t => t.level === 2 && t.hit))
                       .length}
                   </td>
                   <td className="border px-4 py-2">
                     {signals
-                      .filter(s => s.result === "partial")
+                      .filter(s => s.result === "partial" || s.result === "parcial")
                       .filter(s => s.targets?.some(t => t.level === 3 && t.hit))
                       .length}
                   </td>

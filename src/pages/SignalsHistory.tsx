@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
@@ -17,7 +16,9 @@ import {
   Search,
   SlidersHorizontal,
   CheckCircle,
-  List 
+  List,
+  CalendarIcon,
+  X
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -48,12 +49,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
 import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import { getSignalHistory } from "@/lib/signal-storage";
+import SignalsSummary from "@/components/signals/SignalsSummary";
 
 const SignalsHistory = () => {
   const [activeTab, setActiveTab] = useState<"signals" | "performance">("signals");
-  const [resultTab, setResultTab] = useState("all");
+  const [resultFilter, setResultFilter] = useState<string>("all");
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -63,13 +70,16 @@ const SignalsHistory = () => {
   );
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [symbolFilter, setSymbolFilter] = useState<string>("");
   const [sortBy, setSortBy] = useState<"date" | "profit" | "symbol">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [verifying, setVerifying] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60); // in seconds
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(60); // em segundos
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
+  const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
 
-  // Function to load the signals history
   const loadSignalsHistory = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,42 +93,42 @@ const SignalsHistory = () => {
       
       setSignals(updatedSignals);
       
+      const symbols = [...new Set(updatedSignals.map(signal => signal.symbol))];
+      setAvailableSymbols(symbols.sort());
+      
       const metrics = analyzeSignalsHistory();
       setPerformanceMetrics(metrics);
       
-      // Only show toast when manually triggered, not during auto-refresh
       if (loading) {
         toast({
-          title: "History updated",
-          description: "Signal data has been successfully updated.",
+          title: "Histórico atualizado",
+          description: "Dados dos sinais foram atualizados com sucesso.",
         });
       }
     } catch (err: any) {
-      console.error("Error loading signal history:", err);
+      console.error("Erro ao carregar histórico de sinais:", err);
       setError(err);
       
       toast({
         variant: "destructive",
-        title: "Error loading history",
-        description: err.message || "An error occurred while updating the signal history.",
+        title: "Erro ao carregar histórico",
+        description: err.message || "Ocorreu um erro ao atualizar o histórico de sinais.",
       });
     } finally {
       setLoading(false);
     }
   }, [toast, loading]);
 
-  // Initial update when loading the page
   useEffect(() => {
     loadSignalsHistory();
   }, []);
 
-  // Auto-refresh interval setup
   useEffect(() => {
     let intervalId: number | undefined;
     
     if (autoRefresh) {
       intervalId = window.setInterval(() => {
-        console.log("Automatically updating history...");
+        console.log("Atualizando histórico automaticamente...");
         loadSignalsHistory();
       }, autoRefreshInterval * 1000);
     }
@@ -132,8 +142,8 @@ const SignalsHistory = () => {
 
   const handleRefresh = async () => {
     toast({
-      title: "Updating data",
-      description: "Updating signal history status...",
+      title: "Atualizando dados",
+      description: "Atualizando status do histórico de sinais...",
     });
     
     await loadSignalsHistory();
@@ -142,10 +152,10 @@ const SignalsHistory = () => {
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
-      title: autoRefresh ? "Auto-update disabled" : "Auto-update enabled",
+      title: autoRefresh ? "Atualização automática desativada" : "Atualização automática ativada",
       description: autoRefresh 
-        ? "Signals will no longer be updated automatically." 
-        : `Signals will be updated every ${autoRefreshInterval} seconds.`,
+        ? "Os sinais não serão mais atualizados automaticamente." 
+        : `Os sinais serão atualizados a cada ${autoRefreshInterval} segundos.`,
     });
   };
 
@@ -187,7 +197,7 @@ const SignalsHistory = () => {
         variant: "default",
       });
     } catch (err) {
-      console.error("Error verifying signals:", err);
+      console.error("Erro ao verificar sinais:", err);
       toast({
         variant: "destructive",
         title: "Erro",
@@ -248,7 +258,7 @@ const SignalsHistory = () => {
         });
       }
     } catch (err: any) {
-      console.error("Error verifying single signal:", err);
+      console.error("Erro ao verificar sinal único:", err);
       toast({
         variant: "destructive",
         title: "Erro",
@@ -257,20 +267,68 @@ const SignalsHistory = () => {
     }
   };
 
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSymbolFilter("");
+    setResultFilter("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    toast({
+      title: "Filtros limpos",
+      description: "Todos os filtros foram removidos.",
+    });
+  };
+
   const getFilteredSignals = () => {
     let filtered = [...signals];
-    
-    if (resultTab === "profit") {
-      filtered = filtered.filter(signal => signal.result === 1);
-    } else if (resultTab === "loss") {
-      filtered = filtered.filter(signal => signal.result === 0);
-    }
     
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(signal => 
         signal.symbol.toLowerCase().includes(term) ||
         signal.strategy?.toLowerCase().includes(term)
+      );
+    }
+    
+    if (symbolFilter) {
+      filtered = filtered.filter(signal => signal.symbol === symbolFilter);
+    }
+    
+    if (resultFilter === "win") {
+      filtered = filtered.filter(signal => 
+        signal.result === 1 || 
+        signal.result === "win" || 
+        signal.result === "vencedor"
+      );
+    } else if (resultFilter === "loss") {
+      filtered = filtered.filter(signal => 
+        signal.result === 0 || 
+        signal.result === "loss" || 
+        signal.result === "perdedor"
+      );
+    } else if (resultFilter === "partial") {
+      filtered = filtered.filter(signal => 
+        signal.result === "partial" || 
+        signal.result === "parcial"
+      );
+    } else if (resultFilter === "missed") {
+      filtered = filtered.filter(signal => signal.result === "missed");
+    } else if (resultFilter === "pending") {
+      filtered = filtered.filter(signal => signal.result === undefined);
+    }
+    
+    if (dateFrom) {
+      filtered = filtered.filter(signal => 
+        signal.createdAt && new Date(signal.createdAt) >= dateFrom
+      );
+    }
+    
+    if (dateTo) {
+      const endOfDay = new Date(dateTo);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      filtered = filtered.filter(signal => 
+        signal.createdAt && new Date(signal.createdAt) <= endOfDay
       );
     }
     
@@ -298,41 +356,23 @@ const SignalsHistory = () => {
   };
 
   const filteredSignals = getFilteredSignals();
+  const activeFiltersCount = [
+    searchTerm, 
+    symbolFilter, 
+    resultFilter !== "all", 
+    dateFrom, 
+    dateTo
+  ].filter(Boolean).length;
 
-  const getDailyPerformanceData = () => {
-    const dailyData: {[key: string]: {date: string, wins: number, losses: number}} = {};
-    
-    signals.forEach(signal => {
-      if (!signal.createdAt) return;
-      
-      const date = new Date(signal.createdAt).toLocaleDateString();
-      
-      if (!dailyData[date]) {
-        dailyData[date] = { date, wins: 0, losses: 0 };
-      }
-      
-      if (signal.result === 1) {
-        dailyData[date].wins += 1;
-      } else if (signal.result === 0) {
-        dailyData[date].losses += 1;
-      }
-    });
-    
-    return Object.values(dailyData).sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-  };
-
-  const getPerformanceData = () => {
-    const winningSignals = signals.filter(s => s.result === 1);
-    const losingSignals = signals.filter(s => s.result === 0);
-    const pendingSignals = signals.filter(s => s.result === undefined);
-
-    return [
-      { name: "Vencedores", value: winningSignals.length, color: "#10b981" },
-      { name: "Perdedores", value: losingSignals.length, color: "#ef4444" },
-      { name: "Pendentes", value: pendingSignals.length, color: "#f59e0b" }
-    ];
+  const formatDateRange = () => {
+    if (dateFrom && dateTo) {
+      return `${format(dateFrom, 'dd/MM/yyyy')} - ${format(dateTo, 'dd/MM/yyyy')}`;
+    } else if (dateFrom) {
+      return `A partir de ${format(dateFrom, 'dd/MM/yyyy')}`;
+    } else if (dateTo) {
+      return `Até ${format(dateTo, 'dd/MM/yyyy')}`;
+    }
+    return "Selecionar período";
   };
 
   if (error && !forcingLocalMode && error.message && (error.message.includes("fetch") || error.message.includes("network"))) {
@@ -346,10 +386,10 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Signal History</h1>
+          <h1 className="text-3xl font-bold">Histórico de Sinais</h1>
           <p className="text-muted-foreground">
-            Detailed history of generated signals with target hit information
-            {forcingLocalMode && <span className="ml-2 text-amber-500">(Local Mode)</span>}
+            Histórico detalhado dos sinais gerados com informações de acertos
+            {forcingLocalMode && <span className="ml-2 text-amber-500">(Modo Local)</span>}
           </p>
         </div>
         
@@ -363,7 +403,7 @@ const SignalsHistory = () => {
               className="px-4 py-2 bg-amber-500 text-white rounded-md flex items-center gap-2"
             >
               <RefreshCw className="h-5 w-5" />
-              Try API Again
+              Tentar API Novamente
             </button>
           )}
           
@@ -374,7 +414,7 @@ const SignalsHistory = () => {
             disabled={verifying || signals.every(s => s.result !== undefined)}
           >
             <CheckCircle className="h-5 w-5" />
-            {verifying ? 'Verifying...' : 'Verify Results'}
+            {verifying ? 'Verificando...' : 'Verificar Resultados'}
           </Button>
           
           <Button 
@@ -383,7 +423,7 @@ const SignalsHistory = () => {
             className="flex items-center gap-2"
           >
             <Clock className="h-5 w-5" />
-            {autoRefresh ? 'Auto (On)' : 'Auto (Off)'}
+            {autoRefresh ? 'Auto (Ligado)' : 'Auto (Desligado)'}
           </Button>
           
           <Button 
@@ -392,12 +432,11 @@ const SignalsHistory = () => {
             disabled={loading}
           >
             <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Updating...' : 'Update History'}
+            {loading ? 'Atualizando...' : 'Atualizar Histórico'}
           </Button>
         </div>
       </div>
 
-      {/* Auto-refresh status */}
       {autoRefresh && (
         <div className="mb-6">
           <Card className="bg-primary/10 border-primary/20">
@@ -405,7 +444,7 @@ const SignalsHistory = () => {
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 text-primary" />
                 <p>
-                  Auto-update active. Next update in {autoRefreshInterval} seconds.
+                  Atualização automática ativa. Próxima atualização em {autoRefreshInterval} segundos.
                 </p>
               </div>
             </CardContent>
@@ -435,7 +474,6 @@ const SignalsHistory = () => {
         </Card>
       )}
 
-      {/* Resto do código permanece o mesmo */}
       {forcingLocalMode && (
         <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/30 mb-6">
           <CardContent className="p-4">
@@ -449,49 +487,10 @@ const SignalsHistory = () => {
         </Card>
       )}
 
-      {/* Resto do conteúdo permanece o mesmo */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total de Sinais</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{signals.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600">Sinais Vencedores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold flex items-center gap-2">
-              {signals.filter(s => s.result === 1).length}
-              <TrendingUp className="h-5 w-5 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-600">Sinais Perdedores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold flex items-center gap-2">
-              {signals.filter(s => s.result === 0).length}
-              <TrendingDown className="h-5 w-5 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Taxa de Acerto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {performanceMetrics ? performanceMetrics.winRate.toFixed(2) : 0}%
-            </div>
+      <div className="mb-6">
+        <Card className="bg-card">
+          <CardContent className="p-6">
+            <SignalsSummary signals={signals} showDetails={true} />
           </CardContent>
         </Card>
       </div>
@@ -519,9 +518,13 @@ const SignalsHistory = () => {
         <TabsContent value="signals">
           <div className="mb-6">
             <Card>
-              <CardContent className="p-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="col-span-1 md:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-xl">Filtros</CardTitle>
+                <CardDescription>Filtre os sinais por diferentes critérios</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="col-span-1">
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -531,6 +534,83 @@ const SignalsHistory = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
+                  </div>
+                  
+                  <div>
+                    <Select value={symbolFilter} onValueChange={setSymbolFilter}>
+                      <SelectTrigger className="w-full">
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-4 w-4" />
+                          <SelectValue placeholder="Filtrar por símbolo" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Todos os símbolos</SelectItem>
+                        {availableSymbols.map(symbol => (
+                          <SelectItem key={symbol} value={symbol}>{symbol}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Select value={resultFilter} onValueChange={setResultFilter}>
+                      <SelectTrigger className="w-full">
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-4 w-4" />
+                          <SelectValue placeholder="Filtrar por resultado" />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os resultados</SelectItem>
+                        <SelectItem value="win">Vencedores</SelectItem>
+                        <SelectItem value="partial">Parciais</SelectItem>
+                        <SelectItem value="loss">Perdedores</SelectItem>
+                        <SelectItem value="missed">Falsos</SelectItem>
+                        <SelectItem value="pending">Pendentes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {formatDateRange()}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <div className="flex flex-col space-y-4 p-3">
+                          <div className="space-y-2">
+                            <h4 className="font-medium">Data inicial</h4>
+                            <CalendarComponent 
+                              mode="single"
+                              selected={dateFrom}
+                              onSelect={setDateFrom}
+                              className="border rounded-md"
+                              locale={ptBR}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <h4 className="font-medium">Data final</h4>
+                            <CalendarComponent
+                              mode="single"
+                              selected={dateTo}
+                              onSelect={setDateTo}
+                              disabled={(date) => dateFrom ? date < dateFrom : false}
+                              className="border rounded-md"
+                              locale={ptBR}
+                            />
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   
                   <div>
@@ -550,19 +630,18 @@ const SignalsHistory = () => {
                   </div>
                   
                   <div>
-                    <Select value={resultTab} onValueChange={setResultTab}>
-                      <SelectTrigger>
-                        <div className="flex items-center gap-2">
-                          <Filter className="h-4 w-4" />
-                          <SelectValue placeholder="Filtrar por" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos</SelectItem>
-                        <SelectItem value="profit">Vencedores</SelectItem>
-                        <SelectItem value="loss">Perdedores</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={clearFilters}
+                      disabled={activeFiltersCount === 0}
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Limpar filtros
+                      {activeFiltersCount > 0 && (
+                        <Badge variant="secondary" className="ml-2">{activeFiltersCount}</Badge>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -580,6 +659,12 @@ const SignalsHistory = () => {
             </div>
           ) : (
             <Card>
+              <CardHeader>
+                <CardTitle>Histórico de Sinais</CardTitle>
+                <CardDescription>
+                  {filteredSignals.length} {filteredSignals.length === 1 ? 'sinal encontrado' : 'sinais encontrados'}
+                </CardDescription>
+              </CardHeader>
               <CardContent className="p-0">
                 <SignalHistoryTable 
                   signals={filteredSignals} 

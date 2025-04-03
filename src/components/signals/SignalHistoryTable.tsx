@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
   CheckCircle, 
@@ -23,7 +23,8 @@ import {
   ArrowDown,
   AlertCircle,
   CheckCircle2,
-  Diff
+  Diff,
+  Calendar
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -89,27 +90,49 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   const formatDate = (dateStr?: string, verifiedAt?: string) => {
     if (!dateStr) return "—";
     
-    const formattedDate = formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
-    
-    if (verifiedAt) {
+    try {
+      // Exibir data e hora completas em formato brasileiro
+      const formattedFullDate = format(new Date(dateStr), "dd/MM/yyyy HH:mm", { locale: ptBR });
+      
+      // Exibir também "há quanto tempo" para referência rápida
+      const timeAgo = formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
+      
+      if (verifiedAt) {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-col">
+                  <span className="flex items-center text-xs font-medium">
+                    {formattedFullDate}
+                    <CheckCircle2 className="ml-1 h-3 w-3 text-green-500" />
+                  </span>
+                  <span className="text-xs text-muted-foreground">{timeAgo}</span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Verificado em {new Date(verifiedAt).toLocaleString('pt-BR')}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      }
+      
       return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="flex items-center">
-                {formattedDate}
-                <CheckCircle2 className="ml-1 h-3 w-3 text-green-500" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Verificado em {new Date(verifiedAt).toLocaleString('pt-BR')}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="flex flex-col">
+          <span className="text-xs font-medium">{formattedFullDate}</span>
+          <span className="text-xs text-muted-foreground">{timeAgo}</span>
+        </div>
       );
+    } catch (e) {
+      console.error("Erro ao formatar data:", e);
+      return dateStr;
     }
-    
-    return formattedDate;
+  };
+
+  const formatPrice = (price?: number) => {
+    if (price === undefined) return "—";
+    return price < 0.1 ? price.toFixed(6) : price < 1 ? price.toFixed(4) : price.toFixed(2);
   };
   
   const getResultColor = (result: string | number | undefined) => {
@@ -117,21 +140,19 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
       return "text-green-600 dark:text-green-400";
     } else if (result === 0 || result === "loss" || result === "perdedor") {
       return "text-red-600 dark:text-red-400";
-    } else if (result === "falso") {
+    } else if (result === "missed") {
       return "text-gray-500";
-    } else if (result === "parcial") {
+    } else if (result === "partial" || result === "parcial") {
       return "text-amber-500";
     }
     return "";
   };
   
   const formatResult = (result: string | number | undefined) => {
-    if (result === 1 || result === "win") return "Vencedor";
-    if (result === 0 || result === "loss") return "Perdedor";
-    if (result === "vencedor") return "Vencedor";
-    if (result === "perdedor") return "Perdedor";
-    if (result === "parcial") return "Parcial";
-    if (result === "falso") return "Falso";
+    if (result === 1 || result === "win" || result === "vencedor") return "Vencedor";
+    if (result === 0 || result === "loss" || result === "perdedor") return "Perdedor";
+    if (result === "partial" || result === "parcial") return "Parcial";
+    if (result === "missed") return "Falso";
     return result ? String(result) : "—";
   };
   
@@ -151,16 +172,16 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
             Perdedor
           </Badge>
         );
-      } else if (String(signal.result) === "parcial") {
+      } else if (String(signal.result) === "partial" || String(signal.result) === "parcial") {
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Parcial
           </Badge>
         );
-      } else if (String(signal.result) === "falso") {
+      } else if (String(signal.result) === "missed") {
         return (
-          <Badge variant="outline" className="flex items-center gap-1">
+          <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
             Falso
           </Badge>
@@ -214,25 +235,24 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
             >
               Entrada <SortIndicator field="entryPrice" />
             </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("status")}
-            >
-              Status <SortIndicator field="status" />
+            <TableHead>
+              Alvos (TP)
+            </TableHead>
+            <TableHead>
+              Stop Loss
             </TableHead>
             <TableHead 
               className="cursor-pointer"
-              onClick={() => handleSort("profit")}
+              onClick={() => handleSort("result")}
             >
-              Resultado <SortIndicator field="profit" />
+              Resultado <SortIndicator field="result" />
             </TableHead>
             <TableHead 
               className="cursor-pointer"
               onClick={() => handleSort("createdAt")}
             >
-              Data <SortIndicator field="createdAt" />
+              Data/Hora <SortIndicator field="createdAt" />
             </TableHead>
-            <TableHead>Alvos</TableHead>
             {onVerifySingleSignal && (
               <TableHead>Ação</TableHead>
             )}
@@ -243,8 +263,8 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
             <TableRow key={signal.id} className={
               signal.result === 1 || signal.result === "win" || String(signal.result) === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
               signal.result === 0 || signal.result === "loss" || String(signal.result) === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
-              String(signal.result) === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
-              String(signal.result) === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
+              String(signal.result) === "missed" ? "bg-gray-50 dark:bg-gray-900/20" :
+              String(signal.result) === "partial" || String(signal.result) === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
             }>
               <TableCell className="font-medium">
                 {signal.error ? (
@@ -285,39 +305,56 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
                   {signal.direction}
                 </Badge>
               </TableCell>
-              <TableCell>${signal.entryPrice?.toFixed(2)}</TableCell>
+              <TableCell>${formatPrice(signal.entryPrice)}</TableCell>
               <TableCell>
-                {getStatusBadge(signal)}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1 text-xs">
+                    <Badge 
+                      variant={signal.targets?.find(t => t.level === 1)?.hit ? "success" : "outline"} 
+                      className="text-xs"
+                    >
+                      TP1: ${formatPrice(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <Badge 
+                      variant={signal.targets?.find(t => t.level === 2)?.hit ? "success" : "outline"} 
+                      className="text-xs"
+                    >
+                      TP2: ${formatPrice(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs">
+                    <Badge 
+                      variant={signal.targets?.find(t => t.level === 3)?.hit ? "success" : "outline"} 
+                      className="text-xs"
+                    >
+                      TP3: ${formatPrice(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price)}
+                    </Badge>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-red-600 dark:text-red-400">
+                ${formatPrice(signal.stopLoss)}
               </TableCell>
               <TableCell className={getResultColor(signal.result)}>
-                {formatResult(signal.result)}
+                {getStatusBadge(signal)}
               </TableCell>
               <TableCell>
                 {formatDate(signal.createdAt, signal.verifiedAt)}
               </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
-                  {signal.targets?.map((target, idx) => (
-                    <Badge
-                      key={idx}
-                      variant={target.hit ? "success" : "outline"}
-                      className="text-xs"
-                    >
-                      TP{target.level}
-                    </Badge>
-                  ))}
-                </div>
-              </TableCell>
               {onVerifySingleSignal && (
                 <TableCell>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleVerifySignal(signal.id)}
-                    disabled={verifyingSignal === signal.id || signal.result !== undefined}
-                  >
-                    {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
-                  </Button>
+                  {signal.result === undefined ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleVerifySignal(signal.id)}
+                      disabled={verifyingSignal === signal.id}
+                    >
+                      {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
+                    </Button>
+                  ) : null}
                 </TableCell>
               )}
             </TableRow>
