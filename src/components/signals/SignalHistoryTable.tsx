@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import {
@@ -136,28 +137,28 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   
   const getStatusBadge = (signal: TradingSignal) => {
     if (signal.status === "COMPLETED") {
-      if (signal.result === 1 || signal.result === "win" || signal.result === "vencedor") {
+      if (signal.result === 1 || signal.result === "win" || String(signal.result) === "vencedor") {
         return (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Vencedor
           </Badge>
         );
-      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "perdedor") {
+      } else if (signal.result === 0 || signal.result === "loss" || String(signal.result) === "perdedor") {
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Perdedor
           </Badge>
         );
-      } else if (signal.result === "parcial") {
+      } else if (String(signal.result) === "parcial") {
         return (
-          <Badge variant="warning" className="flex items-center gap-1">
+          <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Parcial
           </Badge>
         );
-      } else if (signal.result === "falso") {
+      } else if (String(signal.result) === "falso") {
         return (
           <Badge variant="outline" className="flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
@@ -240,10 +241,10 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
         <TableBody>
           {sortedSignals.map((signal) => (
             <TableRow key={signal.id} className={
-              signal.result === 1 || signal.result === "win" || signal.result === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 || signal.result === "loss" || signal.result === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
-              signal.result === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
-              signal.result === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
+              signal.result === 1 || signal.result === "win" || String(signal.result) === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
+              signal.result === 0 || signal.result === "loss" || String(signal.result) === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
+              String(signal.result) === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
+              String(signal.result) === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
             }>
               <TableCell className="font-medium">
                 {signal.error ? (

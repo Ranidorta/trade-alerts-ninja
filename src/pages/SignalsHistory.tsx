@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { useToast } from "@/components/ui/use-toast";
@@ -37,7 +38,7 @@ import {
   analyzeSignalsHistory,
   updateSignalInHistory
 } from "@/lib/signalHistoryService";
-import { verifySingleSignal } from "@/lib/signalVerification";
+import { verifySingleSignal, verifyAllSignals } from "@/lib/signalVerification";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { 
