@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from services.evaluate_signals_pg import Signal
 from services.evaluate_signals_pg import Base
+from scheduler.evaluation_job import iniciar_avaliador_automatico
 
 load_dotenv()
 
@@ -224,5 +225,10 @@ def generate_signals():
 
 if __name__ == "__main__":
     print("🚀 Iniciando geração de sinais com modelo híbrido...")
+    
+    # Start the automatic signal evaluator
+    print("⏰ Iniciando avaliador automático de sinais (executa a cada 1 hora)")
+    iniciar_avaliador_automatico()
+    
     signals = generate_signals()
     print(json.dumps(signals, indent=2))
