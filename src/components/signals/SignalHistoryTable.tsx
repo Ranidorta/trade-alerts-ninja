@@ -140,7 +140,7 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
       return "text-green-600 dark:text-green-400";
     } else if (result === 0 || result === "loss" || result === "perdedor") {
       return "text-red-600 dark:text-red-400";
-    } else if (result === "missed") {
+    } else if (result === "missed" || result === "falso") {
       return "text-gray-500";
     } else if (result === "partial" || result === "parcial") {
       return "text-amber-500";
@@ -152,34 +152,34 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
     if (result === 1 || result === "win" || result === "vencedor") return "Vencedor";
     if (result === 0 || result === "loss" || result === "perdedor") return "Perdedor";
     if (result === "partial" || result === "parcial") return "Parcial";
-    if (result === "missed") return "Falso";
+    if (result === "missed" || result === "falso") return "Falso";
     return result ? String(result) : "—";
   };
   
   const getStatusBadge = (signal: TradingSignal) => {
     if (signal.status === "COMPLETED") {
-      if (signal.result === 1 || signal.result === "win" || String(signal.result) === "vencedor") {
+      if (signal.result === 1 || signal.result === "win" || signal.result === "vencedor") {
         return (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Vencedor
           </Badge>
         );
-      } else if (signal.result === 0 || signal.result === "loss" || String(signal.result) === "perdedor") {
+      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "perdedor") {
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Perdedor
           </Badge>
         );
-      } else if (String(signal.result) === "partial" || String(signal.result) === "parcial") {
+      } else if (signal.result === "partial" || signal.result === "parcial") {
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Parcial
           </Badge>
         );
-      } else if (String(signal.result) === "missed") {
+      } else if (signal.result === "missed" || signal.result === "falso") {
         return (
           <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
@@ -202,6 +202,12 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
         </Badge>
       );
     }
+  };
+  
+  const shouldShowVerifyButton = (signal: TradingSignal) => {
+    return signal.result === undefined && 
+           signal.status !== "COMPLETED" && 
+           signal.status !== "WAITING";
   };
   
   if (signals.length === 0) {
@@ -261,10 +267,10 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
         <TableBody>
           {sortedSignals.map((signal) => (
             <TableRow key={signal.id} className={
-              signal.result === 1 || signal.result === "win" || String(signal.result) === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 || signal.result === "loss" || String(signal.result) === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
-              String(signal.result) === "missed" ? "bg-gray-50 dark:bg-gray-900/20" :
-              String(signal.result) === "partial" || String(signal.result) === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
+              signal.result === 1 || signal.result === "win" || signal.result === "vencedor" ? "bg-green-50 dark:bg-green-950/20" : 
+              signal.result === 0 || signal.result === "loss" || signal.result === "perdedor" ? "bg-red-50 dark:bg-red-950/20" :
+              signal.result === "missed" || signal.result === "falso" ? "bg-gray-50 dark:bg-gray-900/20" :
+              signal.result === "partial" || signal.result === "parcial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
             }>
               <TableCell className="font-medium">
                 {signal.error ? (
@@ -345,7 +351,7 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
               </TableCell>
               {onVerifySingleSignal && (
                 <TableCell>
-                  {signal.result === undefined ? (
+                  {shouldShowVerifyButton(signal) ? (
                     <Button
                       size="sm"
                       variant="outline"

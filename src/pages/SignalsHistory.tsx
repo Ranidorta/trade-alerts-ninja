@@ -79,6 +79,7 @@ const SignalsHistory = () => {
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
   const [availableSymbols, setAvailableSymbols] = useState<string[]>([]);
+  const [refreshCountdown, setRefreshCountdown] = useState<number>(autoRefreshInterval);
 
   const getPerformanceData = () => {
     if (!performanceMetrics) return [];
@@ -87,7 +88,7 @@ const SignalsHistory = () => {
       { name: 'Vencedores', value: performanceMetrics.winningTrades, color: '#10b981' },
       { name: 'Parciais', value: performanceMetrics.winningTrades - performanceMetrics.losingTrades, color: '#f59e0b' },
       { name: 'Perdedores', value: performanceMetrics.losingTrades, color: '#ef4444' },
-      { name: 'Falsos', value: signals.filter(s => s.result === "missed").length, color: '#9ca3af' }
+      { name: 'Falsos', value: signals.filter(s => s.result === "missed" || s.result === "falso").length, color: '#9ca3af' }
     ];
   };
 
@@ -140,17 +141,33 @@ const SignalsHistory = () => {
 
   useEffect(() => {
     let intervalId: number | undefined;
+    let countdownId: number | undefined;
+    
+    const updateCountdown = () => {
+      setRefreshCountdown(prev => {
+        if (prev <= 1) {
+          return autoRefreshInterval;
+        }
+        return prev - 1;
+      });
+    };
     
     if (autoRefresh) {
       intervalId = window.setInterval(() => {
         console.log("Atualizando histórico automaticamente...");
         loadSignalsHistory();
+        setRefreshCountdown(autoRefreshInterval);
       }, autoRefreshInterval * 1000);
+      
+      countdownId = window.setInterval(updateCountdown, 1000);
     }
     
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
+      }
+      if (countdownId) {
+        clearInterval(countdownId);
       }
     };
   }, [autoRefresh, autoRefreshInterval, loadSignalsHistory]);
@@ -162,10 +179,13 @@ const SignalsHistory = () => {
     });
     
     await loadSignalsHistory();
+    setRefreshCountdown(autoRefreshInterval);
   };
 
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
+    setRefreshCountdown(autoRefreshInterval);
+    
     toast({
       title: autoRefresh ? "Atualização automática desativada" : "Atualização automática ativada",
       description: autoRefresh 
@@ -370,7 +390,7 @@ const SignalsHistory = () => {
   const filteredSignals = getFilteredSignals();
   const activeFiltersCount = [
     searchTerm, 
-    symbolFilter, 
+    symbolFilter !== "all", 
     resultFilter !== "all", 
     dateFrom, 
     dateTo
@@ -455,9 +475,14 @@ const SignalsHistory = () => {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 text-primary" />
-                <p>
-                  Atualização automática ativa. Próxima atualização em {autoRefreshInterval} segundos.
-                </p>
+                <div className="flex items-center">
+                  <p className="mr-2">
+                    Atualização automática ativa.
+                  </p>
+                  <span className="text-sm font-medium bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                    Próxima atualização em {refreshCountdown}s
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>
