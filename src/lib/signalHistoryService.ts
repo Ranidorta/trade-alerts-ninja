@@ -1,6 +1,6 @@
 import { getSignalHistory } from "./signal-storage";
 import { TradingSignal } from "./types";
-import { verifySignal } from "./signalVerification";
+import { verifyAllSignals } from "./signalVerification";
 
 /**
  * Analyzes signal history to generate performance metrics

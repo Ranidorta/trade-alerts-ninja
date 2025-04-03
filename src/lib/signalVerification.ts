@@ -1,5 +1,6 @@
+
 import { TradingSignal } from "@/lib/types";
-import { getSignalHistory, saveSignalHistory } from "@/lib/signal-storage";
+import { getSignalHistory, saveSignalsToHistory } from "@/lib/signal-storage";
 import { verifyTradingSignal } from "./firebaseFunctions";
 
 /**
@@ -75,7 +76,7 @@ export async function verifyAllSignals(signalsToVerify?: TradingSignal[]): Promi
     });
     
     // Save the updated signals to local storage
-    saveSignalHistory(updatedSignals);
+    saveSignalsToHistory(updatedSignals);
     
     return updatedSignals;
   } catch (error) {
