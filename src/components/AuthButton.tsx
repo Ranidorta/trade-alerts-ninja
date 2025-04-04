@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { User, LogOut, Crown, ShieldCheck } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 const AuthButton = () => {
   const { user, logout, isLoading, hasActiveSubscription, isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -56,6 +58,13 @@ const AuthButton = () => {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="cursor-pointer flex items-center gap-2"
+            onClick={() => navigate('/profile')}
+          >
+            <User size={16} />
+            <span>Meu Perfil</span>
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer flex items-center gap-2 text-destructive"
             onClick={() => logout()}

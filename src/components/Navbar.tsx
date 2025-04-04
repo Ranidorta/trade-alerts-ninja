@@ -10,7 +10,6 @@ import {
   LineChart,
   Menu,
   X,
-  User
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -40,11 +39,6 @@ const Navbar = () => {
       path: "/market", 
       name: "Mercado", 
       icon: <Presentation size={18} /> 
-    },
-    {
-      path: "/profile",
-      name: "Meu Perfil",
-      icon: <User size={18} />
     }
   ];
 
