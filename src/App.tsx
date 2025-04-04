@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import PerformanceDashboard from "./pages/PerformanceDashboard";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
+import UserProfile from "./pages/UserProfile";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
@@ -62,6 +63,11 @@ const AppRoutes = () => {
       <Route path="/market" element={
         <ProtectedRoute>
           <CryptoMarket />
+        </ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <UserProfile />
         </ProtectedRoute>
       } />
       

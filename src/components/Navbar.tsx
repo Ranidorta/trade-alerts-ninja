@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -8,7 +9,8 @@ import {
   Clock,
   LineChart,
   Menu,
-  X
+  X,
+  User
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -39,6 +41,11 @@ const Navbar = () => {
       name: "Mercado", 
       icon: <Presentation size={18} /> 
     },
+    {
+      path: "/profile",
+      name: "Meu Perfil",
+      icon: <User size={18} />
+    }
   ];
 
   // For non-authenticated users, don't show any links
