@@ -88,7 +88,7 @@ const SignalsHistory = () => {
       { name: 'Vencedores', value: performanceMetrics.winningTrades, color: '#10b981' },
       { name: 'Parciais', value: performanceMetrics.winningTrades - performanceMetrics.losingTrades, color: '#f59e0b' },
       { name: 'Perdedores', value: performanceMetrics.losingTrades, color: '#ef4444' },
-      { name: 'Falsos', value: signals.filter(s => s.result === "missed" || s.result === "falso").length, color: '#9ca3af' }
+      { name: 'Falsos', value: signals.filter(s => s.result === "missed").length, color: '#9ca3af' }
     ];
   };
 
