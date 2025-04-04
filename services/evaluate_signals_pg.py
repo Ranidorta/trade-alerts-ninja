@@ -66,13 +66,13 @@ def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
             if high >= sl: hit_sl = True; break
 
     if hit_sl:
-        return "perdedor"
+        return "loss"    # Changed from "perdedor" to "loss"
     elif hit_tp3:
-        return "vencedor"
+        return "win"     # Changed from "vencedor" to "win"
     elif hit_tp1:
-        return "parcial"
+        return "partial" # Changed from "parcial" to "partial"
     else:
-        return "falso"  # Atualizado: nenhum alvo ou stop foi atingido
+        return "missed"  # Changed from "falso" to "missed"
 
 def main():
     # Create tables if they don't exist
