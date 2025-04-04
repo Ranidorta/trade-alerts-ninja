@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -67,11 +67,46 @@ const UserProfile = () => {
     );
   }
 
-  const handleCancelSubscription = () => {
-    toast({
-      title: "Aviso",
-      description: "Funcionalidade de cancelamento ainda não implementada.",
-    });
+  const handleCancelSubscription = async () => {
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        toast({
+          variant: "destructive",
+          title: "Erro",
+          description: "Usuário não encontrado."
+        });
+        return;
+      }
+      
+      const userRef = doc(db, "users", currentUser.uid);
+      
+      // Update the subscription status in Firestore
+      await updateDoc(userRef, {
+        assinaturaAtiva: false
+      });
+      
+      // Update local state
+      setUserData({
+        ...userData,
+        assinaturaAtiva: false
+      });
+      
+      // Show success message
+      toast({
+        title: "Sucesso",
+        description: "Sua assinatura foi cancelada com sucesso.",
+      });
+    } catch (error) {
+      console.error("Erro ao cancelar assinatura:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível cancelar sua assinatura. Tente novamente mais tarde."
+      });
+    }
   };
 
   const handleEditProfile = () => {
