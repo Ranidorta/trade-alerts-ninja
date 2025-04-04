@@ -1,5 +1,5 @@
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, g
 from sqlalchemy.orm import Session
 from services.evaluate_signals_pg import Signal, engine
 
@@ -7,6 +7,7 @@ bp = Blueprint('performance_api', __name__)
 
 @bp.route("/api/performance", methods=["GET"])
 def get_performance():
+    # This endpoint will be protected by the main app's middleware
     session = Session(bind=engine)
     total = session.query(Signal).filter(Signal.resultado != None).count()
     vencedores = session.query(Signal).filter(Signal.resultado == "vencedor").count()

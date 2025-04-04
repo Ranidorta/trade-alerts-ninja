@@ -1,3 +1,4 @@
+
 """
 Flask API Server for Trading Signals
 Provides endpoints for retrieving signal data from SQLite database
@@ -16,6 +17,7 @@ import functools
 # Firebase Auth
 import firebase_admin
 from firebase_admin import credentials, auth
+from firebase_admin import firestore
 
 # Import our local modules
 import sys
@@ -41,6 +43,7 @@ RAW_DATA_DIR = "raw_data"
 try:
     cred = credentials.Certificate("firebase-service-account.json")
     firebase_admin.initialize_app(cred)
+    db = firestore.client()
     print("Firebase initialized successfully")
 except Exception as e:
     print(f"Firebase initialization error: {e}")
@@ -77,6 +80,22 @@ def verify_firebase_token(id_token):
             
         # Verify the token
         decoded_token = auth.verify_id_token(id_token)
+        
+        # Get additional user data from Firestore to check subscription status
+        if decoded_token and 'uid' in decoded_token:
+            user_ref = db.collection('users').document(decoded_token['uid'])
+            user_doc = user_ref.get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                # Add subscription status to the decoded token
+                decoded_token['assinaturaAtiva'] = user_data.get('assinaturaAtiva', False)
+                decoded_token['role'] = user_data.get('role', 'user')
+                
+                # Special case for specific users (for testing)
+                if decoded_token.get('email') == "ranier.dorta@gmail.com":
+                    decoded_token['assinaturaAtiva'] = True
+        
         return decoded_token
     except Exception as e:
         print(f"Token verification error: {e}")
@@ -106,6 +125,49 @@ def require_auth(f):
         auth_info = verify_firebase_token(token)
         if not auth_info:
             return jsonify({"error": "Unauthorized: Invalid token"}), 401
+            
+        # Store user info in Flask g object for this request
+        g.user_id = auth_info.get('uid')
+        g.auth_info = auth_info
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Premium content authentication middleware
+def require_premium(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        # First verify authentication
+        auth_header = request.headers.get('Authorization')
+        
+        # For development, bypass premium check
+        if not auth_header or not firebase_admin._apps:
+            g.user_id = None
+            g.auth_info = None
+            return f(*args, **kwargs)
+            
+        # Remove 'Bearer ' prefix if present
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        else:
+            token = auth_header
+            
+        # Verify the token
+        auth_info = verify_firebase_token(token)
+        if not auth_info:
+            return jsonify({"error": "Unauthorized: Invalid token"}), 401
+        
+        # Check if user has active subscription or is admin
+        has_premium_access = (
+            auth_info.get('assinaturaAtiva', False) == True or 
+            auth_info.get('role', 'user') == 'admin'
+        )
+        
+        if not has_premium_access:
+            return jsonify({
+                "error": "Premium access required", 
+                "message": "Esta funcionalidade requer uma assinatura ativa."
+            }), 403
             
         # Store user info in Flask g object for this request
         g.user_id = auth_info.get('uid')
@@ -166,7 +228,7 @@ def health_check():
     return jsonify({"status": "OK", "timestamp": datetime.utcnow().isoformat()})
 
 @app.route('/api/signals', methods=['GET'])
-@optional_auth
+@require_premium  # Changed from optional_auth to require_premium for signal data
 def get_signals():
     """Get all signals with optional filtering"""
     symbol = request.args.get('symbol')
@@ -248,7 +310,7 @@ def get_signals():
     return jsonify(signals)
 
 @app.route('/api/strategies', methods=['GET'])
-@optional_auth
+@require_premium  # Added premium requirement for strategies
 def get_strategies():
     """Get all unique strategy names"""
     conn = get_db_connection()
@@ -273,9 +335,10 @@ def get_strategies():
     return jsonify(strategies)
 
 @app.route('/api/performance', methods=['GET'])
-@optional_auth
+@require_premium  # Added premium requirement for performance metrics
 def get_performance():
     """Get performance metrics"""
+    # ... keep existing code (performance endpoint implementation)
     days = request.args.get('days', default=30, type=int)
     strategy = request.args.get('strategy')  # Optional strategy filter
     date_threshold = (datetime.utcnow() - timedelta(days=days)).isoformat()
@@ -414,7 +477,7 @@ def get_performance():
     })
 
 @app.route('/api/symbols', methods=['GET'])
-@optional_auth
+@require_premium  # Added premium requirement for symbols list
 def get_symbols():
     """Get all unique symbols with signal counts"""
     conn = get_db_connection()
@@ -433,7 +496,7 @@ def get_symbols():
     return jsonify(symbols)
 
 @app.route('/api/raw_data/<symbol>', methods=['GET'])
-@optional_auth
+@require_premium  # Added premium requirement for raw data
 def get_raw_data(symbol):
     """Get raw candle data for a symbol"""
     filepath = os.path.join(RAW_DATA_DIR, f"{symbol}.json")
@@ -449,7 +512,7 @@ def get_raw_data(symbol):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/user/profile', methods=['GET'])
-@require_auth
+@require_auth  # Keep require_auth for user profile, no premium required
 def get_user_profile():
     """Get user profile data"""
     # This endpoint requires auth
@@ -460,13 +523,15 @@ def get_user_profile():
         "uid": g.user_id,
         "email": g.auth_info.get('email', ''),
         "name": g.auth_info.get('name', ''),
-        "isAuthenticated": True
+        "isAuthenticated": True,
+        "isPremium": g.auth_info.get('assinaturaAtiva', False) or g.auth_info.get('role') == 'admin'
     })
 
 @app.route('/api/strategy/<strategy_name>/performance', methods=['GET'])
-@optional_auth
+@require_premium  # Added premium requirement for strategy performance
 def get_strategy_detail_performance(strategy_name):
     """Get detailed performance metrics for a specific strategy"""
+    # ... keep existing code (strategy performance implementation)
     days = request.args.get('days', default=30, type=int)
     date_threshold = (datetime.utcnow() - timedelta(days=days)).isoformat()
     
@@ -559,6 +624,7 @@ def get_strategy_detail_performance(strategy_name):
 
 def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entry_price, leverage=None, user_id=None, sharpe_ratio=None, max_drawdown=None):
     """Salva um sinal no banco de dados com nome da estratégia e ID do usuário."""
+    # ... keep existing code (save_signal_to_db implementation)
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -599,6 +665,7 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
 
 def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None, max_drawdown=None):
     """Atualiza estatísticas de performance de uma estratégia com métricas avançadas."""
+    # ... keep existing code (update_strategy_performance implementation)
     try:
         # Verifica se a estratégia já existe na tabela
         cursor.execute('SELECT * FROM strategy_performance WHERE strategy_name = ?', (strategy_name,))

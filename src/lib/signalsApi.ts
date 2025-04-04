@@ -16,7 +16,7 @@ const getAuthToken = async (): Promise<string | null> => {
     if (firebaseObj && firebaseObj.auth) {
       const currentUser = firebaseObj.auth().currentUser;
       if (currentUser) {
-        return await currentUser.getIdToken();
+        return await currentUser.getIdToken(true); // Force token refresh
       }
     }
     
@@ -53,6 +53,28 @@ const createFetchOptions = async (): Promise<RequestInit> => {
 };
 
 /**
+ * Handles API responses and checks for authentication/subscription errors
+ * @param response The fetch response object
+ * @returns The parsed JSON response or throws appropriate error
+ */
+const handleApiResponse = async (response: Response) => {
+  if (response.ok) {
+    return await response.json();
+  }
+  
+  // Handle different error cases
+  if (response.status === 401) {
+    throw new Error("Unauthorized: Please log in to access this content");
+  } else if (response.status === 403) {
+    // This is specifically for premium access denied
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Premium access required for this content");
+  } else {
+    throw new Error(`API error: ${response.status}`);
+  }
+};
+
+/**
  * Fetches trading signals from the API
  * @param params Optional query parameters
  * @returns Promise with trading signals
@@ -80,11 +102,7 @@ export const fetchSignals = async (params?: {
     console.log(`Fetching signals from: ${API_BASE_URL}/signals${queryString}`);
     const response = await fetch(`${API_BASE_URL}/signals${queryString}`, options);
     
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     
     // Map the API response to match our TradingSignal interface
     const mappedData = data.map((signal: any) => ({
@@ -115,14 +133,13 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   const days = parseInt(daysString, 10);
   
   try {
+    // Get fetch options with auth token
+    const options = await createFetchOptions();
+    
     console.log(`Fetching performance data for ${days} days from: ${API_BASE_URL}/performance?days=${days}`);
-    const response = await fetch(`${API_BASE_URL}/performance?days=${days}`);
+    const response = await fetch(`${API_BASE_URL}/performance?days=${days}`, options);
     
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     console.log("Performance metrics fetched:", data);
     return data;
   } catch (error) {
@@ -143,11 +160,7 @@ export const fetchSymbols = async (): Promise<string[]> => {
     console.log(`Fetching symbols from: ${API_BASE_URL}/symbols`);
     const response = await fetch(`${API_BASE_URL}/symbols`, options);
     
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     console.log("Symbols fetched:", data.length);
     return data;
   } catch (error) {
@@ -168,11 +181,7 @@ export const fetchStrategies = async (): Promise<string[]> => {
     console.log(`Fetching strategies from: ${API_BASE_URL}/strategies`);
     const response = await fetch(`${API_BASE_URL}/strategies`, options);
     
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await handleApiResponse(response);
     console.log("Strategies fetched:", data.length);
     return data;
   } catch (error) {
@@ -188,7 +197,8 @@ export const fetchStrategies = async (): Promise<string[]> => {
  */
 export const fetchRawData = async (symbol: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/raw_data/${symbol}`);
+    const options = await createFetchOptions();
+    const response = await fetch(`${API_BASE_URL}/raw_data/${symbol}`, options);
     
     if (!response.ok) {
       if (response.status === 404) {
@@ -221,13 +231,10 @@ export const fetchAvailableSymbols = async (): Promise<string[]> => {
         ? `${API_BASE_URL}/available_symbols?cursor=${nextCursor}` 
         : `${API_BASE_URL}/available_symbols`;
         
-      const response = await fetch(url);
+      const options = await createFetchOptions();
+      const response = await fetch(url, options);
       
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await handleApiResponse(response);
       allSymbols = [...allSymbols, ...data.symbols];
       nextCursor = data.nextCursor;
       

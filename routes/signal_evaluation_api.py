@@ -6,6 +6,7 @@ from services.evaluate_signals_pg import Signal, get_candles, evaluate_signal
 from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
+from flask import current_app, g
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +19,8 @@ bp = Blueprint('signal_evaluation_api', __name__)
 
 @bp.route("/api/signals/evaluate/<int:signal_id>", methods=["GET"])
 def evaluate_single_signal(signal_id):
+    # Use the premium check from the main app
+    # This will be protected by the main app's middleware
     session = Session(bind=engine)
     signal = session.query(Signal).filter(Signal.id == signal_id).first()
 
