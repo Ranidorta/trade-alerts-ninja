@@ -4,6 +4,7 @@ import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
 import SignalCard from "@/components/SignalCard";
 import NinjaLogo from "@/components/NinjaLogo";
+import PricingSection from "@/components/PricingSection";
 import { Button } from "@/components/ui/button";
 import { 
   Bell, 
@@ -107,6 +108,9 @@ const Index = () => {
           </div>
         </div>
       </section>
+      
+      {/* Pricing Section */}
+      <PricingSection />
       
       {/* Statistics Section */}
       <section className="py-16 bg-slate-50 dark:bg-slate-900/50">
