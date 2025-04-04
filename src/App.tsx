@@ -15,6 +15,7 @@ import PerformanceDashboard from "./pages/PerformanceDashboard";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import UserProfile from "./pages/UserProfile";
+import Checkout from "./pages/Checkout";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
@@ -68,6 +69,11 @@ const AppRoutes = () => {
       <Route path="/profile" element={
         <ProtectedRoute>
           <UserProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/checkout" element={
+        <ProtectedRoute>
+          <Checkout />
         </ProtectedRoute>
       } />
       

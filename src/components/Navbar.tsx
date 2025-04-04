@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   LineChart,
   Menu,
   X,
+  Crown,
 } from "lucide-react";
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,7 +22,8 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const isMobile = useIsMobile();
   const location = useLocation();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, hasActiveSubscription } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -89,6 +91,22 @@ const Navbar = () => {
                         <span>{name}</span>
                       </Link>
                     ))}
+                    
+                    {/* Botão de assinatura premium para mobile */}
+                    {user && !hasActiveSubscription() && (
+                      <Button 
+                        onClick={() => {
+                          navigate("/checkout");
+                          setIsMenuOpen(false);
+                        }}
+                        variant="success" 
+                        className="w-full mt-2 flex items-center justify-center gap-2"
+                      >
+                        <Crown size={16} />
+                        <span>Assinar Plano Premium</span>
+                      </Button>
+                    )}
+                    
                     <div className="pt-2 flex justify-between items-center border-t border-border">
                       <AuthButton />
                       <ThemeToggle />
@@ -114,6 +132,19 @@ const Navbar = () => {
                   <span>{name}</span>
                 </Link>
               ))}
+              
+              {/* Botão de assinatura premium para desktop */}
+              {user && !hasActiveSubscription() && (
+                <Button 
+                  onClick={() => navigate("/checkout")}
+                  variant="success"
+                  size="sm"
+                  className="ml-1 flex items-center gap-1"
+                >
+                  <Crown size={14} />
+                  <span>Assinar Premium</span>
+                </Button>
+              )}
             </div>
           )}
 
