@@ -51,7 +51,7 @@ const ProtectedPremiumRoute = ({
     }
   } else {
     // Premium route - requires either admin role or active subscription
-    hasPermission = isAdmin() || hasActiveSubscription();
+    hasPermission = hasActiveSubscription();
     if (!hasPermission) {
       toast({
         variant: "destructive",
@@ -63,7 +63,7 @@ const ProtectedPremiumRoute = ({
   
   // If no permission, redirect to dashboard
   if (!hasPermission) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/checkout" replace />;
   }
   
   // If user has permission, render the children

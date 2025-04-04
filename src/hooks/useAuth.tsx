@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { 
   User, 
@@ -11,7 +10,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '@/lib/types';
 import { setAuthToken, clearAuthToken } from '@/lib/signalsApi';
 import { useToast } from '@/components/ui/use-toast';
@@ -31,6 +30,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<void>;
   hasActiveSubscription: () => boolean;
   isAdmin: () => boolean;
+  updateUserSubscription: (isActive: boolean) => Promise<void>;
 }
 
 // Create context with default values
@@ -44,6 +44,7 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => {},
   hasActiveSubscription: () => false,
   isAdmin: () => false,
+  updateUserSubscription: async () => {},
 });
 
 // Hook to use the auth context
@@ -75,7 +76,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userSnapshot = await getDoc(userRef);
       
       if (userSnapshot.exists()) {
-        return userSnapshot.data() as UserRole;
+        const userData = userSnapshot.data() as UserRole;
+        
+        // Special case for testing
+        if (user?.email === "ranier.dorta@gmail.com") {
+          userData.assinaturaAtiva = true;
+        }
+        
+        return userData;
       } else {
         // If user document doesn't exist, create it with default values
         const defaultUserRole: UserRole = {
@@ -148,6 +156,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return role;
     }
     return 'user'; // Default role if invalid
+  };
+
+  // Helper function to update user subscription status
+  const updateUserSubscription = async (isActive: boolean) => {
+    if (!user?.uid) return;
+    
+    try {
+      setIsLoading(true);
+      const userRef = doc(db, "users", user.uid);
+      
+      await updateDoc(userRef, {
+        assinaturaAtiva: isActive
+      });
+      
+      // Update local user state
+      setUser(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          assinaturaAtiva: isActive
+        };
+      });
+      
+      // Update localStorage
+      const storedUser = localStorage.getItem('trading-ninja-user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        parsedUser.assinaturaAtiva = isActive;
+        localStorage.setItem('trading-ninja-user', JSON.stringify(parsedUser));
+      }
+      
+      toast({
+        title: isActive ? "Assinatura ativada" : "Assinatura desativada",
+        description: isActive 
+          ? "Sua assinatura premium foi ativada com sucesso!" 
+          : "Sua assinatura premium foi cancelada.",
+      });
+    } catch (error) {
+      console.error("Error updating subscription:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível atualizar o status da assinatura.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const login = async (email: string, password: string) => {
@@ -262,7 +317,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   // Helper function to check if user has an active subscription
   const hasActiveSubscription = () => {
-    return user?.assinaturaAtiva === true;
+    return user?.assinaturaAtiva === true || user?.role === 'admin';
   };
   
   // Helper function to check if user is admin
@@ -281,7 +336,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         logout,
         register,
         hasActiveSubscription,
-        isAdmin
+        isAdmin,
+        updateUserSubscription
       }}
     >
       {children}

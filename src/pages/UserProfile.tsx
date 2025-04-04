@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -30,7 +29,7 @@ const UserProfile = () => {
     cpf: ""
   });
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, updateUserSubscription } = useAuth();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -96,16 +95,13 @@ const UserProfile = () => {
       
       const userRef = doc(db, "users", currentUser.uid);
       
-      // Only update fields that should be stored in Firestore
       await updateDoc(userRef, {
         phone: formData.phone,
         cpf: formData.cpf
       });
       
-      // Update local state
       setUserData(formData);
       
-      // Exit edit mode
       setIsEditing(false);
       
       toast({
@@ -129,35 +125,11 @@ const UserProfile = () => {
 
   const handleCancelSubscription = async () => {
     try {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
+      await updateUserSubscription(false);
       
-      if (!currentUser) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "Usuário não encontrado."
-        });
-        return;
-      }
-      
-      const userRef = doc(db, "users", currentUser.uid);
-      
-      // Update the subscription status in Firestore
-      await updateDoc(userRef, {
-        assinaturaAtiva: false
-      });
-      
-      // Update local state
       setUserData({
         ...userData as UserData,
         assinaturaAtiva: false
-      });
-      
-      // Show success message
-      toast({
-        title: "Sucesso",
-        description: "Sua assinatura foi cancelada com sucesso.",
       });
     } catch (error) {
       console.error("Erro ao cancelar assinatura:", error);
@@ -225,7 +197,6 @@ const UserProfile = () => {
 
       <div className="bg-card border border-border rounded-xl shadow-sm p-6">
         <div className="space-y-6">
-          {/* Dados Pessoais */}
           <div>
             <h2 className="text-xl font-semibold mb-4">Dados Pessoais</h2>
             <div className="space-y-4">
@@ -298,20 +269,19 @@ const UserProfile = () => {
             </div>
           </div>
 
-          {/* Dados da Assinatura */}
           <div className="pt-4 border-t border-border">
             <h2 className="text-xl font-semibold mb-4">Dados da Assinatura</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Plano</h4>
                 <p className="text-lg">
-                  {userData?.role === 'admin' ? "Admin" : userData?.assinaturaAtiva || user?.assinaturaAtiva ? "Premium" : "Básico"}
+                  {userData?.role === 'admin' ? "Admin" : userData?.assinaturaAtiva ? "Premium" : "Básico"}
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
                 <p className="text-lg">
-                  {userData?.assinaturaAtiva || user?.assinaturaAtiva ? 
+                  {userData?.assinaturaAtiva ? 
                     <span className="text-green-600">Ativa</span> : 
                     <span className="text-yellow-600">Inativa</span>}
                 </p>
@@ -320,7 +290,7 @@ const UserProfile = () => {
           </div>
 
           <div className="pt-6 flex flex-col sm:flex-row gap-4">
-            {(userData?.assinaturaAtiva || user?.assinaturaAtiva) && (
+            {userData?.assinaturaAtiva && (
               <Button 
                 variant="outline" 
                 className="flex-1 border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950 dark:border-red-700 dark:text-red-500"
