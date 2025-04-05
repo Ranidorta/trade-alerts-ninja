@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { 
   User, 
   onAuthStateChanged, 
@@ -33,8 +33,7 @@ interface AuthContextType {
   updateUserSubscription: (isActive: boolean) => Promise<void>;
 }
 
-const USER_STORAGE_KEY = 'trading-ninja-user';
-
+// Create context with default values
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
@@ -48,33 +47,18 @@ const AuthContext = createContext<AuthContextType>({
   updateUserSubscription: async () => {},
 });
 
+// Hook to use the auth context
 export const useAuth = () => useContext(AuthContext);
 
+// Auth provider component
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<(UserProfile & Partial<UserRole>) | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        setIsLoading(false);
-        
-        if (parsedUser.token) {
-          setAuthToken(parsedUser.token);
-        }
-      } catch (err) {
-        console.error("Error parsing stored user:", err);
-        localStorage.removeItem(USER_STORAGE_KEY);
-      }
-    }
-  }, []);
-
-  const formatUser = useCallback((firebaseUser: User): UserProfile => {
+  // Convert Firebase user to UserProfile
+  const formatUser = (firebaseUser: User): UserProfile => {
     return {
       uid: firebaseUser.uid,
       email: firebaseUser.email || '',
@@ -83,9 +67,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       token: '',
       photoURL: firebaseUser.photoURL
     };
-  }, []);
+  };
 
-  const fetchUserData = useCallback(async (uid: string) => {
+  // Fetch user role and subscription data from Firestore
+  const fetchUserData = async (uid: string) => {
     try {
       const userRef = doc(db, "users", uid);
       const userSnapshot = await getDoc(userRef);
@@ -93,12 +78,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (userSnapshot.exists()) {
         const userData = userSnapshot.data() as UserRole;
         
+        // Special case for testing
         if (user?.email === "ranier.dorta@gmail.com") {
           userData.assinaturaAtiva = true;
         }
         
         return userData;
       } else {
+        // If user document doesn't exist, create it with default values
         const defaultUserRole: UserRole = {
           role: 'user',
           assinaturaAtiva: false
@@ -111,37 +98,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.error("Error fetching user data:", error);
       return { role: 'user', assinaturaAtiva: false };
     }
-  }, [user?.email]);
-
-  const validateRole = useCallback((role: any): 'user' | 'admin' | 'premium' => {
-    if (role === 'admin' || role === 'premium' || role === 'user') {
-      return role;
-    }
-    return 'user';
-  }, []);
+  };
 
   useEffect(() => {
+    // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setIsLoading(true);
       try {
         if (firebaseUser) {
+          // User is signed in
           const token = await firebaseUser.getIdToken();
           const formattedUser = formatUser(firebaseUser);
           formattedUser.token = token;
           
-          setAuthToken(token);
-          
-          const initialEnrichedUser: UserProfile & Partial<UserRole> = {
-            ...formattedUser,
-            ...(user || {})
-          };
-          
-          setUser(initialEnrichedUser);
-          setIsLoading(false);
-          
+          // Fetch additional user data from Firestore
           const userData = await fetchUserData(firebaseUser.uid);
           
+          // Validate role to ensure it's one of the allowed values
           const validRole = validateRole(userData.role);
           
+          // Combine auth user with Firestore data
           const enrichedUser: UserProfile & Partial<UserRole> = {
             ...formattedUser,
             role: validRole,
@@ -149,27 +125,85 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
           
           setUser(enrichedUser);
+          setAuthToken(token);
           
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(enrichedUser));
+          // Store in localStorage for persistence
+          localStorage.setItem('trading-ninja-user', JSON.stringify(enrichedUser));
         } else {
+          // User is signed out
           setUser(null);
           clearAuthToken();
-          localStorage.removeItem(USER_STORAGE_KEY);
-          setIsLoading(false);
+          localStorage.removeItem('trading-ninja-user');
         }
       } catch (error) {
         console.error("Auth state change error:", error);
         setUser(null);
         clearAuthToken();
-        localStorage.removeItem(USER_STORAGE_KEY);
-        setIsLoading(false);
+        localStorage.removeItem('trading-ninja-user');
       } finally {
+        setIsLoading(false);
         setIsInitialized(true);
       }
     });
 
+    // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, [formatUser, fetchUserData, validateRole, user]);
+  }, []);
+
+  // Helper function to validate role
+  const validateRole = (role: any): 'user' | 'admin' | 'premium' => {
+    if (role === 'admin' || role === 'premium' || role === 'user') {
+      return role;
+    }
+    return 'user'; // Default role if invalid
+  };
+
+  // Helper function to update user subscription status
+  const updateUserSubscription = async (isActive: boolean) => {
+    if (!user?.uid) return;
+    
+    try {
+      setIsLoading(true);
+      const userRef = doc(db, "users", user.uid);
+      
+      await updateDoc(userRef, {
+        assinaturaAtiva: isActive
+      });
+      
+      // Update local user state
+      setUser(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          assinaturaAtiva: isActive
+        };
+      });
+      
+      // Update localStorage
+      const storedUser = localStorage.getItem('trading-ninja-user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        parsedUser.assinaturaAtiva = isActive;
+        localStorage.setItem('trading-ninja-user', JSON.stringify(parsedUser));
+      }
+      
+      toast({
+        title: isActive ? "Assinatura ativada" : "Assinatura desativada",
+        description: isActive 
+          ? "Sua assinatura premium foi ativada com sucesso!" 
+          : "Sua assinatura premium foi cancelada.",
+      });
+    } catch (error) {
+      console.error("Error updating subscription:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível atualizar o status da assinatura.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string) => {
     try {
@@ -210,7 +244,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       toast({
         variant: "destructive",
-        title: "Erro de autenticaç��o",
+        title: "Erro de autenticação",
         description: error.message || "Não foi possível fazer login com o Google. Tente novamente.",
       });
       
@@ -252,8 +286,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         throw new Error('A senha precisa ter pelo menos 6 caracteres.');
       }
       
+      // Create new user
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
+      // Update profile with name
       if (userCredential.user) {
         await updateProfile(userCredential.user, {
           displayName: name
@@ -278,57 +314,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   };
-
+  
+  // Helper function to check if user has an active subscription
   const hasActiveSubscription = () => {
     return user?.assinaturaAtiva === true || user?.role === 'admin';
   };
-
+  
+  // Helper function to check if user is admin
   const isAdmin = () => {
     return user?.role === 'admin';
-  };
-
-  const updateUserSubscription = async (isActive: boolean) => {
-    if (!user?.uid) return;
-    
-    try {
-      setIsLoading(true);
-      const userRef = doc(db, "users", user.uid);
-      
-      await updateDoc(userRef, {
-        assinaturaAtiva: isActive
-      });
-      
-      setUser(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          assinaturaAtiva: isActive
-        };
-      });
-      
-      const storedUser = localStorage.getItem('trading-ninja-user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        parsedUser.assinaturaAtiva = isActive;
-        localStorage.setItem('trading-ninja-user', JSON.stringify(parsedUser));
-      }
-      
-      toast({
-        title: isActive ? "Assinatura ativada" : "Assinatura desativada",
-        description: isActive 
-          ? "Sua assinatura premium foi ativada com sucesso!" 
-          : "Sua assinatura premium foi cancelada.",
-      });
-    } catch (error) {
-      console.error("Error updating subscription:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Não foi possível atualizar o status da assinatura.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (
