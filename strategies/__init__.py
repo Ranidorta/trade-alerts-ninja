@@ -1,48 +1,39 @@
 
-"""
-Strategy package initialization file.
-Provides a factory method to get strategy instances by name.
-"""
-
-from strategies.mean_reversion_enhanced import ClassicStrategy, strategy_classic
-
-# Dictionary mapping strategy names to their implementation classes
-STRATEGY_CLASSES = {
-    "CLASSIC": ClassicStrategy,
-}
-
-# Dictionary mapping strategy names to their row-based functions
+# Available strategies
 STRATEGY_FUNCTIONS = {
-    "CLASSIC": strategy_classic,
+    "CLASSIC": "generate_classic_signal",
+    "RSI_MACD": "strategy_rsi_macd",
+    "BREAKOUT_ATR": "strategy_breakout_atr",
+    "TREND_ADX": "strategy_trend_adx",
+    "BOLLINGER": "strategy_bollinger_bands"
 }
 
-def get_strategy(name: str, params: dict = None):
-    """
-    Factory function to get a strategy instance by name.
+def get_strategy_function(strategy_name):
+    """Get strategy function by name."""
+    if strategy_name not in STRATEGY_FUNCTIONS:
+        raise ValueError(f"Strategy '{strategy_name}' not found")
     
-    Args:
-        name: Strategy name
-        params: Strategy parameters
-        
-    Returns:
-        TradingStrategy instance
-    """
-    if name not in STRATEGY_CLASSES:
-        raise ValueError(f"Strategy {name} not found. Available strategies: {list(STRATEGY_CLASSES.keys())}")
-    
-    return STRATEGY_CLASSES[name](params)
+    # Import the appropriate module
+    if strategy_name == "BOLLINGER":
+        from strategies.bollinger_bands import strategy_bollinger_bands
+        return strategy_bollinger_bands
+    else:
+        from trade_alerts_upgrade import (
+            generate_classic_signal, 
+            strategy_rsi_macd,
+            strategy_breakout_atr,
+            strategy_trend_adx
+        )
+        function_name = STRATEGY_FUNCTIONS[strategy_name]
+        return locals()[function_name]
 
-def get_strategy_function(name: str):
-    """
-    Factory function to get a strategy function by name.
-    
-    Args:
-        name: Strategy name
-        
-    Returns:
-        Strategy function
-    """
-    if name not in STRATEGY_FUNCTIONS:
-        raise ValueError(f"Strategy function {name} not found. Available strategies: {list(STRATEGY_FUNCTIONS.keys())}")
-    
-    return STRATEGY_FUNCTIONS[name]
+def get_strategy(strategy_name):
+    """Get strategy class by name."""
+    if strategy_name == "CORE":
+        from strategies.core import SignalGenerator
+        return SignalGenerator
+    elif strategy_name == "BOLLINGER":
+        from strategies.bollinger_bands import BollingerBandsStrategy
+        return BollingerBandsStrategy
+    else:
+        raise ValueError(f"Strategy class for '{strategy_name}' not found")
