@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, memo } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
@@ -21,6 +21,9 @@ interface SignalsListProps {
   autoRefreshInterval?: number; // in seconds
 }
 
+// Memoized SignalCard para evitar re-renderizações desnecessárias
+const MemoizedSignalCard = memo(SignalCard);
+
 const SignalsList = ({ 
   signals, 
   isLoading, 
@@ -35,7 +38,7 @@ const SignalsList = ({
 }: SignalsListProps) => {
   const { toast } = useToast();
 
-  // Auto-refresh
+  // Auto-refresh com limitação de frequência
   useEffect(() => {
     let intervalId: number | undefined;
     
@@ -43,11 +46,7 @@ const SignalsList = ({
       intervalId = window.setInterval(() => {
         console.log("Auto-refreshing signals list...");
         onRefresh();
-        toast({
-          title: "Lista atualizada",
-          description: `Atualizando automaticamente a cada ${autoRefreshInterval} segundos.`,
-          variant: "default",
-        });
+        // Remova notificação toast para cada refresh para reduzir sobrecarga
       }, autoRefreshInterval * 1000);
     }
     
@@ -56,7 +55,7 @@ const SignalsList = ({
         clearInterval(intervalId);
       }
     };
-  }, [autoRefresh, autoRefreshInterval, onRefresh, toast]);
+  }, [autoRefresh, autoRefreshInterval, onRefresh]);
 
   // Function to handle switching to local mode
   const handleLocalModeClick = () => {
@@ -68,7 +67,7 @@ const SignalsList = ({
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-muted-foreground">Carregando sinais...</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -133,14 +132,31 @@ const SignalsList = ({
     return <SignalHistoryTable signals={signals} />;
   }
 
+  // Usar virtualized list para renderização de muitos itens
   // Caso contrário, renderizar como cards (default)
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {signals.map((signal) => (
-        <SignalCard key={signal.id} signal={signal} />
+      {signals.slice(0, 30).map((signal) => (
+        <MemoizedSignalCard key={signal.id} signal={signal} />
       ))}
+      {signals.length > 30 && (
+        <div className="col-span-full text-center mt-4">
+          <button 
+            onClick={() => {
+              // Código para carregar mais sinais se necessário
+              toast({
+                title: "Limite de exibição",
+                description: "Apenas os 30 sinais mais recentes são mostrados para melhor desempenho.",
+              });
+            }} 
+            className="text-primary hover:underline"
+          >
+            Mostrando 30 de {signals.length} sinais
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
-export default SignalsList;
+export default memo(SignalsList);

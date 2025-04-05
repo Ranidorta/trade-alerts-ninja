@@ -1,8 +1,13 @@
+
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 
 // Default API base URL with fallback
 const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
+
+// Cache para armazenar respostas de API
+const apiCache = new Map();
+const CACHE_DURATION = 60000; // 1 minuto em milissegundos
 
 /**
  * Gets the current Firebase auth token if available
@@ -75,6 +80,41 @@ const handleApiResponse = async (response: Response) => {
 };
 
 /**
+ * Gera uma chave de cache baseada nos parâmetros da requisição
+ */
+const generateCacheKey = (endpoint: string, params?: any): string => {
+  return `${endpoint}:${JSON.stringify(params || {})}`;
+};
+
+/**
+ * Verifica se há uma resposta em cache válida
+ */
+const getFromCache = (cacheKey: string) => {
+  if (apiCache.has(cacheKey)) {
+    const { data, timestamp } = apiCache.get(cacheKey);
+    const now = Date.now();
+    
+    // Verifica se o cache ainda é válido
+    if (now - timestamp < CACHE_DURATION) {
+      return data;
+    }
+    // Remove do cache se expirado
+    apiCache.delete(cacheKey);
+  }
+  return null;
+};
+
+/**
+ * Armazena o resultado no cache
+ */
+const setInCache = (cacheKey: string, data: any) => {
+  apiCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  });
+};
+
+/**
  * Fetches trading signals from the API
  * @param params Optional query parameters
  * @returns Promise with trading signals
@@ -84,16 +124,30 @@ export const fetchSignals = async (params?: {
   type?: string;
   strategy?: string;
   days?: number;
+  forceRefresh?: boolean;
 }): Promise<TradingSignal[]> => {
   try {
+    // Extrair forceRefresh e criar uma cópia dos parâmetros sem ela para o cache
+    const { forceRefresh, ...cacheableParams } = params || {};
+    
     // Build query parameters
     const queryParams = new URLSearchParams();
-    if (params?.symbol) queryParams.append("symbol", params.symbol);
-    if (params?.type) queryParams.append("type", params.type);
-    if (params?.strategy) queryParams.append("strategy", params.strategy);
-    if (params?.days) queryParams.append("days", params.days.toString());
+    if (cacheableParams?.symbol) queryParams.append("symbol", cacheableParams.symbol);
+    if (cacheableParams?.type) queryParams.append("type", cacheableParams.type);
+    if (cacheableParams?.strategy) queryParams.append("strategy", cacheableParams.strategy);
+    if (cacheableParams?.days) queryParams.append("days", cacheableParams.days.toString());
     
     const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+    const cacheKey = generateCacheKey(`signals${queryString}`, null);
+    
+    // Verificar cache se não for forçado refresh
+    if (!forceRefresh) {
+      const cachedData = getFromCache(cacheKey);
+      if (cachedData) {
+        console.log("Using cached signals data");
+        return cachedData;
+      }
+    }
     
     // Get fetch options with auth token if available
     const options = await createFetchOptions();
@@ -114,6 +168,9 @@ export const fetchSignals = async (params?: {
       // Make sure strategy is included in the mapped data
       strategy: signal.strategy || signal.strategy_name || signal.signal_type
     }));
+    
+    // Armazenar no cache
+    setInCache(cacheKey, mappedData);
     
     console.log("Signals fetched:", mappedData.length);
     return mappedData as TradingSignal[];

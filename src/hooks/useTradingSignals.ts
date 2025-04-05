@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { TradingSignal } from "@/lib/types";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
@@ -9,6 +9,7 @@ import {
 } from "@/lib/signalHistoryService";
 import { logTradeSignal } from "@/lib/firebase";
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
+import { fetchSignals as fetchSignalsApi } from "@/lib/signalsApi";
 
 // Using a fallback URL for the backend
 const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
@@ -16,31 +17,68 @@ const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrend
 // Set up localStorage keys
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
 const LAST_ACTIVE_SIGNAL_KEY = "last_active_signal";
+const SIGNALS_LAST_FETCH_TIME = "signals_last_fetch_time";
 
 export const useTradingSignals = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
+  const isFirstRender = useRef(true);
+  const fetchTimeoutRef = useRef<number | null>(null);
 
-  // Load signals from localStorage on initial mount
+  // Load signals from localStorage on initial mount with improved performance
   useEffect(() => {
-    const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
-    if (cachedSignals) {
-      try {
-        const parsedSignals = JSON.parse(cachedSignals);
-        setSignals(parsedSignals);
-        
-        // Also save to signals history
-        saveSignalsToHistory(parsedSignals);
-        
-        console.log("Loaded cached signals from localStorage:", parsedSignals.length);
-      } catch (err) {
-        console.error("Error parsing cached signals:", err);
-        // Invalid data in localStorage, clear it
-        localStorage.removeItem(SIGNALS_STORAGE_KEY);
+    if (!isFirstRender.current) return;
+    
+    // Marcar como não sendo mais o primeiro render
+    isFirstRender.current = false;
+    
+    const loadCachedSignals = () => {
+      const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+      if (cachedSignals) {
+        try {
+          const parsedSignals = JSON.parse(cachedSignals);
+          setSignals(parsedSignals);
+          console.log("Loaded cached signals from localStorage:", parsedSignals.length);
+          
+          // Salvar no histórico em um timeout para não bloquear a UI
+          setTimeout(() => {
+            saveSignalsToHistory(parsedSignals);
+          }, 1000);
+          
+          return true;
+        } catch (err) {
+          console.error("Error parsing cached signals:", err);
+          // Invalid data in localStorage, clear it
+          localStorage.removeItem(SIGNALS_STORAGE_KEY);
+          return false;
+        }
       }
+      return false;
+    };
+    
+    // Carregar sinais em cache primeiro para exibição imediata
+    const hasCachedSignals = loadCachedSignals();
+    
+    // Verificar se precisamos buscar novos dados do servidor
+    const lastFetchTime = localStorage.getItem(SIGNALS_LAST_FETCH_TIME);
+    const now = Date.now();
+    const shouldFetchNew = !lastFetchTime || (now - parseInt(lastFetchTime, 10)) > 5 * 60 * 1000; // 5 minutos
+    
+    if (shouldFetchNew) {
+      // Usar um timeout para dar tempo à UI de renderizar primeiro
+      fetchTimeoutRef.current = window.setTimeout(() => {
+        fetchSignals({ forceRefresh: true });
+        localStorage.setItem(SIGNALS_LAST_FETCH_TIME, now.toString());
+      }, hasCachedSignals ? 2000 : 0); // Se temos dados em cache, atrase a busca para 2s
     }
+    
+    return () => {
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Function to get the last active signal
@@ -64,152 +102,89 @@ export const useTradingSignals = () => {
     }
   }, []);
 
-  const fetchSignals = useCallback(async () => {
+  // Versão otimizada do fetchSignals com debounce e cache
+  const fetchSignals = useCallback(async (options?: { forceRefresh?: boolean }) => {
+    if (loading) return;
+    
     setLoading(true);
     setError(null);
 
     try {
-      console.log(`Trying to fetch signals from: ${BACKEND_URL}/signals?strategy=CLASSIC`);
+      console.log(`Trying to fetch signals from API...`);
       
-      // First try to fetch from the API with a timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
-      let newSignals: TradingSignal[] = [];
-      let fetchedFromRemote = false;
-      
-      try {
-        const response = await fetch(`${BACKEND_URL}/signals?strategy=CLASSIC`, {
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          // If remote API is available, use that data
-          const data = await response.json();
-          newSignals = data;
-          fetchedFromRemote = true;
-          console.log("Signals successfully loaded from API:", newSignals.length);
-          
-          // Show success toast
-          toast({
-            title: "Signals loaded",
-            description: `Successfully loaded ${newSignals.length} signals from API`,
-          });
-        } else {
-          throw new Error(`API returned status ${response.status}`);
-        }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        console.warn(`Could not fetch from API: ${fetchError.message}. Trying to use cached signals.`);
-        
-        // If remote API fails, check if we have signals in localStorage
-        const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
-        if (cachedSignals) {
-          newSignals = JSON.parse(cachedSignals);
-          console.log("Using cached signals:", newSignals.length);
-          
-          // Show fallback toast
-          toast({
-            title: "Using cached signals",
-            description: "Could not connect to the API. Using locally stored signals instead.",
-          });
-        }
-        
-        // If we still have no signals, generate mock data for demo purposes
-        if (newSignals.length === 0) {
-          newSignals = generateMockSignals(20);
-          console.log("Generated mock signals for demo:", newSignals.length);
-          
-          // Show mock data toast
-          toast({
-            title: "Using demo data",
-            description: "Using generated demo data since no signals are available.",
-          });
-        }
-      }
-      
-      // Process signals to add proper result information
-      const processedSignals = newSignals.map((signal: TradingSignal) => {
-        // If result is explicitly defined, use it
-        // Otherwise determine from profit or status
-        if (signal.result === undefined) {
-          if (signal.profit !== undefined) {
-            signal.result = signal.profit > 0 ? 1 : 0;
-          } else if (signal.status === "COMPLETED") {
-            // For completed signals without result info, assume based on status
-            signal.result = Math.random() > 0.5 ? 1 : 0; // Random for demo (server should provide this)
-          }
-        }
-        
-        // Ensure targets are properly formatted with hit information
-        if (signal.targets && Array.isArray(signal.targets)) {
-          // Populate target hit information based on result
-          signal.targets = signal.targets.map((target, index) => ({
-            ...target,
-            hit: signal.result === 1 && index === 0 ? true : 
-                 signal.result === 1 && index > 0 ? Math.random() > 0.5 : false
-          }));
-        } else if (signal.entryPrice) {
-          // Create dummy targets based on entry price if none exist
-          signal.targets = [
-            { level: 1, price: signal.entryPrice * 1.03, hit: signal.result === 1 },
-            { level: 2, price: signal.entryPrice * 1.05, hit: signal.result === 1 && Math.random() > 0.6 },
-            { level: 3, price: signal.entryPrice * 1.08, hit: signal.result === 1 && Math.random() > 0.8 }
-          ];
-        }
-        
-        // Ensure all the required fields exist
-        return {
-          ...signal,
-          // Make sure we have a symbol
-          symbol: signal.symbol || signal.pair || "UNKNOWN",
-          // Ensure direction is set
-          direction: signal.direction || (Math.random() > 0.5 ? "BUY" : "SELL"),
-          // Ensure status is set
-          status: signal.status || "WAITING",
-          // Ensure entryPrice exists
-          entryPrice: signal.entryPrice || signal.entryAvg || 0,
-          // Ensure targets are complete
-          targets: signal.targets || [],
-          // Ensure we have a timestamp
-          createdAt: signal.createdAt || new Date().toISOString(),
-        };
+      // Usar a função centralizada do signalsApi.ts
+      const newSignals = await fetchSignalsApi({ 
+        strategy: "CLASSIC", 
+        forceRefresh: options?.forceRefresh 
       });
       
-      // Update state with processed signals
-      setSignals(processedSignals);
-      
-      // Save to localStorage and history
-      if (processedSignals.length > 0) {
-        localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
+      if (newSignals && newSignals.length > 0) {
+        // Update state with processed signals
+        setSignals(newSignals);
         
-        // Save to both history systems for now to ensure smooth transition
-        saveSignalsToHistory(processedSignals);
-      }
-      
-      // If we succeeded in fetching from remote but there are no signals,
-      // don't overwrite the localStorage cache
-      if (fetchedFromRemote && processedSignals.length === 0) {
-        toast({
-          title: "No signals available",
-          description: "The API returned no signals. This might indicate an issue with the API.",
-        });
+        // Save to localStorage
+        localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(newSignals));
+        localStorage.setItem(SIGNALS_LAST_FETCH_TIME, Date.now().toString());
+        
+        // Salvar no histórico em um timeout para não bloquear a UI
+        setTimeout(() => {
+          saveSignalsToHistory(newSignals);
+        }, 1000);
+        
+        console.log("Signals successfully updated:", newSignals.length);
+      } else {
+        // Se API retornou lista vazia, verificar se temos dados em cache
+        const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+        
+        if (cachedSignals) {
+          console.log("API returned empty results, using cached signals");
+          
+          // Apenas mostrar toast se foi um refresh forçado
+          if (options?.forceRefresh) {
+            toast({
+              title: "Usando dados em cache",
+              description: "Não foram encontrados novos sinais no servidor.",
+            });
+          }
+        } else {
+          // Se não temos nada em cache, gerar dados fictícios
+          const mockSignals = generateMockSignals(20);
+          setSignals(mockSignals);
+          localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(mockSignals));
+          
+          if (options?.forceRefresh) {
+            toast({
+              title: "Usando dados de demonstração",
+              description: "Não foi possível obter sinais reais. Exibindo dados de exemplo.",
+            });
+          }
+        }
       }
     } catch (err: any) {
       console.error("Error fetching trading signals:", err);
       setError(err);
       
-      toast({
-        variant: "destructive",
-        title: "Error loading signals",
-        description: `${err.message}. Using cached data if available.`,
-      });
+      const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+      if (cachedSignals) {
+        try {
+          const parsedSignals = JSON.parse(cachedSignals);
+          setSignals(parsedSignals);
+          
+          if (options?.forceRefresh) {
+            toast({
+              variant: "destructive",
+              title: "Erro ao atualizar",
+              description: `${err.message}. Usando dados em cache.`,
+            });
+          }
+        } catch (parseErr) {
+          console.error("Error parsing cached signals:", parseErr);
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [loading, toast]);
 
   // Function to add new signals (called from SignalsDashboard)
   const addSignals = useCallback((newSignals: TradingSignal[]) => {
