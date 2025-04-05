@@ -1,4 +1,3 @@
-
 """
 Signal saving utility for storing trading signals in CSV format.
 
@@ -11,6 +10,8 @@ import os
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
+import plotly.express as px
+import matplotlib.pyplot as plt
 
 
 def save_signal(signal):
@@ -139,6 +140,126 @@ def evaluate_signal(df, entry_idx, sl_pct=0.02, tp_pct=0.03):
     return 'FALSE'
 
 
+def generate_metrics_report():
+    """
+    Generates a metrics report with visualizations from historical signals data.
+    
+    This function reads the historical signals CSV file, calculates performance
+    metrics like win rate, and creates visualizations including a pie chart of
+    results distribution and a cumulative return chart.
+    
+    Returns:
+        tuple: (win_rate, total_signals) or None if file doesn't exist
+    """
+    # Check if file exists
+    file_path = Path("data/historical_signals.csv")
+    if not file_path.exists():
+        print(f"Error: Historical signals file not found at {file_path}")
+        return None
+    
+    try:
+        # Read the CSV file
+        df = pd.read_csv(file_path)
+        
+        # Filter out rows with null results
+        df_complete = df[df['result'].notna()]
+        
+        if len(df_complete) == 0:
+            print("No completed signals found with results.")
+            return None
+        
+        # Calculate result distribution
+        result_counts = df_complete['result'].value_counts()
+        
+        # Generate pie chart with Plotly
+        fig_pie = px.pie(
+            values=result_counts.values,
+            names=result_counts.index,
+            title="Signal Results Distribution",
+            color_discrete_map={
+                'WINNER': '#2ecc71',      # Green
+                'PARTIAL_WIN': '#f39c12', # Orange
+                'LOSER': '#e74c3c',       # Red
+                'FALSE': '#95a5a6'        # Gray
+            }
+        )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        fig_pie.show()
+        
+        # Calculate win rate
+        winning_trades = len(df_complete[df_complete['result'].isin(['WINNER', 'PARTIAL_WIN'])])
+        total_trades = len(df_complete)
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        
+        print(f"\n📊 Performance Summary:")
+        print(f"  - Total Signals: {total_trades}")
+        print(f"  - Winning Trades: {winning_trades}")
+        print(f"  - Win Rate: {win_rate:.2%}")
+        
+        # Calculate cumulative returns
+        df_complete['return'] = 0.0  # Initialize return column
+        
+        # Calculate returns based on result type
+        for idx, row in df_complete.iterrows():
+            result = row['result']
+            entry_price = row['entry_price']
+            
+            if pd.isna(entry_price) or entry_price == 0:
+                continue
+                
+            if result == 'WINNER' and not pd.isna(row.get('tp')):
+                # Full target hit
+                df_complete.at[idx, 'return'] = (row['tp'] - entry_price) / entry_price * 100
+            elif result == 'PARTIAL_WIN' and not pd.isna(row.get('tp')):
+                # Partial target (50% of full target)
+                half_target = entry_price + (row['tp'] - entry_price) * 0.5
+                df_complete.at[idx, 'return'] = (half_target - entry_price) / entry_price * 100
+            elif result == 'LOSER' and not pd.isna(row.get('sl')):
+                # Stop loss hit
+                df_complete.at[idx, 'return'] = (row['sl'] - entry_price) / entry_price * 100
+        
+        # Sort by timestamp for proper sequencing
+        df_complete['timestamp'] = pd.to_datetime(df_complete['timestamp'])
+        df_complete = df_complete.sort_values('timestamp')
+        
+        # Calculate cumulative returns
+        df_complete['cumulative_return'] = df_complete['return'].cumsum()
+        
+        # Plot cumulative return chart with matplotlib
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(len(df_complete)), df_complete['cumulative_return'], marker='o')
+        plt.title('Cumulative Return from Trading Signals')
+        plt.xlabel('Trade Number')
+        plt.ylabel('Cumulative Return (%)')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        # Add horizontal line at y=0
+        plt.axhline(y=0, color='r', linestyle='-', alpha=0.3)
+        
+        # Show the plot
+        plt.tight_layout()
+        plt.show()
+        
+        # Print additional metrics
+        if len(df_complete) > 0:
+            avg_win = df_complete[df_complete['return'] > 0]['return'].mean()
+            avg_loss = df_complete[df_complete['return'] < 0]['return'].mean()
+            profit_factor = abs(df_complete[df_complete['return'] > 0]['return'].sum() / 
+                             df_complete[df_complete['return'] < 0]['return'].sum()) if df_complete[df_complete['return'] < 0]['return'].sum() != 0 else float('inf')
+            
+            print(f"\n📈 Additional Metrics:")
+            print(f"  - Average Win: {avg_win:.2f}%")
+            print(f"  - Average Loss: {avg_loss:.2f}%")
+            print(f"  - Profit Factor: {profit_factor:.2f}")
+            print(f"  - Total Return: {df_complete['cumulative_return'].iloc[-1]:.2f}%")
+        
+        return win_rate, total_trades
+    
+    except Exception as e:
+        print(f"Error generating metrics report: {str(e)}")
+        return None
+
+
 # Example usage
 if __name__ == "__main__":
     # Test signal example
@@ -164,3 +285,6 @@ if __name__ == "__main__":
         print(saved_signals.tail(5))  # Show last 5 signals
     except Exception as e:
         print(f"Could not read signals file: {str(e)}")
+    
+    # Generate metrics report
+    # generate_metrics_report()
