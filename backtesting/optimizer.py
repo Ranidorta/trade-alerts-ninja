@@ -10,13 +10,13 @@ import pandas as pd
 import vectorbt as vbt
 from strategies.core import SignalGenerator
 from ta.momentum import RSIIndicator
-from ta.trend import MACDIndicator
+from ta.trend import MACDIndicator, ADXIndicator
 from backtesting import Backtest, Strategy
 
 
 class SimpleStrategy(Strategy):
     """
-    A simple trading strategy using SMA, RSI, and MACD indicators.
+    A simple trading strategy using SMA, RSI, MACD, and ADX indicators.
     
     Parameters:
         sma_short: Short SMA period
@@ -24,23 +24,34 @@ class SimpleStrategy(Strategy):
         rsi_period: RSI calculation period
         macd_fast: MACD fast period
         macd_slow: MACD slow period
+        adx_period: ADX calculation period
     """
     sma_short = 10
     sma_long = 30
     rsi_period = 14
     macd_fast = 12
     macd_slow = 26
+    adx_period = 14
 
     def init(self):
         close = self.data.Close
+        high = self.data.High
+        low = self.data.Low
+        
         self.sma_short = self.I(lambda x: x.rolling(self.sma_short).mean(), close)
         self.sma_long = self.I(lambda x: x.rolling(self.sma_long).mean(), close)
         self.rsi = self.I(RSIIndicator(close, window=self.rsi_period).rsi)
         macd_line = close.ewm(span=self.macd_fast).mean() - close.ewm(span=self.macd_slow).mean()
         self.macd = self.I(lambda x: macd_line, close)
+        self.adx = self.I(ADXIndicator(high=high, low=low, close=close, window=self.adx_period).adx)
 
     def next(self):
-        if self.sma_short[-1] > self.sma_long[-1] and self.rsi[-1] > 30 and self.macd[-1] > 0:
+        if (
+            self.sma_short[-1] > self.sma_long[-1] 
+            and self.rsi[-1] > 30 
+            and self.macd[-1] > 0
+            and self.adx[-1] > 25
+        ):
             self.buy()
         elif self.sma_short[-1] < self.sma_long[-1] or self.rsi[-1] > 70:
             self.position.close()
@@ -68,6 +79,7 @@ def walk_forward_optimization(df):
         rsi_period=range(10, 30, 5),
         macd_fast=[8, 12],
         macd_slow=[21, 26],
+        adx_period=[14, 20],
         maximize='Sharpe Ratio',
         return_heatmap=True
     )
@@ -107,7 +119,7 @@ def backtest_strategy(df):
 def optimize_params(df):
     """
     Optimize strategy parameters by testing different combinations of 
-    SMA, RSI, and MACD parameters.
+    SMA, RSI, MACD, and ADX parameters.
     
     Args:
         df: DataFrame with OHLCV data
@@ -125,6 +137,7 @@ def optimize_params(df):
     rsi_periods = range(10, 31, 5)  # 10, 15, 20, 25, 30
     macd_fast_periods = [8, 12]
     macd_slow_periods = [21, 26]
+    adx_periods = [14, 20]
     
     total_combos = len(sma_short_range) * len(sma_long_range[:5])  # Limit to first 5 long values for sample
     processed = 0
@@ -140,69 +153,78 @@ def optimize_params(df):
             for rsi_period in rsi_periods:
                 for macd_fast in macd_fast_periods:
                     for macd_slow in macd_slow_periods:
-                        if macd_fast >= macd_slow:
-                            continue  # Skip invalid combinations
-                            
-                        # Update progress
-                        processed += 1
-                        if processed % 10 == 0:
-                            print(f"Progress: {processed}/{total_combos} combinations tested")
-                            
-                        try:
-                            # Calculate SMAs for this parameter set
-                            df_test = df.copy()
-                            df_test['sma_short'] = df_test['close'].rolling(sma_short).mean()
-                            df_test['sma_long'] = df_test['close'].rolling(sma_long).mean()
-                            
-                            # Calculate RSI for this parameter set
-                            delta = df_test['close'].diff()
-                            gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
-                            loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
-                            rs = gain / loss
-                            df_test['rsi'] = 100 - (100 / (1 + rs))
-                            
-                            # Calculate MACD for this parameter set
-                            ema_fast = df_test['close'].ewm(span=macd_fast, adjust=False).mean()
-                            ema_slow = df_test['close'].ewm(span=macd_slow, adjust=False).mean()
-                            df_test['macd'] = ema_fast - ema_slow
-                            df_test['macd_signal'] = df_test['macd'].ewm(span=9, adjust=False).mean()
-                            
-                            # Generate entry/exit signals
-                            entries = (df_test['sma_short'] > df_test['sma_long']) & \
-                                     (df_test['rsi'] > 30) & \
-                                     (df_test['macd'] > df_test['macd_signal'])
-                            exits = (df_test['sma_short'] < df_test['sma_long']) | \
-                                   (df_test['rsi'] > 70) | \
-                                   (df_test['macd'] < df_test['macd_signal'])
-                            
-                            # Run backtest
-                            pf = vbt.Portfolio.from_signals(
-                                df_test['close'], 
-                                entries, 
-                                exits, 
-                                fees=0.001
-                            )
-                            
-                            # Check if this is the best parameter set so far
-                            stats = pf.stats()
-                            sharpe = stats.get('Sharpe Ratio', 0)
-                            if sharpe and sharpe > best_sharpe:
-                                best_sharpe = sharpe
-                                best_params = {
-                                    'sma_short': sma_short,
-                                    'sma_long': sma_long,
-                                    'rsi_period': rsi_period,
-                                    'macd_fast': macd_fast,
-                                    'macd_slow': macd_slow
-                                }
-                                best_stats = stats
+                        for adx_period in adx_periods:
+                            if macd_fast >= macd_slow:
+                                continue  # Skip invalid combinations
                                 
-                                print(f"New best parameters found: {best_params}, Sharpe: {best_sharpe:.2f}")
+                            # Update progress
+                            processed += 1
+                            if processed % 10 == 0:
+                                print(f"Progress: {processed}/{total_combos} combinations tested")
                                 
-                        except Exception as e:
-                            # Skip this combination if there's an error
-                            print(f"Error with parameters (SMA:{sma_short}/{sma_long}, RSI:{rsi_period}, MACD:{macd_fast}/{macd_slow}): {str(e)}")
-                            continue
+                            try:
+                                # Calculate SMAs for this parameter set
+                                df_test = df.copy()
+                                df_test['sma_short'] = df_test['close'].rolling(sma_short).mean()
+                                df_test['sma_long'] = df_test['close'].rolling(sma_long).mean()
+                                
+                                # Calculate RSI for this parameter set
+                                delta = df_test['close'].diff()
+                                gain = (delta.where(delta > 0, 0)).rolling(window=rsi_period).mean()
+                                loss = (-delta.where(delta < 0, 0)).rolling(window=rsi_period).mean()
+                                rs = gain / loss
+                                df_test['rsi'] = 100 - (100 / (1 + rs))
+                                
+                                # Calculate MACD for this parameter set
+                                ema_fast = df_test['close'].ewm(span=macd_fast, adjust=False).mean()
+                                ema_slow = df_test['close'].ewm(span=macd_slow, adjust=False).mean()
+                                df_test['macd'] = ema_fast - ema_slow
+                                df_test['macd_signal'] = df_test['macd'].ewm(span=9, adjust=False).mean()
+                                
+                                # Calculate ADX for this parameter set
+                                high = df_test['high']
+                                low = df_test['low']
+                                close = df_test['close']
+                                df_test['adx'] = ADXIndicator(high=high, low=low, close=close, window=adx_period).adx
+                                
+                                # Generate entry/exit signals
+                                entries = (df_test['sma_short'] > df_test['sma_long']) & \
+                                         (df_test['rsi'] > 30) & \
+                                         (df_test['macd'] > df_test['macd_signal']) & \
+                                         (df_test['adx'] > 25)
+                                exits = (df_test['sma_short'] < df_test['sma_long']) | \
+                                       (df_test['rsi'] > 70) | \
+                                       (df_test['macd'] < df_test['macd_signal'])
+                                
+                                # Run backtest
+                                pf = vbt.Portfolio.from_signals(
+                                    df_test['close'], 
+                                    entries, 
+                                    exits, 
+                                    fees=0.001
+                                )
+                                
+                                # Check if this is the best parameter set so far
+                                stats = pf.stats()
+                                sharpe = stats.get('Sharpe Ratio', 0)
+                                if sharpe and sharpe > best_sharpe:
+                                    best_sharpe = sharpe
+                                    best_params = {
+                                        'sma_short': sma_short,
+                                        'sma_long': sma_long,
+                                        'rsi_period': rsi_period,
+                                        'macd_fast': macd_fast,
+                                        'macd_slow': macd_slow,
+                                        'adx_period': adx_period
+                                    }
+                                    best_stats = stats
+                                    
+                                    print(f"New best parameters found: {best_params}, Sharpe: {best_sharpe:.2f}")
+                                    
+                            except Exception as e:
+                                # Skip this combination if there's an error
+                                print(f"Error with parameters (SMA:{sma_short}/{sma_long}, RSI:{rsi_period}, MACD:{macd_fast}/{macd_slow}, ADX:{adx_period}): {str(e)}")
+                                continue
     
     # Return the best parameters and stats
     return {
@@ -211,6 +233,7 @@ def optimize_params(df):
         'best_rsi': best_params['rsi_period'] if best_params else None,
         'best_macd_fast': best_params['macd_fast'] if best_params else None,
         'best_macd_slow': best_params['macd_slow'] if best_params else None,
+        'best_adx': best_params['adx_period'] if best_params else None,
         'best_sharpe': best_sharpe,
         'stats': best_stats
     }
