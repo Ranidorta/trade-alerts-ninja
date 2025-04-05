@@ -152,3 +152,66 @@ def optimize_params(df):
         'best_sharpe': best_sharpe,
         'stats': best_stats
     }
+
+
+def benchmark(df):
+    """
+    Create a benchmark portfolio that simply holds the asset for the entire period.
+    
+    Args:
+        df: DataFrame with OHLCV data
+        
+    Returns:
+        Portfolio statistics for the buy and hold strategy
+    """
+    # Create a portfolio that holds the asset for the entire period
+    pf = vbt.Portfolio.from_holding(df['close'], fees=0.001, freq='1h')
+    
+    # Return the portfolio statistics
+    return pf.stats()
+
+
+def compare_strategy_vs_benchmark(df):
+    """
+    Compare the optimized strategy performance with a buy-and-hold benchmark.
+    
+    Args:
+        df: DataFrame with OHLCV data
+        
+    Returns:
+        Dict with comparison metrics between strategy and benchmark
+    """
+    print("Optimizing strategy parameters...")
+    strategy_results = optimize_params(df)
+    
+    print("Calculating benchmark performance...")
+    benchmark_stats = benchmark(df)
+    
+    # Extract statistics for comparison
+    strategy_stats = strategy_results['stats']
+    
+    # Check if we have valid statistics
+    if not strategy_stats or not benchmark_stats:
+        return {
+            "error": "Could not generate valid strategy or benchmark statistics"
+        }
+    
+    # Create comparison dictionary
+    comparison = {
+        "strategy_sharpe": strategy_stats.get('Sharpe Ratio', None),
+        "benchmark_sharpe": benchmark_stats.get('Sharpe Ratio', None),
+        "strategy_return": strategy_stats.get('Total Return [%]', None),
+        "benchmark_return": benchmark_stats.get('Total Return [%]', None),
+        "strategy_drawdown": strategy_stats.get('Max Drawdown [%]', None),
+        "benchmark_drawdown": benchmark_stats.get('Max Drawdown [%]', None),
+        "strategy_win_rate": strategy_stats.get('Win Rate [%]', None),
+        "strategy_best_trade": strategy_stats.get('Best Trade [%]', None),
+        "strategy_worst_trade": strategy_stats.get('Worst Trade [%]', None),
+        "outperformance": strategy_stats.get('Total Return [%]', 0) - benchmark_stats.get('Total Return [%]', 0)
+    }
+    
+    print(f"Strategy Sharpe: {comparison['strategy_sharpe']:.2f} vs Benchmark Sharpe: {comparison['benchmark_sharpe']:.2f}")
+    print(f"Strategy Return: {comparison['strategy_return']:.2f}% vs Benchmark Return: {comparison['benchmark_return']:.2f}%")
+    print(f"Outperformance: {comparison['outperformance']:.2f}%")
+    
+    return comparison
