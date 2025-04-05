@@ -1,4 +1,3 @@
-
 """
 Backtesting and optimization tools for trading strategies.
 
@@ -10,6 +9,69 @@ import numpy as np
 import pandas as pd
 import vectorbt as vbt
 from strategies.core import SignalGenerator
+from ta.momentum import RSIIndicator
+from ta.trend import MACDIndicator
+from backtesting import Backtest, Strategy
+
+
+class SimpleStrategy(Strategy):
+    """
+    A simple trading strategy using SMA, RSI, and MACD indicators.
+    
+    Parameters:
+        sma_short: Short SMA period
+        sma_long: Long SMA period
+        rsi_period: RSI calculation period
+        macd_fast: MACD fast period
+        macd_slow: MACD slow period
+    """
+    sma_short = 10
+    sma_long = 30
+    rsi_period = 14
+    macd_fast = 12
+    macd_slow = 26
+
+    def init(self):
+        close = self.data.Close
+        self.sma_short = self.I(lambda x: x.rolling(self.sma_short).mean(), close)
+        self.sma_long = self.I(lambda x: x.rolling(self.sma_long).mean(), close)
+        self.rsi = self.I(RSIIndicator(close, window=self.rsi_period).rsi)
+        macd_line = close.ewm(span=self.macd_fast).mean() - close.ewm(span=self.macd_slow).mean()
+        self.macd = self.I(lambda x: macd_line, close)
+
+    def next(self):
+        if self.sma_short[-1] > self.sma_long[-1] and self.rsi[-1] > 30 and self.macd[-1] > 0:
+            self.buy()
+        elif self.sma_short[-1] < self.sma_long[-1] or self.rsi[-1] > 70:
+            self.position.close()
+
+
+def walk_forward_optimization(df):
+    """
+    Perform walk-forward optimization on the SimpleStrategy.
+    
+    Args:
+        df: DataFrame with OHLCV data
+        
+    Returns:
+        Stats from the optimization
+    """
+    df_bt = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].copy()
+    df_bt.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+    df_bt.set_index('Date', inplace=True)
+    df_bt.index = pd.to_datetime(df_bt.index)
+
+    bt = Backtest(df_bt, SimpleStrategy, cash=10000, commission=0.001)
+    stats, heatmap = bt.optimize(
+        sma_short=range(10, 20, 2),
+        sma_long=range(30, 50, 4),
+        rsi_period=range(10, 30, 5),
+        macd_fast=[8, 12],
+        macd_slow=[21, 26],
+        maximize='Sharpe Ratio',
+        return_heatmap=True
+    )
+    return stats
 
 
 def backtest_strategy(df):
