@@ -94,6 +94,51 @@ def update_result(timestamp, result):
         return False
 
 
+def evaluate_signal(df, entry_idx, sl_pct=0.02, tp_pct=0.03):
+    """
+    Evaluates the outcome of a trading signal based on historical candle data.
+    
+    Args:
+        df: DataFrame containing OHLCV data
+        entry_idx: Index in the DataFrame where the entry occurred
+        sl_pct: Stop loss percentage from entry price (default: 0.02 or 2%)
+        tp_pct: Take profit percentage from entry price (default: 0.03 or 3%)
+    
+    Returns:
+        str: Result of the signal - 'WINNER', 'PARTIAL_WIN', 'LOSER', or 'FALSE'
+             if no target was hit
+    """
+    # Validate inputs
+    if entry_idx < 0 or entry_idx >= len(df):
+        print(f"Error: Invalid entry index {entry_idx} for DataFrame of length {len(df)}")
+        return 'FALSE'
+    
+    # Extract entry price from the dataframe
+    entry_price = df.iloc[entry_idx]['close']
+    
+    # Calculate stop loss and take profit levels
+    sl = entry_price * (1 - sl_pct)
+    tp = entry_price * (1 + tp_pct)
+    partial_tp = entry_price * (1 + (tp_pct / 2))  # 50% of take profit
+    
+    # Scan forward through the dataframe to find outcomes
+    for i in range(entry_idx + 1, len(df)):
+        # Check if stop loss was hit
+        if df.iloc[i]['low'] <= sl:
+            return 'LOSER'
+        
+        # Check if take profit was hit
+        if df.iloc[i]['high'] >= tp:
+            return 'WINNER'
+        
+        # Check if partial take profit was hit
+        if df.iloc[i]['high'] >= partial_tp:
+            return 'PARTIAL_WIN'
+    
+    # No target was hit within the available data
+    return 'FALSE'
+
+
 # Example usage
 if __name__ == "__main__":
     # Test signal example
