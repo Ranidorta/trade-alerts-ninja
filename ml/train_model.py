@@ -29,23 +29,26 @@ def train_signal_model(df):
     df = df.dropna()
     df['label'] = (df['signal_score'] >= 70).astype(int)
     
-    # Create lag features
+    # Create additional features
     df['close_lag1'] = df['close'].shift(1)
     df['volume_change'] = df['volume'].pct_change()
+    df['close_vs_sma200'] = df['close'] - df['sma_200']
+    df['ema_12'] = df['close'].ewm(span=12).mean()
+    df['ema_26'] = df['close'].ewm(span=26).mean()
+    df['ema_ratio'] = df['ema_12'] / df['ema_26']
+    df['volatility'] = df['high'] - df['low']
     
     # Define feature set based on available indicators
     features = [
-        'rsi', 'macd', 'close', 'sma_200', 'volume', 'volume_ma_20'
+        'rsi', 'macd', 'close', 'sma_200', 'volume', 'volume_ma_20',
+        'close_vs_sma200', 'close_lag1', 'volume_change', 'ema_ratio', 'volatility'
     ]
-    
-    # Add engineered features
-    df['close_vs_sma200'] = df['close'] - df['sma_200']
     
     # Drop NaN values again after creating lag features
     df = df.dropna()
     
     # Prepare features and target
-    X = df[features + ['close_vs_sma200', 'close_lag1', 'volume_change']]
+    X = df[features]
     y = df['label']
     
     # Normalize features
