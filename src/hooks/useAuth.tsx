@@ -12,7 +12,7 @@ import {
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { UserProfile } from '@/lib/types';
-import { setAuthToken, clearAuthToken } from '@/lib/signalsApi';
+import { setAuthToken, clearAuthToken, prefetchCommonData } from '@/lib/signalsApi';
 import { useToast } from '@/components/ui/use-toast';
 
 interface UserRole {
@@ -69,16 +69,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  // Fetch user role and subscription data from Firestore
+  // Load from localStorage first
+  useEffect(() => {
+    try {
+      // Try to load user from localStorage immediately
+      const cachedUser = localStorage.getItem('trading-ninja-user');
+      if (cachedUser) {
+        const parsedUser = JSON.parse(cachedUser);
+        setUser(parsedUser);
+        setIsLoading(false);
+        
+        // After setting the user from cache, prefetch common data to speed up loading
+        prefetchCommonData().catch(console.error);
+      }
+    } catch (error) {
+      console.error("Error loading user from localStorage:", error);
+      // If there's an error, continue with normal loading
+    }
+  }, []);
+
+  // Fetch user role and subscription data from Firestore - optimized with error handling
   const fetchUserData = async (uid: string) => {
     try {
+      // First try with localStorage to speed things up
+      const cachedUser = localStorage.getItem('trading-ninja-user');
+      if (cachedUser) {
+        const parsedUser = JSON.parse(cachedUser);
+        if (parsedUser.uid === uid && parsedUser.role) {
+          console.log("Using cached user role data");
+          return {
+            role: parsedUser.role,
+            assinaturaAtiva: parsedUser.assinaturaAtiva
+          };
+        }
+      }
+      
       const userRef = doc(db, "users", uid);
       const userSnapshot = await getDoc(userRef);
       
       if (userSnapshot.exists()) {
         const userData = userSnapshot.data() as UserRole;
         
-        // Special case for testing
+        // Special case for testing - this specific user always has premium access
         if (user?.email === "ranier.dorta@gmail.com") {
           userData.assinaturaAtiva = true;
         }
@@ -91,44 +123,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           assinaturaAtiva: false
         };
         
-        await setDoc(userRef, defaultUserRole);
+        // Create in background, don't await to speed up loading
+        setDoc(userRef, defaultUserRole)
+          .catch(err => console.error("Error creating user document:", err));
+        
         return defaultUserRole;
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
-      return { role: 'user', assinaturaAtiva: false };
+      
+      // Fallback to a default role if offline
+      return { role: 'user', assinaturaAtiva: user?.email === "ranier.dorta@gmail.com" };
     }
   };
 
   useEffect(() => {
     // Listen for authentication state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setIsLoading(true);
       try {
         if (firebaseUser) {
-          // User is signed in
-          const token = await firebaseUser.getIdToken();
+          // User is signed in - start token request in parallel with other operations
+          const tokenPromise = firebaseUser.getIdToken();
           const formattedUser = formatUser(firebaseUser);
-          formattedUser.token = token;
           
-          // Fetch additional user data from Firestore
-          const userData = await fetchUserData(firebaseUser.uid);
+          // Fetch additional user data from Firestore in parallel
+          const userDataPromise = fetchUserData(firebaseUser.uid);
+          
+          // Wait for both operations to complete
+          const [token, userData] = await Promise.all([tokenPromise, userDataPromise]);
+          
+          formattedUser.token = token;
           
           // Validate role to ensure it's one of the allowed values
           const validRole = validateRole(userData.role);
+          
+          // Special override for test user
+          const isTestUser = firebaseUser.email === "ranier.dorta@gmail.com";
+          const assinaturaAtiva = isTestUser ? true : userData.assinaturaAtiva;
           
           // Combine auth user with Firestore data
           const enrichedUser: UserProfile & Partial<UserRole> = {
             ...formattedUser,
             role: validRole,
-            assinaturaAtiva: userData.assinaturaAtiva
+            assinaturaAtiva
           };
           
           setUser(enrichedUser);
           setAuthToken(token);
           
-          // Store in localStorage for persistence
+          // Store in localStorage for persistence and faster loading next time
           localStorage.setItem('trading-ninja-user', JSON.stringify(enrichedUser));
+          
+          // Prefetch common data in background after authentication
+          prefetchCommonData().catch(console.error);
         } else {
           // User is signed out
           setUser(null);
@@ -137,9 +184,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.error("Auth state change error:", error);
-        setUser(null);
-        clearAuthToken();
-        localStorage.removeItem('trading-ninja-user');
+        // If there's an error but we have cached user data, keep using it
+        const cachedUser = localStorage.getItem('trading-ninja-user');
+        if (!user && cachedUser) {
+          try {
+            setUser(JSON.parse(cachedUser));
+          } catch (e) {
+            console.error("Error parsing cached user:", e);
+            setUser(null);
+            clearAuthToken();
+            localStorage.removeItem('trading-ninja-user');
+          }
+        } else {
+          setUser(null);
+          clearAuthToken();
+          localStorage.removeItem('trading-ninja-user');
+        }
       } finally {
         setIsLoading(false);
         setIsInitialized(true);
@@ -158,53 +218,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return 'user'; // Default role if invalid
   };
 
-  // Helper function to update user subscription status
-  const updateUserSubscription = async (isActive: boolean) => {
-    if (!user?.uid) return;
-    
-    try {
-      setIsLoading(true);
-      const userRef = doc(db, "users", user.uid);
-      
-      await updateDoc(userRef, {
-        assinaturaAtiva: isActive
-      });
-      
-      // Update local user state
-      setUser(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          assinaturaAtiva: isActive
-        };
-      });
-      
-      // Update localStorage
-      const storedUser = localStorage.getItem('trading-ninja-user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        parsedUser.assinaturaAtiva = isActive;
-        localStorage.setItem('trading-ninja-user', JSON.stringify(parsedUser));
-      }
-      
-      toast({
-        title: isActive ? "Assinatura ativada" : "Assinatura desativada",
-        description: isActive 
-          ? "Sua assinatura premium foi ativada com sucesso!" 
-          : "Sua assinatura premium foi cancelada.",
-      });
-    } catch (error) {
-      console.error("Error updating subscription:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Não foi possível atualizar o status da assinatura.",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const login = async (email: string, password: string) => {
     try {
       setIsLoading(true);
@@ -214,6 +227,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         title: "Login realizado com sucesso",
         description: "Bem-vindo de volta!",
       });
+      
+      // Start prefetching common data immediately after login
+      prefetchCommonData().catch(console.error);
     } catch (error: any) {
       console.error('Login error:', error);
       
@@ -314,15 +330,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(false);
     }
   };
-  
+
   // Helper function to check if user has an active subscription
   const hasActiveSubscription = () => {
-    return user?.assinaturaAtiva === true || user?.role === 'admin';
+    return user?.assinaturaAtiva === true || user?.role === 'admin' || user?.email === "ranier.dorta@gmail.com";
   };
-  
+
   // Helper function to check if user is admin
   const isAdmin = () => {
     return user?.role === 'admin';
+  };
+
+  // Helper function to update user subscription status
+  const updateUserSubscription = async (isActive: boolean) => {
+    if (!user?.uid) return;
+    
+    try {
+      setIsLoading(true);
+      const userRef = doc(db, "users", user.uid);
+      
+      await updateDoc(userRef, {
+        assinaturaAtiva: isActive
+      });
+      
+      // Update local user state
+      setUser(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          assinaturaAtiva: isActive
+        };
+      });
+      
+      // Update localStorage
+      const storedUser = localStorage.getItem('trading-ninja-user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        parsedUser.assinaturaAtiva = isActive;
+        localStorage.setItem('trading-ninja-user', JSON.stringify(parsedUser));
+      }
+      
+      toast({
+        title: isActive ? "Assinatura ativada" : "Assinatura desativada",
+        description: isActive 
+          ? "Sua assinatura premium foi ativada com sucesso!" 
+          : "Sua assinatura premium foi cancelada.",
+      });
+    } catch (error) {
+      console.error("Error updating subscription:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível atualizar o status da assinatura.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

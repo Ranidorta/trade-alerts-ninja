@@ -4,26 +4,44 @@ import { config } from "@/config/env";
 // Default API base URL with fallback
 const API_BASE_URL = config.signalsApiUrl || "http://localhost:5000/api";
 
+// Cache durations in milliseconds
+const CACHE_DURATIONS = {
+  signals: 5 * 60 * 1000, // 5 minutes
+  strategies: 30 * 60 * 1000, // 30 minutes
+  symbols: 30 * 60 * 1000, // 30 minutes
+  performance: 15 * 60 * 1000, // 15 minutes
+};
+
+// Cache objects
+const cache = {
+  signals: { data: null, timestamp: 0 },
+  strategies: { data: null, timestamp: 0 },
+  symbols: { data: null, timestamp: 0 },
+  performance: { data: null, timestamp: 0 },
+};
+
 /**
  * Gets the current Firebase auth token if available
  * @returns The auth token or null
  */
 const getAuthToken = async (): Promise<string | null> => {
   try {
+    // First try to get from localStorage for immediate return
+    const storedToken = localStorage.getItem('authToken');
+    if (storedToken) {
+      return storedToken;
+    }
+    
     // Check if Firebase Auth is available using safer type checking
-    // that won't cause TypeScript errors
     const firebaseObj = (window as any).firebase;
     if (firebaseObj && firebaseObj.auth) {
       const currentUser = firebaseObj.auth().currentUser;
       if (currentUser) {
-        return await currentUser.getIdToken(true); // Force token refresh
+        const token = await currentUser.getIdToken(true); // Force token refresh
+        // Cache the token
+        localStorage.setItem('authToken', token);
+        return token;
       }
-    }
-    
-    // Try to get from localStorage if Firebase not initialized
-    const storedToken = localStorage.getItem('authToken');
-    if (storedToken) {
-      return storedToken;
     }
     
     return null;
@@ -84,8 +102,21 @@ export const fetchSignals = async (params?: {
   type?: string;
   strategy?: string;
   days?: number;
+  forceRefresh?: boolean;
 }): Promise<TradingSignal[]> => {
   try {
+    // Generate cache key based on params
+    const cacheKey = JSON.stringify(params || {});
+    const forceRefresh = params?.forceRefresh || false;
+    
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && 
+        cache.signals.data && 
+        cache.signals.timestamp > Date.now() - CACHE_DURATIONS.signals) {
+      console.log("Using cached signals data");
+      return cache.signals.data as TradingSignal[];
+    }
+    
     // Build query parameters
     const queryParams = new URLSearchParams();
     if (params?.symbol) queryParams.append("symbol", params.symbol);
@@ -115,6 +146,12 @@ export const fetchSignals = async (params?: {
       strategy: signal.strategy || signal.strategy_name || signal.signal_type
     }));
     
+    // Update cache
+    cache.signals = {
+      data: mappedData,
+      timestamp: Date.now(),
+    };
+    
     console.log("Signals fetched:", mappedData.length);
     return mappedData as TradingSignal[];
   } catch (error) {
@@ -133,6 +170,14 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   const days = parseInt(daysString, 10);
   
   try {
+    // Check cache first
+    const cacheKey = `performance_${days}`;
+    if (cache.performance.data && 
+        cache.performance.timestamp > Date.now() - CACHE_DURATIONS.performance) {
+      console.log("Using cached performance data");
+      return cache.performance.data;
+    }
+    
     // Get fetch options with auth token
     const options = await createFetchOptions();
     
@@ -140,6 +185,13 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
     const response = await fetch(`${API_BASE_URL}/performance?days=${days}`, options);
     
     const data = await handleApiResponse(response);
+    
+    // Update cache
+    cache.performance = {
+      data,
+      timestamp: Date.now(),
+    };
+    
     console.log("Performance metrics fetched:", data);
     return data;
   } catch (error) {
@@ -152,8 +204,16 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
  * Fetches available trading symbols
  * @returns Promise with list of symbols
  */
-export const fetchSymbols = async (): Promise<string[]> => {
+export const fetchSymbols = async (forceRefresh = false): Promise<string[]> => {
   try {
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && 
+        cache.symbols.data && 
+        cache.symbols.timestamp > Date.now() - CACHE_DURATIONS.symbols) {
+      console.log("Using cached symbols data");
+      return cache.symbols.data as string[];
+    }
+    
     // Get fetch options with auth token if available
     const options = await createFetchOptions();
     
@@ -161,6 +221,13 @@ export const fetchSymbols = async (): Promise<string[]> => {
     const response = await fetch(`${API_BASE_URL}/symbols`, options);
     
     const data = await handleApiResponse(response);
+    
+    // Update cache
+    cache.symbols = {
+      data,
+      timestamp: Date.now(),
+    };
+    
     console.log("Symbols fetched:", data.length);
     return data;
   } catch (error) {
@@ -173,8 +240,16 @@ export const fetchSymbols = async (): Promise<string[]> => {
  * Fetches available strategies
  * @returns Promise with list of strategies
  */
-export const fetchStrategies = async (): Promise<string[]> => {
+export const fetchStrategies = async (forceRefresh = false): Promise<string[]> => {
   try {
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && 
+        cache.strategies.data && 
+        cache.strategies.timestamp > Date.now() - CACHE_DURATIONS.strategies) {
+      console.log("Using cached strategies data");
+      return cache.strategies.data as string[];
+    }
+    
     // Get fetch options with auth token if available
     const options = await createFetchOptions();
     
@@ -182,6 +257,13 @@ export const fetchStrategies = async (): Promise<string[]> => {
     const response = await fetch(`${API_BASE_URL}/strategies`, options);
     
     const data = await handleApiResponse(response);
+    
+    // Update cache
+    cache.strategies = {
+      data,
+      timestamp: Date.now(),
+    };
+    
     console.log("Strategies fetched:", data.length);
     return data;
   } catch (error) {
@@ -296,4 +378,38 @@ export const setAuthToken = (token: string) => {
  */
 export const clearAuthToken = () => {
   localStorage.removeItem('authToken');
+};
+
+/**
+ * Prefetches common data to speed up application loading
+ */
+export const prefetchCommonData = async () => {
+  try {
+    // Start multiple fetches in parallel
+    const promises = [
+      fetchStrategies(),
+      fetchSymbols(),
+    ];
+    
+    // Wait for all to complete
+    await Promise.all(promises);
+    console.log("Prefetched common data successfully");
+  } catch (error) {
+    console.error("Error prefetching common data:", error);
+  }
+};
+
+/**
+ * Clears all API caches
+ */
+export const clearAllCaches = () => {
+  cache.signals.data = null;
+  cache.signals.timestamp = 0;
+  cache.strategies.data = null;
+  cache.strategies.timestamp = 0;
+  cache.symbols.data = null;
+  cache.symbols.timestamp = 0;
+  cache.performance.data = null;
+  cache.performance.timestamp = 0;
+  console.log("All API caches cleared");
 };

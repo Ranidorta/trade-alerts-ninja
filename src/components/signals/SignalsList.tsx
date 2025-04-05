@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, memo } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
@@ -21,7 +21,8 @@ interface SignalsListProps {
   autoRefreshInterval?: number; // in seconds
 }
 
-const SignalsList = ({ 
+// Using memo to prevent unnecessary re-renders
+const SignalsList = memo(({ 
   signals, 
   isLoading, 
   error, 
@@ -141,6 +142,9 @@ const SignalsList = ({
       ))}
     </div>
   );
-};
+});
+
+// Add display name for debugging
+SignalsList.displayName = "SignalsList";
 
 export default SignalsList;
