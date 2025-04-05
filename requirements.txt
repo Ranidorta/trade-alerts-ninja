@@ -12,6 +12,7 @@ joblib>=1.3.0
 # Technical Analysis
 ta-lib>=0.4.26
 river>=0.14.0
+vectorbt>=0.24.0
 
 # Machine Learning
 scikit-learn>=1.3.0
