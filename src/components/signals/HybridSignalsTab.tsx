@@ -69,9 +69,11 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
   const [selectedTimeframe, setSelectedTimeframe] = useState<string>("hybrid");
   
   // Fetch hybrid signals
-  const { data: hybridSignals, isLoading, error } = useQuery({
+  const { data: hybridSignals, isLoading, error, isError } = useQuery({
     queryKey: ["hybridSignals", selectedTimeframe],
-    queryFn: fetchHybridSignals
+    queryFn: fetchHybridSignals,
+    retry: 1, // Only retry once to avoid excessive retries on 404
+    refetchOnWindowFocus: false
   });
 
   // Handle errors
@@ -105,22 +107,20 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
         <div className="flex justify-center mb-4">
-          <Shield className="h-12 w-12 text-red-500" />
+          <Brain className="h-12 w-12 text-blue-500" />
         </div>
-        <h3 className="text-lg font-semibold text-red-800 mb-2">Erro ao carregar sinais</h3>
-        <p className="text-red-600 mb-4">
-          Não foi possível carregar os sinais híbridos do servidor.
+        <h3 className="text-lg font-semibold text-blue-800 mb-2">Nenhum sinal híbrido encontrado</h3>
+        <p className="text-blue-600 mb-4">
+          Ainda não existem sinais gerados pelo algoritmo híbrido. O sistema verificará múltiplos timeframes, 
+          níveis de Fibonacci, ADX e Volume Profile para gerar sinais de alta qualidade.
         </p>
-        <button 
-          className="px-4 py-2 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition-colors"
-          onClick={() => window.location.reload()}
-        >
-          Tentar novamente
-        </button>
+        <p className="text-sm text-blue-500">
+          Os sinais híbridos combinam confirmações em múltiplos timeframes para maior precisão.
+        </p>
       </div>
     );
   }
@@ -169,7 +169,7 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
                 <ul className="list-disc pl-5 mt-2">
                   <li>Múltiplos timeframes (15m, 1h, 4h)</li>
                   <li>Acima do nível de Fibonacci 61.8%</li>
-                  <li>ADX forte (>25) no timeframe 4h</li>
+                  <li>ADX forte (&gt;25) no timeframe 4h</li>
                   <li>Acima do Point of Control do perfil de volume</li>
                 </ul>
               </TooltipContent>

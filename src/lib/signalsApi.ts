@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -58,11 +57,17 @@ export const fetchSignals = async (params?: any) => {
 
 export const fetchHybridSignals = async () => {
   try {
+    console.log("Fetching hybrid signals from:", `${config.apiUrl || 'http://localhost:5000'}/api/signals/history/hybrid`);
     const response = await api.get('/api/signals/history/hybrid');
     return response.data as TradingSignal[];
   } catch (error) {
     console.error('Error fetching hybrid signals:', error);
-    throw error;
+    // If the error is 404, it means no signals were found, which is a valid state
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      console.log('No hybrid signals found (404 response)');
+      return []; // Return empty array instead of throwing
+    }
+    throw error; // Re-throw other errors
   }
 };
 
@@ -90,5 +95,3 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
     throw error;
   }
 };
-
-// More functions could be added here (createSignal, updateSignal, etc.)
