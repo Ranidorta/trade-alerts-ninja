@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Brain, Shield, Info } from "lucide-react";
 import { fetchHybridSignals } from "@/lib/signalsApi";
-import { TradingSignal } from "@/lib/types";
+import { TradingSignal, SignalResult } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Table, 
@@ -30,17 +29,24 @@ import {
 } from "@/components/ui/tabs";
 
 // Function to determine the color based on the result
-const getResultColor = (result: string | null): string => {
+const getResultColor = (result: SignalResult | null): string => {
   if (!result) return "bg-gray-100 text-gray-800";
   
-  switch(result.toUpperCase()) {
+  // Convert to string if it's a number (0 or 1)
+  const resultStr = typeof result === 'number' ? 
+    (result === 1 ? "WINNER" : "LOSER") : result.toString().toUpperCase();
+  
+  switch(resultStr) {
     case "WINNER":
+    case "WIN":
       return "bg-green-100 text-green-800 border-green-300";
     case "PARTIAL":
       return "bg-yellow-100 text-yellow-800 border-yellow-300";
     case "LOSER":
+    case "LOSS":
       return "bg-red-100 text-red-800 border-red-300";
     case "FALSE":
+    case "MISSED":
       return "bg-gray-100 text-gray-800 border-gray-300";
     default:
       return "bg-gray-100 text-gray-800";
@@ -48,16 +54,41 @@ const getResultColor = (result: string | null): string => {
 };
 
 // Function to get the result icon
-const getResultIcon = (result: string | null): string => {
+const getResultIcon = (result: SignalResult | null): string => {
   if (!result) return "⏳";
   
-  switch(result.toUpperCase()) {
-    case "WINNER": return "✅";
+  // Convert to string if it's a number (0 or 1)
+  const resultStr = typeof result === 'number' ? 
+    (result === 1 ? "WINNER" : "LOSER") : result.toString().toUpperCase();
+  
+  switch(resultStr) {
+    case "WINNER":
+    case "WIN": return "✅";
     case "PARTIAL": return "⚠️";
-    case "LOSER": return "❌";
-    case "FALSE": return "⚪";
+    case "LOSER":
+    case "LOSS": return "❌";
+    case "FALSE":
+    case "MISSED": return "⚪";
     default: return "⏳";
   }
+};
+
+// Format the display of result text
+const formatResultText = (result: SignalResult | null): string => {
+  if (!result) return "PENDENTE";
+  
+  if (typeof result === 'number') {
+    return result === 1 ? "WINNER" : "LOSER";
+  }
+  
+  const resultMap: Record<string, string> = {
+    "win": "WINNER",
+    "loss": "LOSER",
+    "partial": "PARTIAL",
+    "missed": "FALSE"
+  };
+  
+  return resultMap[result.toString().toLowerCase()] || result.toString().toUpperCase();
 };
 
 interface HybridSignalsTabProps {
@@ -261,7 +292,7 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
                         variant="outline" 
                         className={`${getResultColor(signal.result)}`}
                       >
-                        {getResultIcon(signal.result)} {signal.result || 'PENDENTE'}
+                        {getResultIcon(signal.result)} {formatResultText(signal.result)}
                       </Badge>
                     </TableCell>
                   </TableRow>
