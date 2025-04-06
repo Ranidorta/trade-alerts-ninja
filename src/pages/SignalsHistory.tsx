@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,16 +83,24 @@ const SignalsHistory = () => {
   
   // Derived calculated data for summary
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => signal.result === 'WINNER').length;
-  const losingTrades = filteredSignals.filter(signal => signal.result === 'LOSER').length;
+  const winningTrades = filteredSignals.filter(signal => 
+    signal.result === "WINNER" || signal.result === "win" || signal.result === 1
+  ).length;
+  const losingTrades = filteredSignals.filter(signal => 
+    signal.result === "LOSER" || signal.result === "loss" || signal.result === 0
+  ).length;
   const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
   // Symbol-based statistics
   const symbolsData = uniqueSymbols.map(symbol => {
     const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
     const count = symbolSignals.length;
-    const wins = symbolSignals.filter(s => s.result === 'WINNER').length;
-    const losses = symbolSignals.filter(s => s.result === 'LOSER').length;
+    const wins = symbolSignals.filter(s => 
+      s.result === "WINNER" || s.result === "win" || (typeof s.result === "number" && s.result === 1)
+    ).length;
+    const losses = symbolSignals.filter(s => 
+      s.result === "LOSER" || s.result === "loss" || (typeof s.result === "number" && s.result === 0)
+    ).length;
     const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
     
     return {
@@ -586,7 +593,7 @@ const SignalsHistory = () => {
           
           {/* Summary view */}
           {viewMode === 'summary' && (
-            <SignalsSummary data={summaryData} />
+            <SignalsSummary signals={filteredSignals} />
           )}
         </>
       )}

@@ -71,6 +71,20 @@ def fetch_hybrid_signals():
                     # If parsing fails, keep empty
                     pass
             
+            # Map result values to the proper format
+            result = None
+            if 'result' in row and not pd.isna(row['result']):
+                if row['result'] == 'win':
+                    result = "WINNER"
+                elif row['result'] == 'loss':
+                    result = "LOSER"
+                elif row['result'] == 'partial':
+                    result = "PARTIAL"
+                elif row['result'] == 'missed':
+                    result = "FALSE"
+                else:
+                    result = row['result']
+            
             # Create signal object
             signal = {
                 "id": str(uuid.uuid4()) if 'id' not in row else row['id'],
@@ -87,7 +101,7 @@ def fetch_hybrid_signals():
                 "strategy": "HYBRID",
                 "confidence": 1.0,
                 "timeframe": "hybrid",
-                "result": row['result'] if not pd.isna(row['result']) else None
+                "result": result
             }
             
             signals.append(signal)

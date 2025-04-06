@@ -69,8 +69,16 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
       aValue = a.profit || 0;
       bValue = b.profit || 0;
     } else if (sortField === "result") {
-      aValue = a.result === 1 ? 1 : a.result === 0 ? 0 : -1;
-      bValue = b.result === 1 ? 1 : b.result === 0 ? 0 : -1;
+      // Convert result values to numeric for sorting
+      const resultToNumber = (result: any) => {
+        if (result === 1 || result === "win" || result === "WINNER") return 3;
+        if (result === "partial" || result === "PARTIAL") return 2;
+        if (result === 0 || result === "loss" || result === "LOSER") return 1;
+        if (result === "missed" || result === "FALSE") return 0;
+        return -1;
+      };
+      aValue = resultToNumber(a.result);
+      bValue = resultToNumber(b.result);
     }
     
     if (aValue === bValue) return 0;
@@ -136,50 +144,50 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   };
   
   const getResultColor = (result: string | number | undefined) => {
-    if (result === 1 || result === "win") {
+    if (result === 1 || result === "win" || result === "WINNER") {
       return "text-green-600 dark:text-green-400";
-    } else if (result === 0 || result === "loss") {
+    } else if (result === 0 || result === "loss" || result === "LOSER") {
       return "text-red-600 dark:text-red-400";
-    } else if (result === "missed") {
+    } else if (result === "missed" || result === "FALSE") {
       return "text-gray-500";
-    } else if (result === "partial") {
+    } else if (result === "partial" || result === "PARTIAL") {
       return "text-amber-500";
     }
     return "";
   };
   
   const formatResult = (result: string | number | undefined) => {
-    if (result === 1 || result === "win") return "Vencedor";
-    if (result === 0 || result === "loss") return "Perdedor";
-    if (result === "partial") return "Parcial";
-    if (result === "missed") return "Falso";
+    if (result === 1 || result === "win" || result === "WINNER") return "Vencedor";
+    if (result === 0 || result === "loss" || result === "LOSER") return "Perdedor";
+    if (result === "partial" || result === "PARTIAL") return "Parcial";
+    if (result === "missed" || result === "FALSE") return "Falso";
     return result ? String(result) : "—";
   };
   
   const getStatusBadge = (signal: TradingSignal) => {
     if (signal.status === "COMPLETED") {
-      if (signal.result === 1 || signal.result === "win") {
+      if (signal.result === 1 || signal.result === "win" || signal.result === "WINNER") {
         return (
           <Badge variant="success" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
             Vencedor
           </Badge>
         );
-      } else if (signal.result === 0 || signal.result === "loss") {
+      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "LOSER") {
         return (
           <Badge variant="destructive" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
             Perdedor
           </Badge>
         );
-      } else if (signal.result === "partial") {
+      } else if (signal.result === "partial" || signal.result === "PARTIAL") {
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
             Parcial
           </Badge>
         );
-      } else if (signal.result === "missed") {
+      } else if (signal.result === "missed" || signal.result === "FALSE") {
         return (
           <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />

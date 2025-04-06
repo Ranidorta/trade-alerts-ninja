@@ -1,3 +1,4 @@
+
 import React from "react";
 import { TradingSignal } from "@/lib/types";
 import { format } from "date-fns";
@@ -9,8 +10,8 @@ interface SignalHistoryItemProps {
 }
 
 export const SignalHistoryItem = ({ signal }: SignalHistoryItemProps) => {
-  const isWin = signal.result === 1 || signal.result === "win";
-  const isLoss = signal.result === 0 || signal.result === "loss";
+  const isWin = signal.result === 1 || signal.result === "win" || signal.result === "WINNER";
+  const isLoss = signal.result === 0 || signal.result === "loss" || signal.result === "LOSER";
   const isPending = signal.result === undefined || signal.status !== "COMPLETED";
   
   const formatPrice = (price?: number) => {

@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,19 +61,19 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
     
     // Calcular métricas
     const wins = symbolSignals.filter(s => 
-      s.result === 1 || s.result === "win"
+      s.result === 1 || s.result === "win" || s.result === "WINNER"
     ).length;
     
     const partials = symbolSignals.filter(s => 
-      s.result === "partial"
+      s.result === "partial" || s.result === "PARTIAL"
     ).length;
     
     const losses = symbolSignals.filter(s => 
-      s.result === 0 || s.result === "loss"
+      s.result === 0 || s.result === "loss" || s.result === "LOSER"
     ).length;
     
     const missed = symbolSignals.filter(s => 
-      s.result === "missed"
+      s.result === "missed" || s.result === "FALSE"
     ).length;
     
     const successRate = symbolSignals.length > 0 ? ((wins + partials) / symbolSignals.length) * 100 : 0;
@@ -89,26 +90,26 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
       .slice(0, 5);
     
     const recentResults = recentSignals.map(s => {
-      if (s.result === 1 || s.result === "win") return "win";
-      if (s.result === "partial") return "partial";
-      if (s.result === 0 || s.result === "loss") return "loss";
+      if (s.result === 1 || s.result === "win" || s.result === "WINNER") return "win";
+      if (s.result === "partial" || s.result === "PARTIAL") return "partial";
+      if (s.result === 0 || s.result === "loss" || s.result === "LOSER") return "loss";
       return "missed";
     });
     
     // Contar atingimento de targets
     const tp1Hit = symbolSignals.filter(s => 
       s.targets?.some(t => t.level === 1 && t.hit) || 
-      (s.tp1 !== undefined && s.result !== 0 && s.result !== "loss")
+      (s.tp1 !== undefined && s.result !== 0 && s.result !== "loss" && s.result !== "LOSER")
     ).length;
     
     const tp2Hit = symbolSignals.filter(s => 
       s.targets?.some(t => t.level === 2 && t.hit) || 
-      (s.tp2 !== undefined && s.result !== 0 && s.result !== "loss")
+      (s.tp2 !== undefined && s.result !== 0 && s.result !== "loss" && s.result !== "LOSER")
     ).length;
     
     const tp3Hit = symbolSignals.filter(s => 
       s.targets?.some(t => t.level === 3 && t.hit) || 
-      (s.tp3 !== undefined && s.result !== 0 && s.result !== "loss")
+      (s.tp3 !== undefined && s.result !== 0 && s.result !== "loss" && s.result !== "LOSER")
     ).length;
     
     setHistoricalData({

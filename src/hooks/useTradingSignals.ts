@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { TradingSignal } from "@/lib/types";
+import { TradingSignal, SignalResult } from "@/lib/types";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
 import { 
@@ -136,10 +136,10 @@ export const useTradingSignals = () => {
         // Otherwise determine from profit or status
         if (signal.result === undefined) {
           if (signal.profit !== undefined) {
-            signal.result = signal.profit > 0 ? 1 : 0;
+            signal.result = signal.profit > 0 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
           } else if (signal.status === "COMPLETED") {
             // For completed signals without result info, assume based on status
-            signal.result = Math.random() > 0.5 ? 1 : 0; // Random for demo (server should provide this)
+            signal.result = Math.random() > 0.5 ? "WINNER" as SignalResult : "LOSER" as SignalResult; // Random for demo (server should provide this)
           }
         }
         
@@ -148,15 +148,15 @@ export const useTradingSignals = () => {
           // Populate target hit information based on result
           signal.targets = signal.targets.map((target, index) => ({
             ...target,
-            hit: signal.result === 1 && index === 0 ? true : 
-                 signal.result === 1 && index > 0 ? Math.random() > 0.5 : false
+            hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index === 0 ? true : 
+                 (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index > 0 ? Math.random() > 0.5 : false
           }));
         } else if (signal.entryPrice) {
           // Create dummy targets based on entry price if none exist
           signal.targets = [
-            { level: 1, price: signal.entryPrice * 1.03, hit: signal.result === 1 },
-            { level: 2, price: signal.entryPrice * 1.05, hit: signal.result === 1 && Math.random() > 0.6 },
-            { level: 3, price: signal.entryPrice * 1.08, hit: signal.result === 1 && Math.random() > 0.8 }
+            { level: 1, price: signal.entryPrice * 1.03, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) },
+            { level: 2, price: signal.entryPrice * 1.05, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && Math.random() > 0.6 },
+            { level: 3, price: signal.entryPrice * 1.08, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && Math.random() > 0.8 }
           ];
         }
         
@@ -322,7 +322,7 @@ export const useTradingSignals = () => {
         direction,
         entryPrice,
         status: Math.random() > 0.3 ? "COMPLETED" : "ACTIVE",
-        result: isWinner ? 1 : 0,
+        result: isWinner ? "WINNER" as SignalResult : "LOSER" as SignalResult,
         profit: isWinner ? Math.random() * 5 + 1 : -(Math.random() * 2 + 0.5),
         createdAt: createdDate.toISOString(),
         stopLoss: direction === "BUY" 
