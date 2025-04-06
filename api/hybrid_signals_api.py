@@ -24,16 +24,21 @@ def get_hybrid_signals():
     """
     file = Path("data/historical_signals_hybrid.csv")
     if not file.exists():
+        print(f"Hybrid signals file not found at: {file}")
         return jsonify({"error": "No hybrid signals found."}), 404
 
     try:
+        print(f"Reading hybrid signals from: {file}")
         df = pd.read_csv(file)
+        print(f"Found {len(df)} hybrid signals")
             
         # Sort by timestamp descending
         df = df.sort_values(by='timestamp', ascending=False)
         
         # Convert to dict records
         records = df.to_dict(orient="records")
+        print(f"Returning {len(records)} hybrid signals")
         return jsonify(records)
     except Exception as e:
+        print(f"Error processing hybrid signals: {str(e)}")
         return jsonify({"error": f"Error processing hybrid signals: {str(e)}"}), 500

@@ -58,15 +58,25 @@ export const fetchSignals = async (params?: any) => {
 
 export const fetchHybridSignals = async () => {
   try {
-    console.log("Fetching hybrid signals from:", `${config.apiUrl || 'http://localhost:5000'}/api/signals/history/hybrid`);
+    console.log(`Fetching hybrid signals from: ${api.defaults.baseURL}/api/signals/history/hybrid`);
     const response = await api.get('/api/signals/history/hybrid');
+    
+    if (response.status === 200) {
+      console.log(`Successfully fetched ${response.data.length} hybrid signals`);
+    }
+    
     return response.data as TradingSignal[];
   } catch (error) {
     console.error('Error fetching hybrid signals:', error);
-    // If the error is 404, it means no signals were found, which is a valid state
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      console.log('No hybrid signals found (404 response)');
-      return []; // Return empty array instead of throwing
+    if (axios.isAxiosError(error)) {
+      console.log(`API responded with status: ${error.response?.status}`);
+      console.log(`Error message: ${error.response?.data?.error || error.message}`);
+      
+      // If the error is 404, it means no signals were found, which is a valid state
+      if (error.response?.status === 404) {
+        console.log('No hybrid signals found (404 response)');
+        return []; // Return empty array instead of throwing
+      }
     }
     throw error; // Re-throw other errors
   }
