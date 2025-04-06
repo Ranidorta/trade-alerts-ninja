@@ -66,6 +66,18 @@ export const fetchHybridSignals = async () => {
   }
 };
 
+// Function to fetch signals for specific timeframes
+export const fetchTimeframeSignals = async (timeframe: string) => {
+  try {
+    // The API endpoint format matches: /api/signals/history/{timeframe}
+    const response = await api.get(`/api/signals/history/${timeframe}`);
+    return response.data as TradingSignal[];
+  } catch (error) {
+    console.error(`Error fetching ${timeframe} signals:`, error);
+    throw error;
+  }
+};
+
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
     const response = await api.get('/api/signals/history', { params: filters });
