@@ -1,456 +1,610 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { TradingSignal } from "@/lib/types";
-import { useToast } from "@/components/ui/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+import React, { useState, useEffect } from 'react';
+import { fetchSignalsHistory } from '@/lib/signalsApi';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { 
-  BarChart4, 
+  ArrowUpDown, 
+  Filter, 
   Calendar, 
-  Clock,
-  RefreshCw,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  Database,
-  Filter,
-  Search,
-  SlidersHorizontal,
-  CheckCircle,
-  List,
-  CalendarIcon,
-  X
-} from "lucide-react";
+  ChevronDown,
+  Layers,
+  BarChart3,
+  X,
+  Search
+} from 'lucide-react';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle,
+  DialogTrigger,
+  DialogClose
+} from '@/components/ui/dialog';
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Cell,
-  Legend
-} from "recharts";
-import ApiConnectionError from "@/components/signals/ApiConnectionError";
-import { config } from "@/config/env";
-import { 
-  getSignalsHistory, 
-  updateAllSignalsStatus, 
-  analyzeSignalsHistory,
-  updateSignalInHistory
-} from "@/lib/signalHistoryService";
-import { verifySingleSignal, verifyAllSignals } from "@/lib/signalVerification";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
-import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
-import { getSignalHistory } from "@/lib/signal-storage";
-import SignalsSummary from "@/components/signals/SignalsSummary";
-import { fetchSignalsHistory } from "@/lib/signalsApi";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/signals/PageHeader';
+import { TradingSignal } from '@/lib/types';
+import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
+import { SignalsSummary } from '@/components/signals/SignalsSummary';
+import ApiConnectionError from '@/components/signals/ApiConnectionError';
+import { config } from '@/config/env';
+import { useToast } from '@/components/ui/use-toast';
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const calculateWinRate = (signals: TradingSignal[]) => {
+  if (!signals.length) return 0;
+  
+  const winners = signals.filter(signal => signal.result === 'WINNER').length;
+  return (winners / signals.length) * 100;
+};
 
 const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
-  const [isError, setIsError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [selectedTab, setSelectedTab] = useState("table");
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [search, setSearch] = useState("");
-  const [resultFilter, setResultFilter] = useState<string | undefined>(undefined);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isAdvancedFilterOpen, setIsAdvancedFilterOpen] = useState(false);
-  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
-  const [isVerifyingAll, setIsVerifyingAll] = useState(false);
-  const [isReprocessing, setIsReprocessing] = useState(false);
+  const [apiError, setApiError] = useState(false);
+  const [symbolFilter, setSymbolFilter] = useState('');
+  const [resultFilter, setResultFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'summary'>('table');
   const { toast } = useToast();
-
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchSignalsHistory();
-      setSignals(data);
-      setFilteredSignals(data);
-      setIsError(false);
-    } catch (error) {
-      console.error("Error fetching signals:", error);
-      setIsError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleDateChange = (newDate: Date | undefined) => {
-    setDate(newDate);
-  };
-
-  const filterSignalsByDate = useCallback(() => {
-    if (!date) {
-      setFilteredSignals([...signals]);
-      return;
-    }
-
-    const selectedDate = new Date(date);
-    const filtered = signals.filter((signal) => {
-      const signalDate = new Date(signal.createdAt);
-      return (
-        signalDate.getDate() === selectedDate.getDate() &&
-        signalDate.getMonth() === selectedDate.getMonth() &&
-        signalDate.getFullYear() === selectedDate.getFullYear()
-      );
-    });
-
-    setFilteredSignals(filtered);
-  }, [date, signals]);
-
-  useEffect(() => {
-    filterSignalsByDate();
-  }, [filterSignalsByDate]);
-
-  const filterSignalsBySearch = useCallback(() => {
-    if (!search) {
-      setFilteredSignals([...signals]);
-      return;
-    }
-
-    const filtered = signals.filter((signal) => {
-      return (
-        signal.symbol.toLowerCase().includes(search.toLowerCase()) ||
-        signal.strategy?.toLowerCase().includes(search.toLowerCase())
-      );
-    });
-
-    setFilteredSignals(filtered);
-  }, [search, signals]);
-
-  useEffect(() => {
-    filterSignalsBySearch();
-  }, [filterSignalsBySearch]);
-
-  const filterSignalsByResult = useCallback(() => {
-    if (!resultFilter) {
-      setFilteredSignals([...signals]);
-      return;
-    }
-
-    const filtered = signals.filter((signal) => {
-      return signal.result === resultFilter;
-    });
-
-    setFilteredSignals(filtered);
-  }, [resultFilter, signals]);
-
-  useEffect(() => {
-    filterSignalsByResult();
-  }, [filterSignalsByResult]);
-
-  const handleVerifySingleSignal = async (signalId: string) => {
-    setIsUpdating(true);
-    try {
-      const updatedSignal = await verifySingleSignal(signalId);
-      if (updatedSignal) {
-        setSignals((prevSignals) =>
-          prevSignals.map((signal) =>
-            signal.id === signalId ? updatedSignal : signal
-          )
-        );
-        setFilteredSignals((prevFilteredSignals) =>
-          prevFilteredSignals.map((signal) =>
-            signal.id === signalId ? updatedSignal : signal
-          )
-        );
-        toast({
-          title: "Sinal verificado!",
-          description: "O sinal foi verificado com sucesso.",
-        });
-      } else {
-        toast({
-          title: "Erro ao verificar sinal",
-          description: "Não foi possível verificar o sinal.",
-          variant: "destructive",
-        });
+  
+  // List of unique symbols for filtering
+  const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
+  
+  // Derived calculated data for summary
+  const totalSignals = filteredSignals.length;
+  const winningTrades = filteredSignals.filter(signal => signal.result === 'WINNER').length;
+  const losingTrades = filteredSignals.filter(signal => signal.result === 'LOSER').length;
+  const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
+  
+  // Symbol-based statistics
+  const symbolsData = uniqueSymbols.map(symbol => {
+    const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
+    const count = symbolSignals.length;
+    const wins = symbolSignals.filter(s => s.result === 'WINNER').length;
+    const losses = symbolSignals.filter(s => s.result === 'LOSER').length;
+    const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
+    
+    return {
+      symbol,
+      count,
+      wins,
+      losses,
+      winRate: symbolWinRate
+    };
+  }).sort((a, b) => b.count - a.count);
+  
+  // Strategy-based statistics
+  const uniqueStrategies = [...new Set(filteredSignals.map(signal => signal.strategy || 'Unknown'))];
+  const strategyData = uniqueStrategies.map(strategy => {
+    const strategySignals = filteredSignals.filter(s => (s.strategy || 'Unknown') === strategy);
+    const count = strategySignals.length;
+    const wins = strategySignals.filter(s => s.result === 'WINNER').length;
+    const losses = strategySignals.filter(s => s.result === 'LOSER').length;
+    const strategyWinRate = count > 0 ? (wins / count) * 100 : 0;
+    
+    return {
+      strategy,
+      count,
+      wins,
+      losses,
+      winRate: strategyWinRate
+    };
+  }).sort((a, b) => b.count - a.count);
+  
+  // Daily performance statistics
+  const dailyData = (() => {
+    const dailyMap = new Map();
+    
+    filteredSignals.forEach(signal => {
+      if (!signal.timestamp) return;
+      
+      const date = new Date(signal.timestamp).toLocaleDateString();
+      if (!dailyMap.has(date)) {
+        dailyMap.set(date, { date, count: 0, wins: 0, losses: 0 });
       }
-    } catch (error) {
-      console.error("Error verifying signal:", error);
-      toast({
-        title: "Erro ao verificar sinal",
-        description: "Ocorreu um erro ao verificar o sinal.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdating(false);
-    }
+      
+      const day = dailyMap.get(date);
+      day.count++;
+      
+      if (signal.result === 'WINNER') day.wins++;
+      if (signal.result === 'LOSER') day.losses++;
+    });
+    
+    return Array.from(dailyMap.values())
+      .map(day => ({
+        ...day,
+        winRate: day.count > 0 ? (day.wins / day.count) * 100 : 0
+      }))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  })();
+  
+  const avgProfit = (() => {
+    const profitSignals = filteredSignals.filter(s => s.profit_percentage);
+    if (profitSignals.length === 0) return 0;
+    
+    const totalProfit = profitSignals.reduce((sum, signal) => {
+      return sum + (parseFloat(signal.profit_percentage?.toString() || '0') || 0);
+    }, 0);
+    
+    return totalProfit / profitSignals.length;
+  })();
+  
+  // Summary data object
+  const summaryData = {
+    totalSignals,
+    winningTrades,
+    losingTrades,
+    winRate,
+    symbolsData,
+    strategyData,
+    dailyData,
+    avgProfit
   };
 
-  const handleVerifyAllSignals = async () => {
-    setIsVerifyingAll(true);
+  // Load signals from API
+  useEffect(() => {
+    const loadSignals = async () => {
+      try {
+        setIsLoading(true);
+        setApiError(false);
+        
+        // Apply any active filters to the API request
+        const filters: { symbol?: string; result?: string } = {};
+        if (symbolFilter) filters.symbol = symbolFilter;
+        if (resultFilter) filters.result = resultFilter;
+        
+        const response = await fetchSignalsHistory(filters);
+        
+        setSignals(response);
+        setFilteredSignals(response);
+        
+        toast({
+          title: "Sinais carregados",
+          description: `${response.length} sinais históricos encontrados.`,
+        });
+      } catch (error) {
+        console.error("Failed to load signals:", error);
+        setApiError(true);
+        
+        // Get mock data if API fails
+        try {
+          const mockData = await import('@/lib/mockData').then(mod => mod.getMockSignalHistory());
+          setSignals(mockData as TradingSignal[]);
+          setFilteredSignals(mockData as TradingSignal[]);
+          
+          toast({
+            title: "Usando dados locais",
+            description: "Não foi possível conectar à API, usando dados locais.",
+            variant: "destructive"
+          });
+        } catch (e) {
+          console.error("Failed to load mock data:", e);
+          setSignals([]);
+          setFilteredSignals([]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadSignals();
+  }, [symbolFilter, resultFilter]);
+  
+  // Handle search filtering
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredSignals(signals);
+      return;
+    }
+    
+    const query = searchQuery.toLowerCase().trim();
+    const filtered = signals.filter(signal => 
+      signal.symbol.toLowerCase().includes(query) ||
+      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+      signal.result.toLowerCase().includes(query)
+    );
+    
+    setFilteredSignals(filtered);
+  }, [signals, searchQuery]);
+  
+  // Handle switching to local mode
+  const handleLocalModeClick = async () => {
     try {
-      await verifyAllSignals();
+      const mockData = await import('@/lib/mockData').then(mod => mod.getMockSignalHistory());
+      setSignals(mockData as TradingSignal[]);
+      setFilteredSignals(mockData as TradingSignal[]);
+      setApiError(false);
+      
       toast({
-        title: "Sinais verificados!",
-        description: "Todos os sinais foram verificados com sucesso.",
+        title: "Modo local ativado",
+        description: "Exibindo dados de exemplo armazenados localmente.",
       });
-      fetchData();
     } catch (error) {
-      console.error("Error verifying all signals:", error);
+      console.error("Failed to load mock data:", error);
       toast({
-        title: "Erro ao verificar sinais",
-        description: "Ocorreu um erro ao verificar os sinais.",
-        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível carregar os dados locais.",
+        variant: "destructive"
       });
-    } finally {
-      setIsVerifyingAll(false);
     }
   };
-
-  const handleUpdateAllSignals = async () => {
-    setIsUpdatingAll(true);
-    try {
-      await updateAllSignalsStatus();
-      toast({
-        title: "Sinais atualizados!",
-        description: "Todos os sinais foram atualizados com sucesso.",
-      });
-      fetchData();
-    } catch (error) {
-      console.error("Error updating all signals:", error);
-      toast({
-        title: "Erro ao atualizar sinais",
-        description: "Ocorreu um erro ao atualizar os sinais.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUpdatingAll(false);
-    }
-  };
-
-  const handleReprocessAllHistory = async () => {
-    setIsReprocessing(true);
-    try {
-      await updateAllSignalsStatus();
-      toast({
-        title: "Histórico reprocessado!",
-        description: "Todo o histórico foi reprocessado com sucesso.",
-      });
-      fetchData();
-    } catch (error) {
-      console.error("Error reprocessing history:", error);
-      toast({
-        title: "Erro ao reprocessar histórico",
-        description: "Ocorreu um erro ao reprocessar o histórico.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsReprocessing(false);
-    }
-  };
-
-  const summary = analyzeSignalsHistory();
-
-  if (isError) {
-    return <ApiConnectionError />;
+  
+  // If API error is detected and we couldn't get mock data
+  if (apiError && signals.length === 0) {
+    return (
+      <ApiConnectionError 
+        apiUrl={config.apiUrl || 'http://localhost:5000'} 
+        onLocalModeClick={handleLocalModeClick} 
+      />
+    );
   }
 
   return (
-    <div className="container max-w-7xl py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h1 className="scroll-m-20 pb-2 text-3xl font-semibold tracking-tight transition-colors first:mt-0">
-            Histórico de Sinais
-          </h1>
-          <Badge variant="secondary">{signals.length} sinais</Badge>
+    <div className="container mx-auto px-4 py-8">
+      <PageHeader
+        title="Histórico de Sinais"
+        description="Histórico detalhado dos sinais gerados"
+      />
+      
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+        {/* Search and filter controls */}
+        <div className="relative w-full sm:w-64 flex-shrink-0">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Pesquisar sinais..."
+            className="pl-8"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsAdvancedFilterOpen(!isAdvancedFilterOpen)}
-          >
-            <SlidersHorizontal className="mr-2 h-4 w-4" />
-            Avançado
-          </Button>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                <span>{date ? format(date, "dd/MM/yyyy") : "Filtrar data"}</span>
+        
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* Symbol filter dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-1">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Ativo</span>
+                {symbolFilter && (
+                  <Badge variant="secondary" className="ml-1 bg-primary/20">
+                    {symbolFilter}
+                  </Badge>
+                )}
+                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
               </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-auto p-0"
-              align="start"
-            >
-              <CalendarComponent
-                mode="single"
-                selected={date}
-                onSelect={handleDateChange}
-                className="rounded-md border"
-              />
-            </PopoverContent>
-          </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                <Filter className="mr-2 h-4 w-4" />
-                Filtrar
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-4" align="end">
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium leading-none">Resultado</h4>
-                  <Select onValueChange={value => setResultFilter(value)} defaultValue={resultFilter}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Selecione o resultado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={undefined}>Limpar</SelectItem>
-                      <SelectItem value="win">Vencedor</SelectItem>
-                      <SelectItem value="loss">Perdedor</SelectItem>
-                      <SelectItem value="partial">Parcial</SelectItem>
-                      <SelectItem value="missed">Falso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Filtrar por ativo</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="max-h-[300px] overflow-y-auto">
+                <DropdownMenuItem 
+                  onSelect={() => setSymbolFilter('')}
+                  className={!symbolFilter ? "bg-primary/10" : ""}
+                >
+                  Todos os ativos
+                  {!symbolFilter && <Check className="ml-auto h-4 w-4" />}
+                </DropdownMenuItem>
+                
+                {uniqueSymbols.map((symbol) => (
+                  <DropdownMenuItem
+                    key={symbol}
+                    onSelect={() => setSymbolFilter(symbol)}
+                    className={symbolFilter === symbol ? "bg-primary/10" : ""}
+                  >
+                    {symbol}
+                    {symbolFilter === symbol && <Check className="ml-auto h-4 w-4" />}
+                  </DropdownMenuItem>
+                ))}
               </div>
-            </PopoverContent>
-          </Popover>
-          <Button variant="outline" onClick={fetchData} disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Atualizando...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Atualizar
-              </>
-            )}
-          </Button>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Result filter dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-1">
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Resultado</span>
+                {resultFilter && (
+                  <Badge 
+                    variant="secondary" 
+                    className={`ml-1 ${
+                      resultFilter === 'WINNER' 
+                        ? 'bg-green-500/20 text-green-600 border-green-300/30' 
+                        : resultFilter === 'LOSER'
+                          ? 'bg-red-500/20 text-red-600 border-red-300/30'
+                          : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
+                    }`}
+                  >
+                    {resultFilter}
+                  </Badge>
+                )}
+                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Filtrar por resultado</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onSelect={() => setResultFilter('')}
+                className={!resultFilter ? "bg-primary/10" : ""}
+              >
+                Todos os resultados
+                {!resultFilter && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setResultFilter('WINNER')}
+                className={resultFilter === 'WINNER' ? "bg-primary/10" : ""}
+              >
+                <Badge className="mr-2 bg-green-500/20 text-green-600 border-green-300/30">WINNER</Badge>
+                Vencedor
+                {resultFilter === 'WINNER' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setResultFilter('LOSER')}
+                className={resultFilter === 'LOSER' ? "bg-primary/10" : ""}
+              >
+                <Badge className="mr-2 bg-red-500/20 text-red-600 border-red-300/30">LOSER</Badge>
+                Perdedor
+                {resultFilter === 'LOSER' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setResultFilter('PARTIAL')}
+                className={resultFilter === 'PARTIAL' ? "bg-primary/10" : ""}
+              >
+                <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">PARTIAL</Badge>
+                Parcial
+                {resultFilter === 'PARTIAL' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* View mode selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 gap-1">
+                <Layers className="h-4 w-4" />
+                <span className="hidden sm:inline">
+                  {viewMode === 'table' ? 'Tabela' : viewMode === 'cards' ? 'Cards' : 'Resumo'}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Modo de visualização</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onSelect={() => setViewMode('table')}
+                className={viewMode === 'table' ? "bg-primary/10" : ""}
+              >
+                Tabela
+                {viewMode === 'table' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setViewMode('cards')}
+                className={viewMode === 'cards' ? "bg-primary/10" : ""}
+              >
+                Cards
+                {viewMode === 'cards' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setViewMode('summary')}
+                className={viewMode === 'summary' ? "bg-primary/10" : ""}
+              >
+                Resumo
+                {viewMode === 'summary' && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Clear filters button */}
+          {(symbolFilter || resultFilter || searchQuery) && (
+            <Button 
+              variant="ghost" 
+              className="h-9"
+              onClick={() => {
+                setSymbolFilter('');
+                setResultFilter('');
+                setSearchQuery('');
+              }}
+            >
+              <X className="h-4 w-4 mr-1" />
+              Limpar filtros
+            </Button>
+          )}
         </div>
       </div>
-
-      {isAdvancedFilterOpen && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Filtros Avançados</CardTitle>
-            <CardDescription>
-              Use os filtros avançados para refinar ainda mais os resultados.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="grid gap-4">
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium leading-none">Pesquisar</h4>
-                <Input
-                  placeholder="Pesquisar por par ou estratégia..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+      
+      {/* Results summary section */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Total de Sinais</span>
+              <span className="text-2xl font-bold">{totalSignals}</span>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={handleUpdateAllSignals}
-                disabled={isUpdatingAll}
-              >
-                {isUpdatingAll ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Atualizando...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Atualizar todos
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleVerifyAllSignals}
-                disabled={isVerifyingAll}
-              >
-                {isVerifyingAll ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Verificando...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Verificar todos
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleReprocessAllHistory}
-                disabled={isReprocessing}
-              >
-                {isReprocessing ? (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                    Reprocessando...
-                  </>
-                ) : (
-                  <>
-                    <Database className="mr-2 h-4 w-4" />
-                    Reprocessar tudo
-                  </>
-                )}
-              </Button>
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Sinais Vencedores</span>
+              <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Tabs defaultValue="table" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="table">
-            <List className="mr-2 h-4 w-4" />
-            Tabela
-          </TabsTrigger>
-          <TabsTrigger value="summary">
-            <BarChart4 className="mr-2 h-4 w-4" />
-            Resumo
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="table" className="space-y-2">
-          {isLoading ? (
-            <div className="text-center py-8">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Carregando sinais...
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Sinais Perdedores</span>
+              <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
             </div>
-          ) : (
-            <SignalHistoryTable
-              signals={filteredSignals}
-              onVerifySingleSignal={handleVerifySingleSignal}
-            />
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
+              <span className="text-2xl font-bold text-amber-500">{winRate.toFixed(1)}%</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Loading state */}
+      {isLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : (
+        <>
+          {/* No results message */}
+          {filteredSignals.length === 0 && (
+            <Card className="col-span-full">
+              <CardContent className="p-8 text-center">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                  <Calendar className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold">Nenhum sinal encontrado</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {searchQuery || symbolFilter || resultFilter ? 
+                    'Tente ajustar seus filtros para ver mais resultados.' : 
+                    'Nenhum sinal de trading foi gerado ainda.'}
+                </p>
+                {(searchQuery || symbolFilter || resultFilter) && (
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => {
+                      setSymbolFilter('');
+                      setResultFilter('');
+                      setSearchQuery('');
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Limpar filtros
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
           )}
-        </TabsContent>
-        <TabsContent value="summary" className="space-y-2">
-          <SignalsSummary summary={summary} />
-        </TabsContent>
-      </Tabs>
+          
+          {/* Table view */}
+          {viewMode === 'table' && filteredSignals.length > 0 && (
+            <Card>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data/Hora</TableHead>
+                      <TableHead>Ativo</TableHead>
+                      <TableHead>Direção</TableHead>
+                      <TableHead>Entrada</TableHead>
+                      <TableHead>TP</TableHead>
+                      <TableHead>SL</TableHead>
+                      <TableHead>Resultado</TableHead>
+                      <TableHead>Estratégia</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSignals.map((signal) => (
+                      <TableRow key={signal.id || `${signal.timestamp}-${signal.symbol}`}>
+                        <TableCell>
+                          {signal.timestamp ? formatDate(signal.timestamp) : 'N/A'}
+                        </TableCell>
+                        <TableCell className="font-medium">{signal.symbol}</TableCell>
+                        <TableCell>
+                          <Badge variant={signal.direction === 'BUY' ? 'success' : 'destructive'}>
+                            {signal.direction}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{signal.entry_price}</TableCell>
+                        <TableCell>{signal.tp}</TableCell>
+                        <TableCell>{signal.sl}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline" 
+                            className={
+                              signal.result === 'WINNER' 
+                                ? 'bg-green-500/20 text-green-600 border-green-300/30' 
+                                : signal.result === 'LOSER'
+                                  ? 'bg-red-500/20 text-red-600 border-red-300/30'
+                                  : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
+                            }
+                          >
+                            {signal.result}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{signal.strategy || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
+          
+          {/* Cards view */}
+          {viewMode === 'cards' && filteredSignals.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSignals.map((signal) => (
+                <SignalHistoryItem key={signal.id || `${signal.timestamp}-${signal.symbol}`} signal={signal} />
+              ))}
+            </div>
+          )}
+          
+          {/* Summary view */}
+          {viewMode === 'summary' && (
+            <SignalsSummary data={summaryData} />
+          )}
+        </>
+      )}
     </div>
+  );
+};
+
+// Add the missing Check component
+const Check = (props: React.SVGProps<SVGSVGElement>) => {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 };
 
