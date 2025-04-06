@@ -1,164 +1,128 @@
-
 """
-Gerador de sinais aprimorado com suporte a WebSocket e time sync.
-Implementa cálculo de entrada baseado em ATR e leverage dinâmica.
+Versão híbrida aprimorada do gerador de sinais com estilo enterprise:
+- Filtro de tendência no 4h (EMA50 > EMA200)
+- Entrada em tempo real no 15m com SL/TP dinâmicos baseados em ATR
+- Confirmação por volume, padrão de candle e validade curta (5 minutos)
+- Logging estruturado e tratamento de exceções robusto
 """
 
-from datetime import datetime
 import pandas as pd
+from datetime import datetime, timedelta
+from ta.trend import EMAIndicator
+from ta.volatility import AverageTrueRange
 import logging
-from data_feeds.ws_connector import WSPriceFeed
+from utils.save_signal import save_signal
+from data.fetch_data import fetch_data
 
-try:
-    from utils.time_sync import TimeSync
-    time_sync_available = True
-except ImportError:
-    time_sync_available = False
-    
-logger = logging.getLogger("signal_generator")
+# Setup de logging enterprise
+logger = logging.getLogger("HybridSignalGenerator")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 
-class SignalGenerator:
-    def __init__(self, use_websocket=True):
-        """
-        Inicializa o gerador de sinais com opção de usar WebSocket.
-        
-        Args:
-            use_websocket: Se True, tenta usar WebSocket para preços em tempo real
-        """
-        self.price_feed = None
-        self.time_sync = None
-        
-        # Configurar time sync se disponível
-        if time_sync_available:
-            try:
-                self.time_sync = TimeSync()
-                logger.info("Time sync inicializado com sucesso")
-            except Exception as e:
-                logger.error(f"Erro ao inicializar time sync: {e}")
-        
-        # Configurar WebSocket se solicitado
-        if use_websocket:
-            try:
-                self.price_feed = WSPriceFeed()
-                self.price_feed.start()
-                logger.info("WebSocket price feed inicializado")
-            except Exception as e:
-                logger.error(f"Erro ao inicializar WebSocket: {e}")
-                self.price_feed = None
-    
-    def calculate_leverage(self, atr, symbol=None):
-        """
-        Calcula a alavancagem dinâmica com base no ATR e perfil do ativo.
-        
-        Args:
-            atr: Average True Range
-            symbol: Símbolo do ativo (opcional)
-            
-        Returns:
-            int: Leverage recomendada (3-25)
-        """
-        # Regras básicas de leverage
-        if atr > 15:  # Extremamente volátil
-            base_leverage = 2
-        elif atr > 10:
-            base_leverage = 3
-        elif atr > 5:
-            base_leverage = 5
-        elif atr > 2.5:
-            base_leverage = 10
+def check_trend(symbol, timeframe='4h'):
+    try:
+        df = fetch_data(symbol, timeframe)
+        df['ema_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
+        df['ema_200'] = EMAIndicator(close=df['close'], window=200).ema_indicator()
+        is_uptrend = df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1]
+        logger.info(f"{symbol} tendência 4h: {'alta' if is_uptrend else 'baixa'}")
+        return is_uptrend
+    except Exception as e:
+        logger.error(f"Erro ao verificar tendência: {e}")
+        return False
+
+def confirm_volume(df):
+    try:
+        df['volume_ma'] = df['volume'].rolling(20).mean()
+        volume_confirmed = df['volume'].iloc[-1] > 1.5 * df['volume_ma'].iloc[-1]
+        logger.info(f"Volume confirmado: {volume_confirmed}")
+        return volume_confirmed
+    except Exception as e:
+        logger.error(f"Erro ao confirmar volume: {e}")
+        return False
+
+def confirm_candle_pattern(df):
+    try:
+        body = abs(df['close'] - df['open'])
+        shadow = df['low'].rolling(2).min()
+        is_hammer = (df['open'] - shadow).iloc[-1] > 2 * body.iloc[-1]
+        logger.info(f"Padrão de candle detectado: {is_hammer}")
+        return is_hammer
+    except Exception as e:
+        logger.error(f"Erro ao detectar padrão de candle: {e}")
+        return False
+
+def generate_entry(symbol, trend_direction, timeframe='15m'):
+    try:
+        df = fetch_data(symbol, timeframe)
+        atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
+        last_close = df['close'].iloc[-1]
+        atr_value = atr.iloc[-1]
+
+        if trend_direction == 'UP':
+            entry = last_close - (atr_value * 0.3)
+            sl = entry - (atr_value * 1.5)
+            tp = entry + (atr_value * 3)
         else:
-            base_leverage = 15
-            
-        # Ajuste por tipo de ativo (opcional)
-        if symbol:
-            if 'BTC' in symbol or 'ETH' in symbol:
-                # Ativos mais consolidados permitem mais leverage
-                base_leverage = min(base_leverage * 1.2, 20)
-            elif 'ALT' in symbol or symbol.endswith('DOWN') or symbol.endswith('UP'):
-                # Tokens mais arriscados, reduzir leverage
-                base_leverage = max(base_leverage * 0.7, 2)
-                
-        return int(base_leverage)
-    
-    def get_real_time_price(self, symbol):
-        """
-        Obtém o preço em tempo real via WebSocket se disponível.
-        
-        Args:
-            symbol: Símbolo do ativo
-            
-        Returns:
-            dict: Dados do preço ou None se indisponível
-        """
-        if not self.price_feed:
+            entry = last_close + (atr_value * 0.3)
+            sl = entry + (atr_value * 1.5)
+            tp = entry - (atr_value * 3)
+
+        return {
+            'entry': entry,
+            'sl': sl,
+            'tp': tp,
+            'atr': atr_value
+        }
+    except Exception as e:
+        logger.error(f"Erro ao calcular entrada: {e}")
+        return None
+
+def generate_signal(symbol):
+    logger.info(f"🔍 Analisando {symbol} para geração de sinal híbrido...")
+    try:
+        trend_up = check_trend(symbol, '4h')
+        trend_direction = 'UP' if trend_up else 'DOWN'
+
+        df_15m = fetch_data(symbol, '15m')
+        if df_15m.empty:
+            logger.warning(f"❌ Dados vazios para {symbol} no 15m")
             return None
-            
-        price_data = self.price_feed.get_price(symbol)
-        
-        # Verificar se os dados estão atualizados
-        if price_data and self.time_sync:
-            current_time = self.time_sync.get_synced_time()
-            if current_time - price_data['timestamp'] > 2:  # 2 segundos de latência máxima
-                logger.warning(f"Dados do {symbol} estão defasados: {current_time - price_data['timestamp']:.2f}s")
-                return None
-                
-        return price_data
-        
-    def generate_signal(self, strategy, use_websocket=True):
-        """
-        Gera um sinal com preço atual e métricas de latência.
-        
-        Args:
-            strategy: Dicionário com parâmetros da estratégia
-            use_websocket: Se deve usar WebSocket (padrão: True)
-            
-        Returns:
-            dict: Dados do sinal ou None se não for possível gerar
-        """
-        symbol = strategy.get('symbol')
-        if not symbol:
-            logger.error("Símbolo não especificado na estratégia")
+
+        if not confirm_volume(df_15m):
+            logger.info(f"❌ Volume fraco para {symbol}, sinal descartado.")
             return None
-            
-        # Tentar obter preço em tempo real
-        price_data = None
-        if use_websocket and self.price_feed:
-            price_data = self.get_real_time_price(symbol)
-            
-        # Se não tiver dados de WebSocket ou estão defasados, retorna None
-        if not price_data:
-            logger.info(f"Sem dados de WebSocket para {symbol}, usando preços alternativos")
+
+        if not confirm_candle_pattern(df_15m):
+            logger.info(f"❌ Sem padrão de candle confirmado para {symbol}.")
             return None
-            
-        # Calcular latência
-        latency = 0
-        if price_data.get('timestamp') and self.time_sync:
-            current_time = self.time_sync.get_synced_time()
-            latency = current_time - price_data['timestamp']
-            
-        # Gerar o sinal
+
+        entry_data = generate_entry(symbol, trend_direction, '15m')
+        if not entry_data:
+            return None
+
         signal = {
             'symbol': symbol,
-            'price': price_data['price'],
-            'timestamp': price_data['timestamp'],
-            'latency': latency,
-            'conditions': strategy.get('conditions', {}),
-            'strategy': strategy.get('name', 'UNKNOWN'),
-            'atr': strategy.get('atr', 0),
+            'direction': 'BUY' if trend_direction == 'UP' else 'SELL',
+            'entry_price': round(entry_data['entry'], 2),
+            'sl': round(entry_data['sl'], 2),
+            'tp': round(entry_data['tp'], 2),
+            'atr': round(entry_data['atr'], 2),
+            'timestamp': datetime.utcnow().isoformat(),
+            'expires': (datetime.utcnow() + timedelta(minutes=5)).isoformat(),
+            'timeframe': 'hybrid_realtime',
+            'score': 1.0,
+            'result': None
         }
-        
-        # Calcular leverage se ATR disponível
-        if 'atr' in strategy and strategy['atr'] > 0:
-            signal['leverage'] = self.calculate_leverage(strategy['atr'], symbol)
-        else:
-            signal['leverage'] = 5  # Valor default conservador
-            
-        logger.info(f"Sinal gerado: {symbol} @ {price_data['price']} (latência: {latency:.3f}s, leverage: {signal.get('leverage', 5)})")
-        return signal
-        
-    def cleanup(self):
-        """Libera recursos ao encerrar"""
-        if self.price_feed:
-            self.price_feed.stop()
-            logger.info("WebSocket price feed encerrado")
 
+        save_signal(signal)
+        logger.info(f"✅ Sinal gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
+        return signal
+
+    except Exception as e:
+        logger.exception(f"Erro ao gerar sinal para {symbol}")
+        return None
+
+if __name__ == "__main__":
+    symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+    for symbol in symbols:
+        generate_signal(symbol)
