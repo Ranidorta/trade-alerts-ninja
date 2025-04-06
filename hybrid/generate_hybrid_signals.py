@@ -1,334 +1,188 @@
-
 """
 Hybrid signal generation module that combines multiple timeframes
-to generate high-confidence trading signals.
+(15m, 1h, 4h) to generate high-confidence trading signals.
 
-This module analyzes data from multiple timeframes (15m, 1h, 4h)
-to ensure alignment of technical indicators before generating a signal.
+This module validates trend alignment, volume, momentum, and price action
+across timeframes before generating a BUY or SELL signal.
 """
 
 import pandas as pd
-import numpy as np
 from datetime import datetime
-from pathlib import Path
-import os
+from ta import add_all_ta_features
 from ta.trend import ADXIndicator
-
-# Ensure data directory exists
-os.makedirs('data', exist_ok=True)
-
-def fetch_data(symbol='BTCUSDT', interval='15m', limit=250):
-    """
-    Fetch OHLCV data for the specified symbol and timeframe.
-    
-    This is a wrapper around the API fetch function. If API is not available,
-    it will attempt to use cached data or generate mock data for testing.
-    
-    Args:
-        symbol: Trading pair to fetch data for
-        interval: Timeframe (15m, 1h, 4h, etc.)
-        limit: Number of candles to fetch
-        
-    Returns:
-        DataFrame with OHLCV data
-    """
-    # ... keep existing code (API fetching and mock data generation)
+from pathlib import Path
+from utils.save_signal import save_signal
+from data.fetch_data import fetch_data
 
 
 def calculate_indicators(df, label):
     """
-    Calculate technical indicators for the given DataFrame.
+    Calculates technical indicators for a given DataFrame and appends
+    timeframe label suffix to column names.
     
     Args:
-        df: DataFrame with OHLCV data
-        label: Timeframe label for column naming
-        
+        df (pd.DataFrame): OHLCV data.
+        label (str): Timeframe label (e.g., '15m', '1h').
+
     Returns:
-        DataFrame with calculated indicators
+        pd.DataFrame: DataFrame with renamed columns containing indicators.
     """
     df = df.copy()
-    
-    # Calculate SMA 200
-    df['sma_200'] = df['close'].rolling(window=200).mean()
-    
-    # Calculate volume moving average
-    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
-    
-    # Calculate RSI
-    delta = df['close'].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=14).mean()
-    avg_loss = loss.rolling(window=14).mean()
-    rs = avg_gain / avg_loss
-    df['rsi'] = 100 - (100 / (1 + rs))
-    
-    # Calculate MACD
-    exp12 = df['close'].ewm(span=12, adjust=False).mean()
-    exp26 = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = exp12 - exp26
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-    df['macd_histogram'] = df['macd'] - df['macd_signal']
-    
-    # Calculate ADX
-    adx = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
-    df['adx'] = adx.adx()
-    
-    # Fibonacci 61.8% retracement level (based on last 100 candles)
-    high = df['high'].rolling(window=100).max()
-    low = df['low'].rolling(window=100).min()
-    df['fib_618'] = high - (0.618 * (high - low))
-    
-    # Volume Profile - Point of Control approximation
-    # Group close prices into bins for better volume distribution analysis
-    price_bins = pd.cut(df['close'], bins=50)
-    volume_profile = df.groupby(price_bins)['volume'].sum()
-    # Find bin with maximum volume
-    poc_bin = volume_profile.idxmax()
-    # Assign POC value to all rows
-    if not volume_profile.empty and poc_bin is not None:
-        df['poc'] = poc_bin.mid
-    else:
-        # Fallback if binning doesn't work properly
-        df['poc'] = df.groupby(df['close'].round(decimals=1))['volume'].transform('sum').idxmax()
-    
-    # Check if indicators meet criteria
-    df['above_sma200'] = df['close'] > df['sma_200']
-    df['rsi_ok'] = df['rsi'] > 30
-    df['macd_cross'] = df['macd'] > df['macd_signal']
-    
-    # Overall trend validity
-    df['trend_valid'] = df['above_sma200'] & df['rsi_ok'] & df['macd_cross']
-    
-    # Rename columns for timeframe identification
-    result_df = pd.DataFrame({
-        f'close_{label}': df['close'],
-        f'sma_200_{label}': df['sma_200'],
-        f'rsi_{label}': df['rsi'],
-        f'macd_{label}': df['macd'],
-        f'macd_signal_{label}': df['macd_signal'],
-        f'trend_valid_{label}': df['trend_valid'],
-        f'volume_{label}': df['volume'],
-        f'volume_ma_20_{label}': df['volume_ma_20'],
-        f'adx_{label}': df['adx'],
-        f'fib_618_{label}': df['fib_618'],
-        f'poc_{label}': df['poc']
-    })
-    
-    return result_df
+    df = add_all_ta_features(df, open='open', high='high', low='low', close='close', volume='volume')
+    df['sma_200'] = df['close'].rolling(200).mean()
+    df['macd_cross'] = df['trend_macd'] > df['trend_macd_signal']
+    df['macd_cross_down'] = df['trend_macd'] < df['trend_macd_signal']
+    df['rsi_ok'] = df['momentum_rsi'] > 30
+    df['rsi_overbought'] = df['momentum_rsi'] > 70
+    df['rsi_oversold'] = df['momentum_rsi'] < 30
+    df['trend_valid'] = (df['close'] > df['sma_200']) & df['macd_cross'] & df['rsi_ok']
+    df['trend_short'] = (df['close'] < df['sma_200']) & df['macd_cross_down'] & df['rsi_overbought']
+    df['volume_ma_20'] = df['volume'].rolling(20).mean()
+    df['adx'] = ADXIndicator(df['high'], df['low'], df['close']).adx()
+    high = df['high'].rolling(100).max()
+    low = df['low'].rolling(100).min()
+    df['fib_618'] = high - 0.618 * (high - low)
+    df['poc'] = df.groupby('close')['volume'].transform('max')
+
+    df.rename(columns={
+        'close': f'close_{label}',
+        'sma_200': f'sma_200_{label}',
+        'volume': f'volume_{label}',
+        'volume_ma_20': f'volume_ma_20_{label}',
+        'adx': f'adx_{label}',
+        'fib_618': f'fib_618_{label}',
+        'poc': f'poc_{label}'
+    }, inplace=True)
+
+    return df
 
 
-def is_trend_aligned(df_15m, df_1h, df_4h):
+def is_trend_aligned(df_15m, df_1h, df_4h, short=False):
     """
-    Check if trend is aligned across multiple timeframes with weighted importance.
-    
+    Validates if the trend is aligned across 15m, 1h, 4h using weighted scores.
+
     Args:
-        df_15m: DataFrame with 15m indicators
-        df_1h: DataFrame with 1h indicators
-        df_4h: DataFrame with 4h indicators
-        
+        df_15m (pd.DataFrame): Indicators for 15m.
+        df_1h (pd.DataFrame): Indicators for 1h.
+        df_4h (pd.DataFrame): Indicators for 4h.
+        short (bool): If True, checks bearish trend.
+
     Returns:
-        Boolean indicating if trend alignment score meets threshold (≥0.7)
+        bool: True if weighted trend score ≥ 0.7
     """
-    # Define timeframe weights (4h=50%, 1h=30%, 15m=20%)
     weights = {'4h': 0.5, '1h': 0.3, '15m': 0.2}
-    
-    # Get latest data for each timeframe
     s15 = df_15m.iloc[-1]
     s1h = df_1h.iloc[-1]
     s4h = df_4h.iloc[-1]
-    
-    # Calculate weighted score
-    score = 0.0
-    
-    # Apply weights to each timeframe's trend validity
-    if s4h['trend_valid_4h']:
-        score += weights['4h']
-        
-    if s1h['trend_valid_1h']:
-        score += weights['1h']
-        
-    if s15['trend_valid_15m']:
-        score += weights['15m']
-    
-    # Check if score meets or exceeds threshold (0.7)
+
+    if short:
+        score = (
+            (s4h['close_4h'] < s4h['sma_200_4h']) * weights['4h'] +
+            (s1h['close_1h'] < s1h['sma_200_1h']) * weights['1h'] +
+            (s15['close_15m'] < s15['sma_200_15m']) * weights['15m']
+        )
+    else:
+        score = (
+            (s4h['close_4h'] > s4h['sma_200_4h']) * weights['4h'] +
+            (s1h['close_1h'] > s1h['sma_200_1h']) * weights['1h'] +
+            (s15['close_15m'] > s15['sma_200_15m']) * weights['15m']
+        )
     return score >= 0.7
 
 
-def generate_hybrid_signal(symbol='BTCUSDT'):
+def generate_hybrid_signal(symbol):
     """
-    Generate hybrid signal that checks for alignment across multiple timeframes.
-    
-    Signal is generated only when:
-    - Trend is aligned across timeframes (with hierarchical weights)
-    - 1h volume > 20-period volume MA
-    - 4h ADX > 25 (strong trend)
-    - Current 15m price > Fibonacci 61.8% retracement level from 4h
-    - Current 15m price > Point of Control (POC) from 4h volume profile
-    
+    Generates a hybrid BUY or SELL signal based on alignment of technicals
+    across 15m, 1h, and 4h timeframes.
+
     Args:
-        symbol: Trading pair to analyze
-        
+        symbol (str): Trading symbol like 'BTCUSDT'
+
     Returns:
-        Boolean indicating if a signal was generated
+        None
     """
-    print(f"Analyzing {symbol} across multiple timeframes...")
-    
-    # Fetch data for each timeframe
-    df_15m = fetch_data(symbol=symbol, interval='15m', limit=250)
-    df_1h = fetch_data(symbol=symbol, interval='1h', limit=250)
-    df_4h = fetch_data(symbol=symbol, interval='4h', limit=250)
-    
-    if df_15m.empty or df_1h.empty or df_4h.empty:
-        print(f"⚠️ Failed to fetch data for one or more timeframes for {symbol}")
-        return False
-        
-    # Calculate indicators for each timeframe
-    df_15m_ind = calculate_indicators(df_15m, '15m')
-    df_1h_ind = calculate_indicators(df_1h, '1h')
-    df_4h_ind = calculate_indicators(df_4h, '4h')
-    
-    # Get latest values
-    s_15m = df_15m_ind.iloc[-1]
-    s_1h = df_1h_ind.iloc[-1]
-    s_4h = df_4h_ind.iloc[-1]
-    
-    # Initialize logs list to track conditions
-    logs = []
-    
-    # Check condition 1: Trend alignment with hierarchical weights
-    trend_aligned = is_trend_aligned(df_15m_ind, df_1h_ind, df_4h_ind)
-    if not trend_aligned:
-        logs.append("❌ Falha: Tendência desalinhada entre os timeframes")
-        # Add detailed information about each timeframe's trend validity
-        logs.append(f"   • 15m trend valid: {'✓' if s_15m[f'trend_valid_15m'] else '✗'}")
-        logs.append(f"   • 1h trend valid: {'✓' if s_1h[f'trend_valid_1h'] else '✗'}")
-        logs.append(f"   • 4h trend valid: {'✓' if s_4h[f'trend_valid_4h'] else '✗'}")
-    
-    # Check condition 2: 1h volume > 20-period volume MA
-    volume_ok = s_1h[f'volume_1h'] > s_1h[f'volume_ma_20_1h']
-    if not volume_ok:
-        logs.append("❌ Falha: Volume no 1h abaixo da média de 20 períodos")
-        logs.append(f"   • Volume atual: {s_1h[f'volume_1h']:.2f}")
-        logs.append(f"   • Volume MA20: {s_1h[f'volume_ma_20_1h']:.2f}")
-    
-    # Check condition 3: 4h ADX > 25 (strong trend)
-    strong_trend = s_4h[f'adx_4h'] > 25
-    if not strong_trend:
-        logs.append("❌ Falha: ADX no 4h abaixo de 25 (sem tendência forte)")
-        logs.append(f"   • ADX atual: {s_4h[f'adx_4h']:.2f}")
-    
-    # Check condition 4: 15m price > Fibonacci 61.8% retracement level from 4h
-    fib_confirmation = s_15m[f'close_15m'] > s_4h[f'fib_618_4h']
-    if not fib_confirmation:
-        logs.append("❌ Falha: Preço abaixo da retração de Fibonacci 61.8% no 4h")
-        logs.append(f"   • Preço atual: {s_15m[f'close_15m']:.2f}")
-        logs.append(f"   • Nível Fib 61.8%: {s_4h[f'fib_618_4h']:.2f}")
-    
-    # Check condition 5: 15m price > Point of Control (POC) from 4h volume profile
-    poc_confirmation = s_15m[f'close_15m'] > s_4h[f'poc_4h']
-    if not poc_confirmation:
-        logs.append("❌ Falha: Preço abaixo do POC (Volume Profile) no 4h")
-        logs.append(f"   • Preço atual: {s_15m[f'close_15m']:.2f}")
-        logs.append(f"   • POC: {s_4h[f'poc_4h']:.2f}")
-    
-    # All conditions must be true
-    all_conditions_met = (
-        trend_aligned and 
-        volume_ok and 
-        strong_trend and 
-        fib_confirmation and 
-        poc_confirmation
-    )
-    
-    if all_conditions_met:
-        # Get current price and calculate targets
-        entry_price = df_15m.iloc[-1]['close']
-        stop_loss = entry_price * 0.98  # 2% below entry
-        take_profit = entry_price * 1.03  # 3% above entry
-        
-        # Create signal data
-        signal = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'asset': symbol,
-            'direction': 'BUY',
-            'timeframe': 'hybrid',
-            'score': 1.0,  # Highest confidence score
-            'entry_price': entry_price,
-            'sl': stop_loss,
-            'tp': take_profit,
-            'result': None,
-            'indicators': {
-                '15m': {
-                    'rsi': df_15m_ind.iloc[-1][f'rsi_15m'],
-                    'sma200': df_15m_ind.iloc[-1][f'sma_200_15m'],
-                    'trend_valid': df_15m_ind.iloc[-1][f'trend_valid_15m'],
-                    'close': df_15m_ind.iloc[-1][f'close_15m'],
-                },
-                '1h': {
-                    'rsi': df_1h_ind.iloc[-1][f'rsi_1h'],
-                    'sma200': df_1h_ind.iloc[-1][f'sma_200_1h'],
-                    'volume': df_1h_ind.iloc[-1][f'volume_1h'],
-                    'volume_ma20': df_1h_ind.iloc[-1][f'volume_ma_20_1h'],
-                    'trend_valid': df_1h_ind.iloc[-1][f'trend_valid_1h'],
-                },
-                '4h': {
-                    'rsi': df_4h_ind.iloc[-1][f'rsi_4h'],
-                    'sma200': df_4h_ind.iloc[-1][f'sma_200_4h'],
-                    'adx': df_4h_ind.iloc[-1][f'adx_4h'],
-                    'trend_valid': df_4h_ind.iloc[-1][f'trend_valid_4h'],
-                    'fib_618': df_4h_ind.iloc[-1][f'fib_618_4h'],
-                    'poc': df_4h_ind.iloc[-1][f'poc_4h'],
-                }
+    try:
+        df_15m = fetch_data(symbol=symbol, interval='15m', limit=250)
+        df_1h = fetch_data(symbol=symbol, interval='1h', limit=250)
+        df_4h = fetch_data(symbol=symbol, interval='4h', limit=250)
+
+        df_15m = calculate_indicators(df_15m, '15m')
+        df_1h = calculate_indicators(df_1h, '1h')
+        df_4h = calculate_indicators(df_4h, '4h')
+
+        s1h = df_1h.iloc[-1]
+        s4h = df_4h.iloc[-1]
+        s15 = df_15m.iloc[-1]
+
+        logs_long = []
+        trend_long = is_trend_aligned(df_15m, df_1h, df_4h, short=False)
+        if not trend_long: logs_long.append("❌ Long: tendência desalinhada")
+        if not (s1h['volume_1h'] > s1h['volume_ma_20_1h']): logs_long.append("❌ Long: volume 1h baixo")
+        if not (s4h['adx_4h'] > 25): logs_long.append("❌ Long: ADX baixo")
+        if not (s15['close_15m'] > s4h['fib_618_4h']): logs_long.append("❌ Long: abaixo do Fibonacci")
+        if not (s15['close_15m'] > s4h['poc_4h']): logs_long.append("❌ Long: abaixo do POC")
+
+        logs_short = []
+        trend_short = is_trend_aligned(df_15m, df_1h, df_4h, short=True)
+        if not trend_short: logs_short.append("❌ Short: tendência desalinhada")
+        if not (s1h['volume_1h'] > s1h['volume_ma_20_1h']): logs_short.append("❌ Short: volume 1h baixo")
+        if not (s4h['adx_4h'] > 25): logs_short.append("❌ Short: ADX baixo")
+        if not (s15['close_15m'] < s4h['fib_618_4h']): logs_short.append("❌ Short: acima do Fibonacci")
+        if not (s15['close_15m'] < s4h['poc_4h']): logs_short.append("❌ Short: acima do POC")
+
+        if trend_long and not logs_long:
+            entry_price = s15['close_15m']
+            sl = entry_price * 0.98
+            tp = entry_price * 1.03
+            signal = {
+                'timestamp': datetime.utcnow().isoformat(),
+                'asset': symbol,
+                'direction': 'BUY',
+                'timeframe': 'hybrid',
+                'score': 1.0,
+                'entry_price': entry_price,
+                'sl': sl,
+                'tp': tp,
+                'result': None
             }
-        }
-        
-        # Ensure the data directory exists
-        data_dir = Path("data")
-        data_dir.mkdir(exist_ok=True)
-        
-        # Save to CSV
-        file_path = data_dir / "historical_signals_hybrid.csv"
-        df_signal = pd.DataFrame([signal])
-        
-        # Write header only if file doesn't exist
-        write_header = not file_path.exists()
-        
-        # Save signal to CSV
-        df_signal.to_csv(file_path, mode='a', header=write_header, index=False)
-        
-        print(f"✅ Hybrid signal generated for {symbol} @ {entry_price}")
-        print(f"  - Entry: {entry_price:.2f}")
-        print(f"  - Stop Loss: {stop_loss:.2f} (-2%)")
-        print(f"  - Take Profit: {take_profit:.2f} (+3%)")
-        print(f"  - Score: 1.0")
-        print(f"  - Confirmations:")
-        print(f"    • Trend alignment: ✓")
-        print(f"    • 1h volume > MA: ✓")
-        print(f"    • 4h ADX > 25: ✓")
-        print(f"    • Above Fib 61.8%: ✓")
-        print(f"    • Above POC: ✓")
-        
-        # Save to a specific utils function if available
-        try:
-            from utils.save_signal import save_signal
-            save_signal(signal)
-            print("  - Also saved using utils.save_signal")
-        except ImportError:
-            # If save_signal not available, we already saved to CSV above
-            pass
-            
-        return True
-    else:
-        print(f"⛔ Signal criteria not met for {symbol}:")
-        # Print all logs with proper formatting
-        for log in logs:
-            print(f"   - {log}")
-        return False
+            file = Path("data/historical_signals_hybrid.csv")
+            df_signal = pd.DataFrame([signal])
+            df_signal.to_csv(file, mode='a', header=not file.exists(), index=False)
+            print(f"✅ Sinal LONG gerado para {symbol} @ {entry_price}")
+        else:
+            print(f"⛔ {symbol} (LONG): nenhum sinal. Motivos:")
+            for log in logs_long:
+                print(f"   - {log}")
+
+        if trend_short and not logs_short:
+            entry_price = s15['close_15m']
+            sl = entry_price * 1.02
+            tp = entry_price * 0.97
+            signal = {
+                'timestamp': datetime.utcnow().isoformat(),
+                'asset': symbol,
+                'direction': 'SELL',
+                'timeframe': 'hybrid',
+                'score': 1.0,
+                'entry_price': entry_price,
+                'sl': sl,
+                'tp': tp,
+                'result': None
+            }
+            file = Path("data/historical_signals_hybrid.csv")
+            df_signal = pd.DataFrame([signal])
+            df_signal.to_csv(file, mode='a', header=not file.exists(), index=False)
+            print(f"✅ Sinal SHORT gerado para {symbol} @ {entry_price}")
+        else:
+            print(f"⛔ {symbol} (SHORT): nenhum sinal. Motivos:")
+            for log in logs_short:
+                print(f"   - {log}")
+
+    except Exception as e:
+        print(f"❌ Erro ao processar {symbol}: {e}")
 
 
 if __name__ == "__main__":
-    # Test with multiple symbols
-    symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
+    symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT']
     for symbol in symbols:
         generate_hybrid_signal(symbol=symbol)
