@@ -1,4 +1,3 @@
-
 """
 Flask API Server for Trading Signals
 Provides endpoints for retrieving signal data from SQLite database
@@ -26,6 +25,7 @@ from strategies.bollinger_bands import strategy_bollinger_bands
 from backtesting.performance import generate_performance_report
 from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
 from routes import signal_evaluation_bp, performance_api_bp
+from api.hybrid_signals_api import hybrid_signals_api
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -34,6 +34,7 @@ CORS(app)  # Enable CORS for all routes
 # Register blueprints
 app.register_blueprint(signal_evaluation_bp)
 app.register_blueprint(performance_api_bp)
+app.register_blueprint(hybrid_signals_api)
 
 # Database configuration
 DB_PATH = "signals.db"

@@ -3,6 +3,7 @@
 
 from flask import Flask
 from api.signals_api import signals_api
+from api.hybrid_signals_api import hybrid_signals_api
 
 def register_blueprints(app: Flask):
     """
@@ -12,6 +13,7 @@ def register_blueprints(app: Flask):
         app: The Flask application instance
     """
     app.register_blueprint(signals_api)
+    app.register_blueprint(hybrid_signals_api)
     
     # Register other blueprints here as needed
     

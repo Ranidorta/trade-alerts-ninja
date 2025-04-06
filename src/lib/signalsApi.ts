@@ -56,6 +56,16 @@ export const fetchSignals = async (params?: any) => {
   }
 };
 
+export const fetchHybridSignals = async () => {
+  try {
+    const response = await api.get('/api/signals/history/hybrid');
+    return response.data as TradingSignal[];
+  } catch (error) {
+    console.error('Error fetching hybrid signals:', error);
+    throw error;
+  }
+};
+
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
     const response = await api.get('/api/signals/history', { params: filters });
