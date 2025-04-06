@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 import os
+from ta.trend import ADXIndicator
 
 # Ensure data directory exists
 os.makedirs('data', exist_ok=True)
@@ -96,6 +97,9 @@ def calculate_indicators(df, label):
     # Calculate SMA 200
     df['sma_200'] = df['close'].rolling(window=200).mean()
     
+    # Calculate volume moving average
+    df['volume_ma_20'] = df['volume'].rolling(window=20).mean()
+    
     # Calculate RSI
     delta = df['close'].diff()
     gain = delta.where(delta > 0, 0)
@@ -112,6 +116,10 @@ def calculate_indicators(df, label):
     df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
     df['macd_histogram'] = df['macd'] - df['macd_signal']
     
+    # Calculate ADX
+    adx = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
+    df['adx'] = adx.adx()
+    
     # Check if indicators meet criteria
     df['above_sma200'] = df['close'] > df['sma_200']
     df['rsi_ok'] = df['rsi'] > 30
@@ -127,20 +135,60 @@ def calculate_indicators(df, label):
         f'rsi_{label}': df['rsi'],
         f'macd_{label}': df['macd'],
         f'macd_signal_{label}': df['macd_signal'],
-        f'trend_valid_{label}': df['trend_valid']
+        f'trend_valid_{label}': df['trend_valid'],
+        f'volume_{label}': df['volume'],
+        f'volume_ma_20_{label}': df['volume_ma_20'],
+        f'adx_{label}': df['adx']
     })
     
     return result_df
+
+
+def is_trend_aligned(df_15m, df_1h, df_4h):
+    """
+    Check if trend is aligned across multiple timeframes with weighted importance.
+    
+    Args:
+        df_15m: DataFrame with 15m indicators
+        df_1h: DataFrame with 1h indicators
+        df_4h: DataFrame with 4h indicators
+        
+    Returns:
+        Boolean indicating if trend alignment score meets threshold (≥0.7)
+    """
+    # Define timeframe weights (4h=50%, 1h=30%, 15m=20%)
+    weights = {'4h': 0.5, '1h': 0.3, '15m': 0.2}
+    
+    # Get latest data for each timeframe
+    s15 = df_15m.iloc[-1]
+    s1h = df_1h.iloc[-1]
+    s4h = df_4h.iloc[-1]
+    
+    # Calculate weighted score
+    score = 0.0
+    
+    # Apply weights to each timeframe's trend validity
+    if s4h['trend_valid_4h']:
+        score += weights['4h']
+        
+    if s1h['trend_valid_1h']:
+        score += weights['1h']
+        
+    if s15['trend_valid_15m']:
+        score += weights['15m']
+    
+    # Check if score meets or exceeds threshold (0.7)
+    return score >= 0.7
 
 
 def generate_hybrid_signal(symbol='BTCUSDT'):
     """
     Generate hybrid signal that checks for alignment across multiple timeframes.
     
-    A signal is generated only when all 3 timeframes (15m, 1h, 4h) show alignment:
-    - Price above 200 SMA
-    - RSI > 30
-    - MACD line crossed above signal line
+    Signal is generated only when:
+    - Trend is aligned across timeframes (with hierarchical weights)
+    - 1h volume > 20-period volume MA
+    - 4h ADX > 25 (strong trend)
     
     Args:
         symbol: Trading pair to analyze
@@ -164,20 +212,27 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     df_1h_ind = calculate_indicators(df_1h, '1h')
     df_4h_ind = calculate_indicators(df_4h, '4h')
     
-    # Check if all timeframes have a valid trend
-    valid_15m = df_15m_ind.iloc[-1]['trend_valid_15m']
-    valid_1h = df_1h_ind.iloc[-1]['trend_valid_1h']
-    valid_4h = df_4h_ind.iloc[-1]['trend_valid_4h']
+    # Get latest values
+    s_1h = df_1h_ind.iloc[-1]
+    s_4h = df_4h_ind.iloc[-1]
     
-    all_valid = valid_15m and valid_1h and valid_4h
+    # Check condition 1: Trend alignment with hierarchical weights
+    trend_aligned = is_trend_aligned(df_15m_ind, df_1h_ind, df_4h_ind)
     
-    if all_valid:
+    # Check condition 2: 1h volume > 20-period volume MA
+    volume_ok = s_1h[f'volume_1h'] > s_1h[f'volume_ma_20_1h']
+    
+    # Check condition 3: 4h ADX > 25 (strong trend)
+    strong_trend = s_4h[f'adx_4h'] > 25
+    
+    # All conditions must be true
+    all_conditions_met = trend_aligned and volume_ok and strong_trend
+    
+    if all_conditions_met:
         # Get current price and calculate targets
         entry_price = df_15m.iloc[-1]['close']
         stop_loss = entry_price * 0.98  # 2% below entry
-        take_profit1 = entry_price * 1.03  # 3% above entry
-        take_profit2 = entry_price * 1.05  # 5% above entry
-        take_profit3 = entry_price * 1.08  # 8% above entry
+        take_profit = entry_price * 1.03  # 3% above entry
         
         # Create signal data
         signal = {
@@ -185,31 +240,29 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
             'asset': symbol,
             'direction': 'BUY',
             'timeframe': 'hybrid',
-            'score': 1.0,  # Maximum confidence
+            'score': 0.95,  # High confidence score
             'entry_price': entry_price,
             'sl': stop_loss,
-            'tp1': take_profit1,
-            'tp2': take_profit2,
-            'tp3': take_profit3,
+            'tp': take_profit,
             'result': None,
             'indicators': {
                 '15m': {
                     'rsi': df_15m_ind.iloc[-1][f'rsi_15m'],
                     'sma200': df_15m_ind.iloc[-1][f'sma_200_15m'],
-                    'macd': df_15m_ind.iloc[-1][f'macd_15m'],
-                    'macd_signal': df_15m_ind.iloc[-1][f'macd_signal_15m'],
+                    'trend_valid': df_15m_ind.iloc[-1][f'trend_valid_15m'],
                 },
                 '1h': {
                     'rsi': df_1h_ind.iloc[-1][f'rsi_1h'],
                     'sma200': df_1h_ind.iloc[-1][f'sma_200_1h'],
-                    'macd': df_1h_ind.iloc[-1][f'macd_1h'],
-                    'macd_signal': df_1h_ind.iloc[-1][f'macd_signal_1h'],
+                    'volume': df_1h_ind.iloc[-1][f'volume_1h'],
+                    'volume_ma20': df_1h_ind.iloc[-1][f'volume_ma_20_1h'],
+                    'trend_valid': df_1h_ind.iloc[-1][f'trend_valid_1h'],
                 },
                 '4h': {
                     'rsi': df_4h_ind.iloc[-1][f'rsi_4h'],
                     'sma200': df_4h_ind.iloc[-1][f'sma_200_4h'],
-                    'macd': df_4h_ind.iloc[-1][f'macd_4h'],
-                    'macd_signal': df_4h_ind.iloc[-1][f'macd_signal_4h'],
+                    'adx': df_4h_ind.iloc[-1][f'adx_4h'],
+                    'trend_valid': df_4h_ind.iloc[-1][f'trend_valid_4h'],
                 }
             }
         }
@@ -230,10 +283,9 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
         
         print(f"✅ Hybrid signal generated for {symbol} @ {entry_price}")
         print(f"  - Entry: {entry_price:.2f}")
-        print(f"  - Stop Loss: {stop_loss:.2f}")
-        print(f"  - Take Profit 1: {take_profit1:.2f}")
-        print(f"  - Take Profit 2: {take_profit2:.2f}")
-        print(f"  - Take Profit 3: {take_profit3:.2f}")
+        print(f"  - Stop Loss: {stop_loss:.2f} (-2%)")
+        print(f"  - Take Profit: {take_profit:.2f} (+3%)")
+        print(f"  - Score: 0.95")
         
         # Save to a specific utils function if available
         try:
@@ -246,19 +298,16 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
             
         return True
     else:
-        print("⛔ No alignment across timeframes. Signal criteria not met:")
-        print(f"  - 15m valid: {valid_15m}")
-        print(f"  - 1h valid: {valid_1h}")
-        print(f"  - 4h valid: {valid_4h}")
+        print("⛔ Signal criteria not met:")
+        print(f"  - Trend aligned: {trend_aligned}")
+        print(f"  - 1h Volume > MA: {volume_ok}")
+        print(f"  - 4h ADX > 25: {strong_trend}")
         return False
 
 
 if __name__ == "__main__":
-    # Test with Bitcoin
-    generate_hybrid_signal(symbol='BTCUSDT')
-    
-    # Test with Ethereum
-    generate_hybrid_signal(symbol='ETHUSDT')
-    
-    # Test with Solana
-    generate_hybrid_signal(symbol='SOLUSDT')
+    # Test with multiple symbols
+    symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
+    for symbol in symbols:
+        generate_hybrid_signal(symbol=symbol)
+
