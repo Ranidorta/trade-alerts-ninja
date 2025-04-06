@@ -1,94 +1,84 @@
 
-import axios from "axios";
-import { TradingSignal, PerformanceMetrics } from "./types";
-import { config } from "@/config/env";
+import axios from 'axios';
+import { TradingSignal, PerformanceData } from '@/lib/types';
+import { config } from '@/config/env';
 
-/**
- * Fetch historical trading signals from the API
- * @param filters Optional filters for symbol and result
- * @returns Promise with array of trading signals
- */
-export const fetchSignalsHistory = async (filters?: { 
-  symbol?: string;
-  result?: string;
-}): Promise<TradingSignal[]> => {
+// Create an axios instance with the base URL
+const api = axios.create({
+  baseURL: config.apiUrl || 'http://localhost:5000',
+  timeout: 10000,
+});
+
+// Auth token management
+let authToken: string | null = null;
+
+export const setAuthToken = (token: string) => {
+  authToken = token;
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  localStorage.setItem('auth_token', token);
+};
+
+export const clearAuthToken = () => {
+  authToken = null;
+  delete api.defaults.headers.common['Authorization'];
+  localStorage.removeItem('auth_token');
+};
+
+export const prefetchCommonData = async () => {
+  // This function can be used to prefetch data that's commonly needed
   try {
-    // Build query parameters
-    const params = new URLSearchParams();
-    if (filters?.symbol) {
-      params.append('symbol', filters.symbol);
-    }
-    if (filters?.result) {
-      params.append('result', filters.result);
-    }
+    // Example: Prefetch market overview, active signals, etc.
+    return true;
+  } catch (error) {
+    console.error('Error prefetching common data:', error);
+    return false;
+  }
+};
 
-    // Construct URL with potential query params
-    const queryString = params.toString();
-    const url = `${config.apiUrl || ''}/api/signals/history${queryString ? `?${queryString}` : ''}`;
-    
-    const response = await axios.get(url);
+// Initialize auth token from localStorage if available
+const initializeAuth = () => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    setAuthToken(token);
+  }
+};
+
+initializeAuth();
+
+// Signal API functions
+export const fetchSignals = async (params?: any) => {
+  try {
+    const response = await api.get('/api/signals', { params });
     return response.data;
   } catch (error) {
-    console.error("Error fetching signals history:", error);
+    console.error('Error fetching signals:', error);
     throw error;
   }
 };
 
-/**
- * Fetch signals from the API
- * @param params Parameters for the API request
- * @returns Promise with array of trading signals
- */
-export const fetchSignals = async (params?: any): Promise<TradingSignal[]> => {
+export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    const response = await axios.get(`${config.apiUrl || ''}/api/signals`, { params });
-    return response.data;
+    const response = await api.get('/api/signals/history', { params: filters });
+    return response.data as TradingSignal[];
   } catch (error) {
-    console.error("Error fetching signals:", error);
+    console.error('Error fetching signals history:', error);
     throw error;
   }
 };
 
-/**
- * Fetch performance metrics from the API
- * @param options Query options
- * @returns Promise with performance metrics
- */
-export const fetchPerformanceMetrics = async (options?: any): Promise<PerformanceMetrics> => {
-  const days = options?.queryKey?.[1] || '30';
+export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[] }) => {
+  const [_, daysParam] = queryKey;
+  const days = daysParam ? parseInt(daysParam) : 30;
+  
   try {
-    const response = await axios.get(`${config.apiUrl || ''}/api/performance?days=${days}`);
-    return response.data;
+    const response = await api.get('/api/performance', {
+      params: { days }
+    });
+    return response.data as PerformanceData;
   } catch (error) {
-    console.error("Error fetching performance metrics:", error);
+    console.error('Error fetching performance metrics:', error);
     throw error;
   }
 };
 
-/**
- * Set the authentication token for API requests
- * @param token The authentication token
- */
-export const setAuthToken = (token: string): void => {
-  axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-};
-
-/**
- * Clear the authentication token from API requests
- */
-export const clearAuthToken = (): void => {
-  delete axios.defaults.headers.common['Authorization'];
-};
-
-/**
- * Prefetch common data to improve user experience
- */
-export const prefetchCommonData = async (): Promise<void> => {
-  try {
-    // Prefetch performance metrics
-    await fetchPerformanceMetrics({ queryKey: ['performance', '30'] });
-    // Add other prefetch calls as needed
-  } catch (error) {
-    console.error("Error prefetching common data:", error);
-  }
-};
+// More functions could be added here (createSignal, updateSignal, etc.)

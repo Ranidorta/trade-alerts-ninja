@@ -1,4 +1,3 @@
-
 import { TradingSignal } from './types';
 
 export const mockSignals: TradingSignal[] = [
@@ -178,3 +177,75 @@ export const mockHistoricalSignals: TradingSignal[] = [
 
 // All signals combined
 export const allSignals = [...mockSignals, ...mockHistoricalSignals];
+
+export const getMockSignals = (): any[] => {
+  const symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "DOGEUSDT"];
+  const strategies = ["RSI Divergence", "MACD Cross", "Bollinger Bands", "EMA Cross", "Support/Resistance", "Trend Line Break"];
+  const results = ["WINNER", "LOSER", "PARTIAL", "FALSE"];
+  const resultWeights = [0.45, 0.35, 0.15, 0.05]; // Higher probability for winners and losers
+  
+  const getRandomResult = () => {
+    const rand = Math.random();
+    let sum = 0;
+    for (let i = 0; i < resultWeights.length; i++) {
+      sum += resultWeights[i];
+      if (rand < sum) return results[i];
+    }
+    return results[0];
+  };
+  
+  const signals = [];
+  const now = new Date();
+  
+  for (let i = 0; i < 50; i++) {
+    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+    const direction = Math.random() > 0.5 ? "BUY" : "SELL";
+    const entryPrice = Math.round(Math.random() * 10000 + 100) / 10;
+    const stopLoss = direction === "BUY" 
+      ? Math.round((entryPrice * (1 - Math.random() * 0.05)) * 10) / 10
+      : Math.round((entryPrice * (1 + Math.random() * 0.05)) * 10) / 10;
+    const takeProfit = direction === "BUY"
+      ? [
+          Math.round((entryPrice * (1 + Math.random() * 0.03)) * 10) / 10,
+          Math.round((entryPrice * (1 + Math.random() * 0.05)) * 10) / 10,
+          Math.round((entryPrice * (1 + Math.random() * 0.08)) * 10) / 10
+        ]
+      : [
+          Math.round((entryPrice * (1 - Math.random() * 0.03)) * 10) / 10,
+          Math.round((entryPrice * (1 - Math.random() * 0.05)) * 10) / 10,
+          Math.round((entryPrice * (1 - Math.random() * 0.08)) * 10) / 10
+        ];
+    
+    const result = getRandomResult();
+    const profit = result === "WINNER" 
+      ? Math.round(Math.random() * 50 + 10) / 10
+      : result === "LOSER" 
+        ? -Math.round(Math.random() * 30 + 5) / 10
+        : result === "PARTIAL"
+          ? Math.round(Math.random() * 20 + 5) / 10
+          : 0;
+          
+    const createdDate = new Date(now.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+    
+    signals.push({
+      id: `mock-${i}-${Date.now()}`,
+      symbol,
+      direction,
+      entryPrice,
+      stopLoss,
+      takeProfit,
+      strategy: strategies[Math.floor(Math.random() * strategies.length)],
+      result,
+      profit,
+      status: Math.random() > 0.2 ? "COMPLETED" : "ACTIVE",
+      createdAt: createdDate.toISOString(),
+      completedAt: Math.random() > 0.2 ? new Date(createdDate.getTime() + Math.random() * 3 * 24 * 60 * 60 * 1000).toISOString() : undefined,
+      leverage: Math.round(Math.random() * 10 + 1)
+    });
+  }
+  
+  return signals;
+};
+
+// For backward compatibility
+export const getMockSignalHistory = getMockSignals;

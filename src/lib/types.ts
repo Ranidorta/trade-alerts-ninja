@@ -1,7 +1,7 @@
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
-export type SignalResult = "win" | "loss" | "partial" | "missed";
+export type SignalResult = "WINNER" | "LOSER" | "PARTIAL" | "FALSE";
 
 export interface PriceTarget {
   level: number;
@@ -24,7 +24,7 @@ export interface TechnicalIndicators {
 export interface TradingSignal {
   id: string;
   symbol: string;
-  pair: string;
+  pair?: string;
   direction?: SignalDirection;
   entryPrice?: number;
   entryMin?: number;
@@ -33,7 +33,7 @@ export interface TradingSignal {
   stopLoss: number;
   takeProfit?: number[];
   targets?: PriceTarget[];
-  leverage: number;
+  leverage?: number;
   status: SignalStatus;
   createdAt: string;
   updatedAt?: string;
@@ -45,7 +45,7 @@ export interface TradingSignal {
   reason?: string;
   type?: SignalType;
   technicalIndicators?: TechnicalIndicators;
-  result?: number | SignalResult; // Updated to support string result types
+  result?: SignalResult; // Updated to be the string enum
   strategy?: string;
   performance?: StrategyTypePerformance;
   tpHit?: number;
@@ -139,6 +139,14 @@ export interface PerformanceMetrics {
   dailyData: DailyPerformance[];
   strategyPerformance?: StrategyDetailedPerformance[];
   avgProfit?: number;
+}
+
+export interface PerformanceData {
+  total: number;
+  vencedor: { quantidade: number; percentual: number };
+  parcial: { quantidade: number; percentual: number };
+  perdedor: { quantidade: number; percentual: number };
+  falso: { quantidade: number; percentual: number };
 }
 
 export interface SymbolPerformance {

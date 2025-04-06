@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PerformanceData } from "@/lib/types";
 
 const PerformanceBreakdownCard = ({ title, value, color, percentage, icon }: { 
   title: string; 

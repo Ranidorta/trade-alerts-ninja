@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,6 +11,7 @@ import {
   Title,
 } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
+import { PerformanceData } from "@/lib/types";
 
 // Register ChartJS components
 ChartJS.register(
@@ -23,14 +23,6 @@ ChartJS.register(
   BarElement,
   Title
 );
-
-interface PerformanceData {
-  total: number;
-  vencedor: { quantidade: number; percentual: number };
-  parcial: { quantidade: number; percentual: number };
-  perdedor: { quantidade: number; percentual: number };
-  falso: { quantidade: number; percentual: number };
-}
 
 interface PerformanceChartProps {
   data: PerformanceData;

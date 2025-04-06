@@ -1,9 +1,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchPerformanceMetrics } from '@/lib/signalsApi';
+import { PerformanceData } from '@/lib/types';
 
 export function usePerformanceMetrics(days: number = 30, refetchInterval: number = 60000) {
-  return useQuery({
+  return useQuery<PerformanceData>({
     queryKey: ['performance', days.toString()],
     queryFn: () => fetchPerformanceMetrics({ queryKey: ['performance', days.toString()] }),
     refetchOnWindowFocus: false,

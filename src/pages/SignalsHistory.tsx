@@ -42,10 +42,10 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageHeader } from '@/components/signals/PageHeader';
+import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
 import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
-import { SignalsSummary } from '@/components/signals/SignalsSummary';
+import SignalsSummary from '@/components/signals/SignalsSummary';
 import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
@@ -128,9 +128,9 @@ const SignalsHistory = () => {
     const dailyMap = new Map();
     
     filteredSignals.forEach(signal => {
-      if (!signal.timestamp) return;
+      if (!signal.createdAt) return;
       
-      const date = new Date(signal.timestamp).toLocaleDateString();
+      const date = new Date(signal.createdAt).toLocaleDateString();
       if (!dailyMap.has(date)) {
         dailyMap.set(date, { date, count: 0, wins: 0, losses: 0 });
       }
@@ -151,11 +151,11 @@ const SignalsHistory = () => {
   })();
   
   const avgProfit = (() => {
-    const profitSignals = filteredSignals.filter(s => s.profit_percentage);
+    const profitSignals = filteredSignals.filter(s => s.profit);
     if (profitSignals.length === 0) return 0;
     
     const totalProfit = profitSignals.reduce((sum, signal) => {
-      return sum + (parseFloat(signal.profit_percentage?.toString() || '0') || 0);
+      return sum + (parseFloat(signal.profit?.toString() || '0') || 0);
     }, 0);
     
     return totalProfit / profitSignals.length;
@@ -200,15 +200,18 @@ const SignalsHistory = () => {
         
         // Get mock data if API fails
         try {
-          const mockData = await import('@/lib/mockData').then(mod => mod.getMockSignalHistory());
-          setSignals(mockData as TradingSignal[]);
-          setFilteredSignals(mockData as TradingSignal[]);
-          
-          toast({
-            title: "Usando dados locais",
-            description: "Não foi possível conectar à API, usando dados locais.",
-            variant: "destructive"
-          });
+          const mockData = await import('@/lib/mockData');
+          if (mockData && typeof mockData.getMockSignals === 'function') {
+            const mockSignals = mockData.getMockSignals() as TradingSignal[];
+            setSignals(mockSignals);
+            setFilteredSignals(mockSignals);
+            
+            toast({
+              title: "Usando dados locais",
+              description: "Não foi possível conectar à API, usando dados locais.",
+              variant: "destructive"
+            });
+          }
         } catch (e) {
           console.error("Failed to load mock data:", e);
           setSignals([]);
@@ -220,7 +223,7 @@ const SignalsHistory = () => {
     };
     
     loadSignals();
-  }, [symbolFilter, resultFilter]);
+  }, [symbolFilter, resultFilter, toast]);
   
   // Handle search filtering
   useEffect(() => {
@@ -233,7 +236,7 @@ const SignalsHistory = () => {
     const filtered = signals.filter(signal => 
       signal.symbol.toLowerCase().includes(query) ||
       (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
-      signal.result.toLowerCase().includes(query)
+      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
     );
     
     setFilteredSignals(filtered);
@@ -242,15 +245,18 @@ const SignalsHistory = () => {
   // Handle switching to local mode
   const handleLocalModeClick = async () => {
     try {
-      const mockData = await import('@/lib/mockData').then(mod => mod.getMockSignalHistory());
-      setSignals(mockData as TradingSignal[]);
-      setFilteredSignals(mockData as TradingSignal[]);
-      setApiError(false);
-      
-      toast({
-        title: "Modo local ativado",
-        description: "Exibindo dados de exemplo armazenados localmente.",
-      });
+      const mockData = await import('@/lib/mockData');
+      if (mockData && typeof mockData.getMockSignals === 'function') {
+        const mockSignals = mockData.getMockSignals() as TradingSignal[];
+        setSignals(mockSignals);
+        setFilteredSignals(mockSignals);
+        setApiError(false);
+        
+        toast({
+          title: "Modo local ativado",
+          description: "Exibindo dados de exemplo armazenados localmente.",
+        });
+      }
     } catch (error) {
       console.error("Failed to load mock data:", error);
       toast({
@@ -533,9 +539,9 @@ const SignalsHistory = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredSignals.map((signal) => (
-                      <TableRow key={signal.id || `${signal.timestamp}-${signal.symbol}`}>
+                      <TableRow key={signal.id || `${signal.createdAt}-${signal.symbol}`}>
                         <TableCell>
-                          {signal.timestamp ? formatDate(signal.timestamp) : 'N/A'}
+                          {signal.createdAt ? formatDate(signal.createdAt) : 'N/A'}
                         </TableCell>
                         <TableCell className="font-medium">{signal.symbol}</TableCell>
                         <TableCell>
@@ -543,9 +549,9 @@ const SignalsHistory = () => {
                             {signal.direction}
                           </Badge>
                         </TableCell>
-                        <TableCell>{signal.entry_price}</TableCell>
-                        <TableCell>{signal.tp}</TableCell>
-                        <TableCell>{signal.sl}</TableCell>
+                        <TableCell>{signal.entryPrice}</TableCell>
+                        <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
+                        <TableCell>{signal.stopLoss}</TableCell>
                         <TableCell>
                           <Badge 
                             variant="outline" 
@@ -573,7 +579,7 @@ const SignalsHistory = () => {
           {viewMode === 'cards' && filteredSignals.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSignals.map((signal) => (
-                <SignalHistoryItem key={signal.id || `${signal.timestamp}-${signal.symbol}`} signal={signal} />
+                <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
               ))}
             </div>
           )}
