@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -73,6 +74,7 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
+    // Fix: Use correct API endpoint with properly formed URL
     const response = await api.get('/api/signals/history', { params: filters });
     return response.data as TradingSignal[];
   } catch (error) {

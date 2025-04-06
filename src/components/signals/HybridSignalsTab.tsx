@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Brain, Shield, Info } from "lucide-react";
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/tabs";
 
 // Function to determine the color based on the result
-const getResultColor = (result: SignalResult | null): string => {
+const getResultColor = (result: SignalResult | null | number): string => {
   if (!result) return "bg-gray-100 text-gray-800";
   
   // Convert to string if it's a number (0 or 1)
@@ -54,7 +55,7 @@ const getResultColor = (result: SignalResult | null): string => {
 };
 
 // Function to get the result icon
-const getResultIcon = (result: SignalResult | null): string => {
+const getResultIcon = (result: SignalResult | null | number): string => {
   if (!result) return "⏳";
   
   // Convert to string if it's a number (0 or 1)
@@ -74,7 +75,7 @@ const getResultIcon = (result: SignalResult | null): string => {
 };
 
 // Format the display of result text
-const formatResultText = (result: SignalResult | null): string => {
+const formatResultText = (result: SignalResult | null | number): string => {
   if (!result) return "PENDENTE";
   
   if (typeof result === 'number') {
