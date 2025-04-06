@@ -193,20 +193,44 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     s_1h = df_1h_ind.iloc[-1]
     s_4h = df_4h_ind.iloc[-1]
     
+    # Initialize logs list to track conditions
+    logs = []
+    
     # Check condition 1: Trend alignment with hierarchical weights
     trend_aligned = is_trend_aligned(df_15m_ind, df_1h_ind, df_4h_ind)
+    if not trend_aligned:
+        logs.append("❌ Falha: Tendência desalinhada entre os timeframes")
+        # Add detailed information about each timeframe's trend validity
+        logs.append(f"   • 15m trend valid: {'✓' if s_15m[f'trend_valid_15m'] else '✗'}")
+        logs.append(f"   • 1h trend valid: {'✓' if s_1h[f'trend_valid_1h'] else '✗'}")
+        logs.append(f"   • 4h trend valid: {'✓' if s_4h[f'trend_valid_4h'] else '✗'}")
     
     # Check condition 2: 1h volume > 20-period volume MA
     volume_ok = s_1h[f'volume_1h'] > s_1h[f'volume_ma_20_1h']
+    if not volume_ok:
+        logs.append("❌ Falha: Volume no 1h abaixo da média de 20 períodos")
+        logs.append(f"   • Volume atual: {s_1h[f'volume_1h']:.2f}")
+        logs.append(f"   • Volume MA20: {s_1h[f'volume_ma_20_1h']:.2f}")
     
     # Check condition 3: 4h ADX > 25 (strong trend)
     strong_trend = s_4h[f'adx_4h'] > 25
+    if not strong_trend:
+        logs.append("❌ Falha: ADX no 4h abaixo de 25 (sem tendência forte)")
+        logs.append(f"   • ADX atual: {s_4h[f'adx_4h']:.2f}")
     
     # Check condition 4: 15m price > Fibonacci 61.8% retracement level from 4h
     fib_confirmation = s_15m[f'close_15m'] > s_4h[f'fib_618_4h']
+    if not fib_confirmation:
+        logs.append("❌ Falha: Preço abaixo da retração de Fibonacci 61.8% no 4h")
+        logs.append(f"   • Preço atual: {s_15m[f'close_15m']:.2f}")
+        logs.append(f"   • Nível Fib 61.8%: {s_4h[f'fib_618_4h']:.2f}")
     
     # Check condition 5: 15m price > Point of Control (POC) from 4h volume profile
     poc_confirmation = s_15m[f'close_15m'] > s_4h[f'poc_4h']
+    if not poc_confirmation:
+        logs.append("❌ Falha: Preço abaixo do POC (Volume Profile) no 4h")
+        logs.append(f"   • Preço atual: {s_15m[f'close_15m']:.2f}")
+        logs.append(f"   • POC: {s_4h[f'poc_4h']:.2f}")
     
     # All conditions must be true
     all_conditions_met = (
@@ -229,7 +253,7 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
             'asset': symbol,
             'direction': 'BUY',
             'timeframe': 'hybrid',
-            'score': 1.0,  # Highest confidence score (was 0.95, now 1.0)
+            'score': 1.0,  # Highest confidence score
             'entry_price': entry_price,
             'sl': stop_loss,
             'tp': take_profit,
@@ -297,11 +321,9 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
         return True
     else:
         print(f"⛔ Signal criteria not met for {symbol}:")
-        print(f"  - Trend aligned: {'✓' if trend_aligned else '✗'}")
-        print(f"  - 1h Volume > MA: {'✓' if volume_ok else '✗'}")
-        print(f"  - 4h ADX > 25: {'✓' if strong_trend else '✗'}")
-        print(f"  - Above Fib 61.8%: {'✓' if fib_confirmation else '✗'}")
-        print(f"  - Above POC: {'✓' if poc_confirmation else '✗'}")
+        # Print all logs with proper formatting
+        for log in logs:
+            print(f"   - {log}")
         return False
 
 
