@@ -14,6 +14,13 @@ import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
 
 // Key for storing whether signals have been generated before
 const SIGNALS_GENERATED_KEY = "signals_generated_before";
@@ -31,6 +38,7 @@ const SignalsDashboard = () => {
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [signalsGeneratedBefore, setSignalsGeneratedBefore] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("classic");
   const isMobile = useIsMobile();
   
   const {
@@ -261,7 +269,7 @@ const SignalsDashboard = () => {
   };
   
   // Show empty state based on whether signals have been generated before
-  const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0);
+  const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0 && activeTab === "classic");
   
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
@@ -269,7 +277,7 @@ const SignalsDashboard = () => {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
           <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base">
-            Oportunidades de trading utilizando estratégia CLASSIC
+            Oportunidades de trading com estratégias avançadas
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
@@ -305,222 +313,239 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      {isMobile ? (
-        <div className="flex items-center justify-between mb-4">
-          <Button
-            onClick={handleManualRefresh}
-            variant="outline"
-            size="sm"
-            className="h-9 p-2"
-            title="Atualizar sinais agora"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 p-2">
-                <Filter className="h-4 w-4" />
+      <Tabs defaultValue="classic" className="w-full" onValueChange={setActiveTab}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="classic">
+            💲 Trade Ninja Classic
+          </TabsTrigger>
+          <TabsTrigger value="hybrid">
+            🧠 Trade Ninja Híbrido
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="classic">
+          {isMobile ? (
+            <div className="flex items-center justify-between mb-4">
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                size="sm"
+                className="h-9 p-2"
+                title="Atualizar sinais agora"
+              >
+                <RefreshCw className="h-4 w-4" />
               </Button>
-            </SheetTrigger>
-            <SheetContent className="w-[80vw] p-4" side="right">
-              <h3 className="text-lg font-medium mb-4">Filtros</h3>
               
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Buscar</h4>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                    <Input 
-                      placeholder="Buscar por símbolo ou par..." 
-                      className="pl-10" 
-                      value={searchQuery} 
-                      onChange={handleSearchChange} 
-                    />
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 p-2">
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[80vw] p-4" side="right">
+                  <h3 className="text-lg font-medium mb-4">Filtros</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Buscar</h4>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                        <Input 
+                          placeholder="Buscar por símbolo ou par..." 
+                          className="pl-10" 
+                          value={searchQuery} 
+                          onChange={handleSearchChange} 
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Status</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          variant={statusFilter === "ALL" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleStatusFilter("ALL")}
+                          className="w-full"
+                        >
+                          Todos
+                        </Button>
+                        <Button 
+                          variant={statusFilter === "ACTIVE" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleStatusFilter("ACTIVE")}
+                          className="w-full"
+                        >
+                          Ativos
+                        </Button>
+                        <Button 
+                          variant={statusFilter === "WAITING" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleStatusFilter("WAITING")}
+                          className="w-full"
+                        >
+                          Aguardando
+                        </Button>
+                        <Button 
+                          variant={statusFilter === "COMPLETED" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleStatusFilter("COMPLETED")}
+                          className="w-full"
+                        >
+                          Completados
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">Ordenar por</h4>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          variant={sortBy === "newest" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleSort("newest")}
+                          className="w-full"
+                        >
+                          Mais Recentes
+                        </Button>
+                        <Button 
+                          variant={sortBy === "oldest" ? "default" : "outline"} 
+                          size="sm" 
+                          onClick={() => handleSort("oldest")}
+                          className="w-full"
+                        >
+                          Mais Antigos
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={handleSubscribe} 
+                      variant="outline"
+                      className="w-full"
+                    >
+                      <Bell className="mr-2 h-4 w-4" />
+                      Receber Alertas
+                    </Button>
                   </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Status</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant={statusFilter === "ALL" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleStatusFilter("ALL")}
-                      className="w-full"
-                    >
-                      Todos
-                    </Button>
-                    <Button 
-                      variant={statusFilter === "ACTIVE" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleStatusFilter("ACTIVE")}
-                      className="w-full"
-                    >
-                      Ativos
-                    </Button>
-                    <Button 
-                      variant={statusFilter === "WAITING" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleStatusFilter("WAITING")}
-                      className="w-full"
-                    >
-                      Aguardando
-                    </Button>
-                    <Button 
-                      variant={statusFilter === "COMPLETED" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleStatusFilter("COMPLETED")}
-                      className="w-full"
-                    >
-                      Completados
-                    </Button>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium mb-2">Ordenar por</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant={sortBy === "newest" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleSort("newest")}
-                      className="w-full"
-                    >
-                      Mais Recentes
-                    </Button>
-                    <Button 
-                      variant={sortBy === "oldest" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleSort("oldest")}
-                      className="w-full"
-                    >
-                      Mais Antigos
-                    </Button>
-                  </div>
-                </div>
-                
-                <Button 
-                  onClick={handleSubscribe} 
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Bell className="mr-2 h-4 w-4" />
-                  Receber Alertas
-                </Button>
+                </SheetContent>
+              </Sheet>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
+                <Input 
+                  placeholder="Buscar por símbolo ou par..." 
+                  className="pl-10" 
+                  value={searchQuery} 
+                  onChange={handleSearchChange} 
+                />
               </div>
-            </SheetContent>
-          </Sheet>
-        </div>
-      ) : (
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-            <Input 
-              placeholder="Buscar por símbolo ou par..." 
-              className="pl-10" 
-              value={searchQuery} 
-              onChange={handleSearchChange} 
-            />
-          </div>
+              
+              <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
+                <Button 
+                  onClick={handleManualRefresh} 
+                  variant="outline" 
+                  size={isMobile ? "sm" : "default"} 
+                  className={isMobile ? "h-9 px-2" : ""}
+                  title="Atualizar sinais agora"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
+                  {!isMobile && "Atualizar"}
+                </Button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                      <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
+                      {!isMobile && (statusFilter === "ALL" ? "Todos Status" : statusFilter)}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem className={statusFilter === "ALL" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ALL")}>
+                        Todos Status
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className={statusFilter === "ACTIVE" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ACTIVE")}>
+                        Ativos
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className={statusFilter === "WAITING" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("WAITING")}>
+                        Aguardando
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className={statusFilter === "COMPLETED" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("COMPLETED")}>
+                        Completados
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
+                      <ArrowUpDown className="h-4 w-4 mr-1 sm:mr-2" />
+                      {!isMobile && "Ordenar"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Ordenar Sinais</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem className={sortBy === "newest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("newest")}>
+                        Mais Recentes
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className={sortBy === "oldest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("oldest")}>
+                        Mais Antigos
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          )}
           
-          <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
-            <Button 
-              onClick={handleManualRefresh} 
-              variant="outline" 
-              size={isMobile ? "sm" : "default"} 
-              className={isMobile ? "h-9 px-2" : ""}
-              title="Atualizar sinais agora"
-            >
-              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
-              {!isMobile && "Atualizar"}
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
-                  <BarChart3 className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile && (statusFilter === "ALL" ? "Todos Status" : statusFilter)}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Filtrar por Status</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem className={statusFilter === "ALL" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ALL")}>
-                    Todos Status
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className={statusFilter === "ACTIVE" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("ACTIVE")}>
-                    Ativos
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className={statusFilter === "WAITING" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("WAITING")}>
-                    Aguardando
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className={statusFilter === "COMPLETED" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleStatusFilter("COMPLETED")}>
-                    Completados
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""}>
-                  <ArrowUpDown className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile && "Ordenar"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Ordenar Sinais</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem className={sortBy === "newest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("newest")}>
-                    Mais Recentes
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className={sortBy === "oldest" ? "bg-slate-100 dark:bg-slate-800" : ""} onClick={() => handleSort("oldest")}>
-                    Mais Antigos
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      )}
-      
-      {!isLoading && showEmptyState && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
-            <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
-          </div>
-          <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais</h3>
-          <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base max-w-md mx-auto mb-3 sm:mb-6">
-            Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
-          </p>
-          <Button onClick={handleGenerateSignals} disabled={isGenerating}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
-          </Button>
-        </div>
-      )}
-      
-      {isLoading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full"></div>
-        </div>
-      ) : (
-        filteredSignals.length > 0 && (
-          <>
-            <div className="mb-4">
-              <h2 className="text-xl font-semibold">Sinais ({filteredSignals.length})</h2>
+          {!isLoading && showEmptyState && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 sm:p-8 text-center mb-4 sm:mb-8">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
+                <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
+              </div>
+              <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais</h3>
+              <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base max-w-md mx-auto mb-3 sm:mb-6">
+                Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
+              </p>
+              <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+                {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
+              </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredSignals.map((signal) => (
-                <SignalCard key={signal.id} signal={signal} />
-              ))}
+          )}
+          
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full"></div>
             </div>
-          </>
-        )
-      )}
+          ) : (
+            filteredSignals.length > 0 && (
+              <>
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold">Sinais ({filteredSignals.length})</h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredSignals.map((signal) => (
+                    <SignalCard key={signal.id} signal={signal} />
+                  ))}
+                </div>
+              </>
+            )
+          )}
+        </TabsContent>
+        
+        <TabsContent value="hybrid">
+          <HybridSignalsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
