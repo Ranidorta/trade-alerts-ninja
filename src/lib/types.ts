@@ -1,4 +1,3 @@
-
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
@@ -25,18 +24,23 @@ export interface TechnicalIndicators {
 export interface TradingSignal {
   id: string;
   symbol: string;
+  asset?: string;          // Added for hybrid signals
   pair?: string;
   direction?: SignalDirection;
   entryPrice?: number;
+  entry_price?: number;    // Added for hybrid signals
   entryMin?: number;
   entryMax?: number;
   entryAvg?: number;
   stopLoss: number;
+  sl?: number;             // Added for hybrid signals
   takeProfit?: number[];
+  tp?: number;             // Added for hybrid signals
   targets?: PriceTarget[];
   leverage?: number;
   status: SignalStatus;
   createdAt: string;
+  timestamp?: string;      // Added for hybrid signals
   updatedAt?: string;
   completedAt?: string;
   profit?: number;
@@ -46,18 +50,19 @@ export interface TradingSignal {
   reason?: string;
   type?: SignalType;
   technicalIndicators?: TechnicalIndicators;
-  result?: SignalResult; // Updated to be the string enum
+  result?: SignalResult; 
   strategy?: string;
   performance?: StrategyTypePerformance;
   tpHit?: number;
-  hitTargets?: boolean[]; // Added for Binance verification
-  verifiedAt?: string;   // Added for Binance verification
-  error?: string;        // Added for error tracking
-  confidence?: number;   // Added for ML signal confidence
-  conf_nivel?: string;   // Added for confidence level (alta, média, baixa)
-  tp1?: number;          // Added for target price 1
-  tp2?: number;          // Added for target price 2
-  tp3?: number;          // Added for target price 3
+  hitTargets?: boolean[]; 
+  verifiedAt?: string;   
+  error?: string;        
+  confidence?: number;   
+  score?: number;         // Added for hybrid signals
+  conf_nivel?: string;   
+  tp1?: number;         
+  tp2?: number;          
+  tp3?: number;          
 }
 
 export interface Feature {
