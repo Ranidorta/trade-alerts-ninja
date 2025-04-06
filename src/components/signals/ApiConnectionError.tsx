@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, ExternalLink, RefreshCw, Database } from "lucide-react";
 
-interface ApiConnectionErrorProps {
+export interface ApiConnectionErrorProps {
   apiUrl: string;
   onLocalModeClick: () => void;
 }

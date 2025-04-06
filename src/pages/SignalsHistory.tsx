@@ -164,7 +164,6 @@ const SignalsHistory = () => {
     try {
       const updatedSignal = await verifySingleSignal(signalId);
       if (updatedSignal) {
-        // Update the signals state with the updated signal
         setSignals((prevSignals) =>
           prevSignals.map((signal) =>
             signal.id === signalId ? updatedSignal : signal
@@ -455,5 +454,4 @@ const SignalsHistory = () => {
   );
 };
 
-// Export the component as default
 export default SignalsHistory;
