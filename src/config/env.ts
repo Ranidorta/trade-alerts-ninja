@@ -24,5 +24,8 @@ export const config = {
   
   // ML Signal Generator Config
   mlSignalSymbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
-  mlSignalInterval: "15"
+  mlSignalInterval: "15",
+  
+  // Debug flag for API connections
+  enableApiDebug: true
 };

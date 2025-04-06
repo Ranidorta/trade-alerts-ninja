@@ -59,7 +59,11 @@ export const fetchSignals = async (params?: any) => {
 export const fetchHybridSignals = async () => {
   try {
     console.log(`Fetching hybrid signals from: ${api.defaults.baseURL}/api/signals/history/hybrid`);
-    const response = await api.get('/api/signals/history/hybrid');
+    
+    // Add absolute URL as a fallback to debug potential cross-origin issues
+    const url = '/api/signals/history/hybrid';
+    
+    const response = await api.get(url);
     
     if (response.status === 200) {
       console.log(`Successfully fetched ${response.data.length} hybrid signals`);
@@ -71,6 +75,8 @@ export const fetchHybridSignals = async () => {
     if (axios.isAxiosError(error)) {
       console.log(`API responded with status: ${error.response?.status}`);
       console.log(`Error message: ${error.response?.data?.error || error.message}`);
+      console.log(`Request URL: ${error.config?.url}`);
+      console.log(`Base URL: ${api.defaults.baseURL}`);
       
       // If the error is 404, it means no signals were found, which is a valid state
       if (error.response?.status === 404) {
