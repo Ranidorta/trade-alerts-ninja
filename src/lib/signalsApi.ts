@@ -161,6 +161,72 @@ export const fetchSignals = async (params?: {
 };
 
 /**
+ * Fetches trading signals history from the API
+ * @param params Optional query parameters
+ * @returns Promise with historical trading signals
+ */
+export const fetchSignalsHistory = async (params?: {
+  symbol?: string;
+  result?: string;
+  forceRefresh?: boolean;
+}): Promise<TradingSignal[]> => {
+  try {
+    // Generate cache key based on params
+    const cacheKey = JSON.stringify(params || {});
+    const forceRefresh = params?.forceRefresh || false;
+    
+    // Return cached data if available and not forcing refresh
+    if (!forceRefresh && 
+        cache.signals.data && 
+        cache.signals.timestamp > Date.now() - CACHE_DURATIONS.signals) {
+      console.log("Using cached signals history data");
+      return cache.signals.data as TradingSignal[];
+    }
+    
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    if (params?.symbol) queryParams.append("symbol", params.symbol);
+    if (params?.result) queryParams.append("result", params.result);
+    
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+    
+    // Get fetch options with auth token if available
+    const options = await createFetchOptions();
+    
+    // Make API request
+    console.log(`Fetching signals history from: ${API_BASE_URL}/signals/history${queryString}`);
+    const response = await fetch(`${API_BASE_URL}/signals/history${queryString}`, options);
+    
+    const data = await handleApiResponse(response);
+    
+    // Map the API response to match our TradingSignal interface
+    const mappedData = data.map((signal: any) => ({
+      ...signal,
+      // Convert API's asset field to symbol if needed
+      symbol: signal.symbol || signal.asset,
+      // If signal doesn't have a result property but has a profit,
+      // we can determine result from profit
+      result: signal.result !== undefined ? signal.result : 
+              (signal.profit !== undefined ? (signal.profit > 0 ? 1 : 0) : undefined),
+      // Make sure strategy is included in the mapped data
+      strategy: signal.strategy || signal.strategy_name || signal.signal_type
+    }));
+    
+    // Update cache
+    cache.signals = {
+      data: mappedData,
+      timestamp: Date.now(),
+    };
+    
+    console.log("Signals history fetched:", mappedData.length);
+    return mappedData as TradingSignal[];
+  } catch (error) {
+    console.error("Error fetching signals history:", error);
+    throw error;
+  }
+};
+
+/**
  * Fetches signal performance metrics from the API
  * @returns Promise with performance data
  */
