@@ -32,53 +32,7 @@ def fetch_data(symbol='BTCUSDT', interval='15m', limit=250):
     Returns:
         DataFrame with OHLCV data
     """
-    try:
-        # First try to import bybit API
-        from api.bybit import get_candles, mock_candles
-        
-        # Try to fetch from API
-        df = get_candles(symbol, interval, limit)
-        
-        # If no data returned, use mock data
-        if df.empty:
-            print(f"No data available from API for {symbol} {interval}, using mock data")
-            df = mock_candles(symbol, days=limit * int(interval) / 1440 if interval.isdigit() else 30)
-            
-        return df
-    except Exception as e:
-        print(f"Error fetching data: {e}")
-        
-        # Generate mock data if API fails
-        print(f"Generating mock data for {symbol} {interval}")
-        
-        # Create date range
-        dates = pd.date_range(end=datetime.now(), periods=limit, freq='15min' if interval == '15m' else 
-                                                               '1h' if interval == '1h' else '4h')
-        
-        # Generate random price data
-        base_price = 30000 if 'BTC' in symbol else 2000 if 'ETH' in symbol else 100
-        
-        # Add some trend and randomness
-        noise = np.random.normal(0, 1, size=limit)
-        trend = np.linspace(0, 0.1, limit)  # Small upward trend
-        close = base_price * (1 + trend + noise * 0.01)
-        
-        # Generate OHLC based on close
-        high = close * (1 + abs(np.random.normal(0, 0.005, size=limit)))
-        low = close * (1 - abs(np.random.normal(0, 0.005, size=limit)))
-        open_price = low + (high - low) * np.random.random(size=limit)
-        
-        # Create DataFrame
-        df = pd.DataFrame({
-            'timestamp': dates,
-            'open': open_price,
-            'high': high,
-            'low': low,
-            'close': close,
-            'volume': np.random.normal(base_price * 100, base_price * 10, size=limit)
-        })
-        
-        return df
+    # ... keep existing code (API fetching and mock data generation)
 
 
 def calculate_indicators(df, label):
@@ -120,6 +74,24 @@ def calculate_indicators(df, label):
     adx = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
     df['adx'] = adx.adx()
     
+    # Fibonacci 61.8% retracement level (based on last 100 candles)
+    high = df['high'].rolling(window=100).max()
+    low = df['low'].rolling(window=100).min()
+    df['fib_618'] = high - (0.618 * (high - low))
+    
+    # Volume Profile - Point of Control approximation
+    # Group close prices into bins for better volume distribution analysis
+    price_bins = pd.cut(df['close'], bins=50)
+    volume_profile = df.groupby(price_bins)['volume'].sum()
+    # Find bin with maximum volume
+    poc_bin = volume_profile.idxmax()
+    # Assign POC value to all rows
+    if not volume_profile.empty and poc_bin is not None:
+        df['poc'] = poc_bin.mid
+    else:
+        # Fallback if binning doesn't work properly
+        df['poc'] = df.groupby(df['close'].round(decimals=1))['volume'].transform('sum').idxmax()
+    
     # Check if indicators meet criteria
     df['above_sma200'] = df['close'] > df['sma_200']
     df['rsi_ok'] = df['rsi'] > 30
@@ -138,7 +110,9 @@ def calculate_indicators(df, label):
         f'trend_valid_{label}': df['trend_valid'],
         f'volume_{label}': df['volume'],
         f'volume_ma_20_{label}': df['volume_ma_20'],
-        f'adx_{label}': df['adx']
+        f'adx_{label}': df['adx'],
+        f'fib_618_{label}': df['fib_618'],
+        f'poc_{label}': df['poc']
     })
     
     return result_df
@@ -189,6 +163,8 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     - Trend is aligned across timeframes (with hierarchical weights)
     - 1h volume > 20-period volume MA
     - 4h ADX > 25 (strong trend)
+    - Current 15m price > Fibonacci 61.8% retracement level from 4h
+    - Current 15m price > Point of Control (POC) from 4h volume profile
     
     Args:
         symbol: Trading pair to analyze
@@ -204,7 +180,7 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     df_4h = fetch_data(symbol=symbol, interval='4h', limit=250)
     
     if df_15m.empty or df_1h.empty or df_4h.empty:
-        print("⚠️ Failed to fetch data for one or more timeframes")
+        print(f"⚠️ Failed to fetch data for one or more timeframes for {symbol}")
         return False
         
     # Calculate indicators for each timeframe
@@ -213,6 +189,7 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     df_4h_ind = calculate_indicators(df_4h, '4h')
     
     # Get latest values
+    s_15m = df_15m_ind.iloc[-1]
     s_1h = df_1h_ind.iloc[-1]
     s_4h = df_4h_ind.iloc[-1]
     
@@ -225,8 +202,20 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
     # Check condition 3: 4h ADX > 25 (strong trend)
     strong_trend = s_4h[f'adx_4h'] > 25
     
+    # Check condition 4: 15m price > Fibonacci 61.8% retracement level from 4h
+    fib_confirmation = s_15m[f'close_15m'] > s_4h[f'fib_618_4h']
+    
+    # Check condition 5: 15m price > Point of Control (POC) from 4h volume profile
+    poc_confirmation = s_15m[f'close_15m'] > s_4h[f'poc_4h']
+    
     # All conditions must be true
-    all_conditions_met = trend_aligned and volume_ok and strong_trend
+    all_conditions_met = (
+        trend_aligned and 
+        volume_ok and 
+        strong_trend and 
+        fib_confirmation and 
+        poc_confirmation
+    )
     
     if all_conditions_met:
         # Get current price and calculate targets
@@ -240,7 +229,7 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
             'asset': symbol,
             'direction': 'BUY',
             'timeframe': 'hybrid',
-            'score': 0.95,  # High confidence score
+            'score': 1.0,  # Highest confidence score (was 0.95, now 1.0)
             'entry_price': entry_price,
             'sl': stop_loss,
             'tp': take_profit,
@@ -250,6 +239,7 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
                     'rsi': df_15m_ind.iloc[-1][f'rsi_15m'],
                     'sma200': df_15m_ind.iloc[-1][f'sma_200_15m'],
                     'trend_valid': df_15m_ind.iloc[-1][f'trend_valid_15m'],
+                    'close': df_15m_ind.iloc[-1][f'close_15m'],
                 },
                 '1h': {
                     'rsi': df_1h_ind.iloc[-1][f'rsi_1h'],
@@ -263,6 +253,8 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
                     'sma200': df_4h_ind.iloc[-1][f'sma_200_4h'],
                     'adx': df_4h_ind.iloc[-1][f'adx_4h'],
                     'trend_valid': df_4h_ind.iloc[-1][f'trend_valid_4h'],
+                    'fib_618': df_4h_ind.iloc[-1][f'fib_618_4h'],
+                    'poc': df_4h_ind.iloc[-1][f'poc_4h'],
                 }
             }
         }
@@ -285,7 +277,13 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
         print(f"  - Entry: {entry_price:.2f}")
         print(f"  - Stop Loss: {stop_loss:.2f} (-2%)")
         print(f"  - Take Profit: {take_profit:.2f} (+3%)")
-        print(f"  - Score: 0.95")
+        print(f"  - Score: 1.0")
+        print(f"  - Confirmations:")
+        print(f"    • Trend alignment: ✓")
+        print(f"    • 1h volume > MA: ✓")
+        print(f"    • 4h ADX > 25: ✓")
+        print(f"    • Above Fib 61.8%: ✓")
+        print(f"    • Above POC: ✓")
         
         # Save to a specific utils function if available
         try:
@@ -298,10 +296,12 @@ def generate_hybrid_signal(symbol='BTCUSDT'):
             
         return True
     else:
-        print("⛔ Signal criteria not met:")
-        print(f"  - Trend aligned: {trend_aligned}")
-        print(f"  - 1h Volume > MA: {volume_ok}")
-        print(f"  - 4h ADX > 25: {strong_trend}")
+        print(f"⛔ Signal criteria not met for {symbol}:")
+        print(f"  - Trend aligned: {'✓' if trend_aligned else '✗'}")
+        print(f"  - 1h Volume > MA: {'✓' if volume_ok else '✗'}")
+        print(f"  - 4h ADX > 25: {'✓' if strong_trend else '✗'}")
+        print(f"  - Above Fib 61.8%: {'✓' if fib_confirmation else '✗'}")
+        print(f"  - Above POC: {'✓' if poc_confirmation else '✗'}")
         return False
 
 
@@ -310,4 +310,3 @@ if __name__ == "__main__":
     symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']
     for symbol in symbols:
         generate_hybrid_signal(symbol=symbol)
-
