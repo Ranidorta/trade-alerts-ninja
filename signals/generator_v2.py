@@ -1,128 +1,160 @@
-"""
-Versão híbrida aprimorada do gerador de sinais com estilo enterprise:
-- Filtro de tendência no 4h (EMA50 > EMA200)
-- Entrada em tempo real no 15m com SL/TP dinâmicos baseados em ATR
-- Confirmação por volume, padrão de candle e validade curta (5 minutos)
-- Logging estruturado e tratamento de exceções robusto
-"""
-
-import pandas as pd
-from datetime import datetime, timedelta
-from ta.trend import EMAIndicator
-from ta.volatility import AverageTrueRange
 import logging
-from utils.save_signal import save_signal
+from typing import Dict, Optional, List, Tuple
+from datetime import datetime, timedelta
+import pandas as pd
+from ta.trend import EMAIndicator, MACD
+from ta.volatility import AverageTrueRange, BollingerBands
+from ta.momentum import RSIIndicator
+from hybrid_logic import confirm_volume, confirm_candle_pattern, generate_entry
+from context_engine import ContextEngine
 from data.fetch_data import fetch_data
+from utils.save_signal import save_signal
+from alertSender import SignalSender
 
-# Setup de logging enterprise
-logger = logging.getLogger("HybridSignalGenerator")
+logger = logging.getLogger("TradeAgent")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 
-def check_trend(symbol, timeframe='4h'):
-    try:
-        df = fetch_data(symbol, timeframe)
+class TradeAgent:
+    def __init__(self, config: Dict, context_text: str = ""):
+        self.config = config
+        self.context_text = context_text
+        self.context_engine = ContextEngine(config.get("llm_config", {}))
+        self.alert_sender = SignalSender(config.get("alert_config", {}))
+        self.min_volume_factor = config.get("min_volume_factor", 1.2)
+        self.max_rsi = config.get("max_rsi", 70)
+        self.min_rsi = config.get("min_rsi", 30)
+
+    def _calculate_technical_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Calcula todos os indicadores técnicos de uma vez"""
         df['ema_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
         df['ema_200'] = EMAIndicator(close=df['close'], window=200).ema_indicator()
-        is_uptrend = df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1]
-        logger.info(f"{symbol} tendência 4h: {'alta' if is_uptrend else 'baixa'}")
-        return is_uptrend
-    except Exception as e:
-        logger.error(f"Erro ao verificar tendência: {e}")
-        return False
+        df['atr'] = AverageTrueRange(
+            high=df['high'],
+            low=df['low'],
+            close=df['close'],
+            window=14
+        ).average_true_range()
+        df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
+        return df
 
-def confirm_volume(df):
-    try:
-        df['volume_ma'] = df['volume'].rolling(20).mean()
-        volume_confirmed = df['volume'].iloc[-1] > 1.5 * df['volume_ma'].iloc[-1]
-        logger.info(f"Volume confirmado: {volume_confirmed}")
-        return volume_confirmed
-    except Exception as e:
-        logger.error(f"Erro ao confirmar volume: {e}")
-        return False
+    def check_trend(self, symbol: str, timeframe='4h') -> Tuple[str, float]:
+        """Retorna a direção da tendência e sua força relativa"""
+        try:
+            df = fetch_data(symbol, timeframe)
+            df = self._calculate_technical_indicators(df)
+            
+            # Tendência baseada em EMA
+            ema_trend = 'UP' if df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1] else 'DOWN'
+            
+            # Força da tendência (0 a 1)
+            trend_strength = abs(df['ema_50'].iloc[-1] - df['ema_200'].iloc[-1]) / df['close'].iloc[-1]
+            
+            logger.info(f"{symbol} {timeframe} - Tendência: {ema_trend} | Força: {trend_strength:.2%}")
+            return ema_trend, trend_strength
+            
+        except Exception as e:
+            logger.error(f"Erro ao verificar tendência: {e}", exc_info=True)
+            return 'UNKNOWN', 0
 
-def confirm_candle_pattern(df):
-    try:
-        body = abs(df['close'] - df['open'])
-        shadow = df['low'].rolling(2).min()
-        is_hammer = (df['open'] - shadow).iloc[-1] > 2 * body.iloc[-1]
-        logger.info(f"Padrão de candle detectado: {is_hammer}")
-        return is_hammer
-    except Exception as e:
-        logger.error(f"Erro ao detectar padrão de candle: {e}")
-        return False
+    def _validate_market_conditions(self, df: pd.DataFrame) -> bool:
+        """Valida condições de sobrecompra/sobrevenda"""
+        last_rsi = df['rsi'].iloc[-1]
+        
+        if last_rsi > self.max_rsi:
+            logger.info(f"RSI {last_rsi:.2f} acima do limite ({self.max_rsi}) - Condição de sobrecompra")
+            return False
+        if last_rsi < self.min_rsi:
+            logger.info(f"RSI {last_rsi:.2f} abaixo do limite ({self.min_rsi}) - Condição de sobrevenda")
+            return False
+        return True
 
-def generate_entry(symbol, trend_direction, timeframe='15m'):
-    try:
-        df = fetch_data(symbol, timeframe)
-        atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
-        last_close = df['close'].iloc[-1]
-        atr_value = atr.iloc[-1]
+    def generate_signal(self, symbol: str) -> Optional[Dict]:
+        logger.info(f"🔍 Analisando {symbol} para geração de sinal...")
+        try:
+            # 1. Verifica contexto macroeconômico
+            context_score, context_reason = self.context_engine.analyze(symbol, self.context_text)
+            if context_score < self.config.get("min_context_score", 0.6):
+                logger.info(f"🛑 Contexto desfavorável ({context_score:.2f}). Sinal descartado.")
+                return None
 
-        if trend_direction == 'UP':
-            entry = last_close - (atr_value * 0.3)
-            sl = entry - (atr_value * 1.5)
-            tp = entry + (atr_value * 3)
-        else:
-            entry = last_close + (atr_value * 0.3)
-            sl = entry + (atr_value * 1.5)
-            tp = entry - (atr_value * 3)
+            # 2. Verifica tendência técnica (EMA 4h) e sua força
+            trend_direction, trend_strength = self.check_trend(symbol, '4h')
+            if trend_direction == 'UNKNOWN' or trend_strength < 0.005:  # 0.5%
+                logger.info(f"🛑 Tendência fraca ou indefinida ({trend_strength:.2%})")
+                return None
 
-        return {
-            'entry': entry,
-            'sl': sl,
-            'tp': tp,
-            'atr': atr_value
-        }
-    except Exception as e:
-        logger.error(f"Erro ao calcular entrada: {e}")
-        return None
+            # 3. Coleta dados de 15m e valida condições
+            df_15m = fetch_data(symbol, '15m')
+            if df_15m.empty or len(df_15m) < 50:
+                logger.warning(f"❌ Dados insuficientes para {symbol} no 15m")
+                return None
 
-def generate_signal(symbol):
-    logger.info(f"🔍 Analisando {symbol} para geração de sinal híbrido...")
-    try:
-        trend_up = check_trend(symbol, '4h')
-        trend_direction = 'UP' if trend_up else 'DOWN'
+            df_15m = self._calculate_technical_indicators(df_15m)
+            
+            if not self._validate_market_conditions(df_15m):
+                return None
 
-        df_15m = fetch_data(symbol, '15m')
-        if df_15m.empty:
-            logger.warning(f"❌ Dados vazios para {symbol} no 15m")
+            if not confirm_volume(df_15m, min_factor=self.min_volume_factor):
+                logger.info(f"❌ Volume insuficiente para {symbol}, sinal descartado.")
+                return None
+
+            if not confirm_candle_pattern(df_15m, trend_direction):
+                logger.info(f"❌ Sem padrão de candle confirmado para {symbol}.")
+                return None
+
+            # 4. Gera entrada com ATR e valida risco
+            entry_data = generate_entry(
+                symbol, 
+                trend_direction, 
+                '15m',
+                risk_reward_ratio=self.config.get("risk_reward_ratio", 1.5)
+            )
+            
+            if not entry_data or entry_data['risk'] > self.config.get("max_risk_per_trade", 0.02):
+                logger.info(f"🛑 Risco muito alto ou entrada inválida: {entry_data.get('risk', 0):.2%}")
+                return None
+
+            # 5. Monta e salva o sinal
+            signal = {
+                'symbol': symbol,
+                'direction': 'BUY' if trend_direction == 'UP' else 'SELL',
+                'entry_price': round(entry_data['entry'], 6),
+                'sl': round(entry_data['sl'], 6),
+                'tp': round(entry_data['tp'], 6),
+                'atr': round(entry_data['atr'], 6),
+                'risk': round(entry_data['risk'], 4),
+                'timestamp': datetime.utcnow().isoformat(),
+                'expires': (datetime.utcnow() + timedelta(minutes=self.config.get("signal_expiry_minutes", 5))).isoformat(),
+                'timeframe': 'hybrid_realtime',
+                'score': round(context_score * 0.6 + trend_strength * 0.4, 2),  # Score composto
+                'context': context_reason,
+                'indicators': {
+                    'ema_50': round(df_15m['ema_50'].iloc[-1], 2),
+                    'ema_200': round(df_15m['ema_200'].iloc[-1], 2),
+                    'rsi': round(df_15m['rsi'].iloc[-1], 2),
+                    'atr': round(df_15m['atr'].iloc[-1], 2)
+                }
+            }
+
+            save_signal(signal)
+            logger.info(f"✅ Sinal gerado {signal['direction']} @ {signal['entry_price']} ({symbol}) | R:R {entry_data['risk_reward_ratio']:.2f}:1")
+            return signal
+
+        except Exception as e:
+            logger.exception(f"Erro crítico ao gerar sinal para {symbol}")
             return None
 
-        if not confirm_volume(df_15m):
-            logger.info(f"❌ Volume fraco para {symbol}, sinal descartado.")
-            return None
-
-        if not confirm_candle_pattern(df_15m):
-            logger.info(f"❌ Sem padrão de candle confirmado para {symbol}.")
-            return None
-
-        entry_data = generate_entry(symbol, trend_direction, '15m')
-        if not entry_data:
-            return None
-
-        signal = {
-            'symbol': symbol,
-            'direction': 'BUY' if trend_direction == 'UP' else 'SELL',
-            'entry_price': round(entry_data['entry'], 2),
-            'sl': round(entry_data['sl'], 2),
-            'tp': round(entry_data['tp'], 2),
-            'atr': round(entry_data['atr'], 2),
-            'timestamp': datetime.utcnow().isoformat(),
-            'expires': (datetime.utcnow() + timedelta(minutes=5)).isoformat(),
-            'timeframe': 'hybrid_realtime',
-            'score': 1.0,
-            'result': None
-        }
-
-        save_signal(signal)
-        logger.info(f"✅ Sinal gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
-        return signal
-
-    except Exception as e:
-        logger.exception(f"Erro ao gerar sinal para {symbol}")
-        return None
-
-if __name__ == "__main__":
-    symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
-    for symbol in symbols:
-        generate_signal(symbol)
+    def run(self, symbols: List[str], batch_size: int = 5):
+        """Processa símbolos em lotes com intervalo para evitar rate limits"""
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            logger.info(f"⚙️ Processando lote {i//batch_size + 1}/{(len(symbols)-1)//batch_size + 1}")
+            
+            for symbol in batch:
+                signal = self.generate_signal(symbol)
+                if signal:
+                    self.alert_sender.send_signal(signal)
+            
+            # Intervalo entre lotes
+            if i + batch_size < len(symbols):
+                time.sleep(self.config.get("batch_interval", 10))
