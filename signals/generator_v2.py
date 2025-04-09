@@ -1,14 +1,13 @@
-### generator_v2.py
-
 import logging
-import pickle
 import sqlite3
 import numpy as np
-from typing import Dict, Optional, List
 from datetime import datetime, timedelta
+from typing import Dict, Optional, List
 from ta.trend import EMAIndicator
 from ta.volatility import AverageTrueRange
 from ta.momentum import RSIIndicator
+
+# Módulos customizados
 from logic.hybrid_logic import confirm_volume, confirm_candle_pattern, generate_entry
 from services.context_engine import ContextEngine
 from services.trainer import MLTrainer
@@ -27,94 +26,148 @@ class TradeAgent:
         self.alert_sender = SignalSender(config.get("alert_config", {}))
         self.trainer = MLTrainer(model_path="models/trade_agent_model.pkl")
         self.db_path = config.get("db_path", "signals.db")
-        self.learning_enabled = config.get("enable_learning", True)
-        self.feature_window = config.get("feature_window", 50)
-        self.min_success_prob = config.get("min_success_prob", 0.6)
+        self._init_db()
+
+    def _init_db(self):
+        """Inicializa o banco de dados SQLite com uma tabela otimizada."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS signals (
+                    id TEXT PRIMARY KEY,
+                    symbol TEXT,
+                    direction TEXT,
+                    entry_price REAL,
+                    sl REAL,
+                    tp REAL,
+                    atr REAL,
+                    timestamp TEXT,
+                    expires TEXT,
+                    timeframe TEXT,
+                    score REAL,
+                    context TEXT,
+                    success_prob REAL,
+                    result REAL,
+                    features BLOB,
+                    closed INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol ON signals (symbol)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_closed ON signals (closed)")
 
     def _calculate_technical_indicators(self, df):
+        """Calcula indicadores técnicos de forma mais eficiente."""
         df['ema_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
         df['ema_200'] = EMAIndicator(close=df['close'], window=200).ema_indicator()
-        df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
+        df['atr'] = AverageTrueRange(
+            high=df['high'], 
+            low=df['low'], 
+            close=df['close'], 
+            window=14
+        ).average_true_range()
         df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
         return df
 
-    def extract_features(self, df):
+    def _extract_features(self, df):
+        """Extrai features para o modelo de ML com vetorização."""
         latest = df.iloc[-1]
-        features = [
+        return np.array([
             latest['rsi'] / 100,
             latest['atr'] / latest['close'],
             (latest['ema_50'] - latest['ema_200']) / latest['close'],
             latest['volume'] / df['volume'].rolling(20).mean().iloc[-1]
-        ]
-        return np.array(features).reshape(1, -1)
+        ]).reshape(1, -1)
 
-    def check_trend(self, symbol: str, timeframe='4h') -> str:
+    def _check_trend(self, symbol: str, timeframe: str = '4h') -> str:
+        """Determina a tendência com tratamento robusto de erros."""
         try:
             df = fetch_data(symbol, timeframe)
+            if df.empty:
+                raise ValueError("Dados vazios")
+                
             df = self._calculate_technical_indicators(df)
-            is_uptrend = df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1]
-            return 'UP' if is_uptrend else 'DOWN'
+            return 'UP' if df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1] else 'DOWN'
+            
         except Exception as e:
-            logger.error(f"Erro ao verificar tendência: {e}")
+            logger.error(f"Erro ao verificar tendência ({symbol}): {str(e)}")
             return 'UNKNOWN'
 
-    def _save_to_sqlite(self, signal: Dict, features: np.ndarray):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                INSERT INTO signals (
-                    id, symbol, direction, entry_price, sl, tp, atr,
-                    timestamp, expires, timeframe, score, context,
-                    success_prob, result, features, closed
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                f"{signal['symbol']}_{datetime.now().isoformat()}",
-                signal['symbol'], signal['direction'], signal['entry_price'],
-                signal['sl'], signal['tp'], signal['atr'],
-                signal['timestamp'], signal['expires'], signal['timeframe'],
-                signal['score'], signal['context'], signal.get('success_prob', 0.5),
-                None, pickle.dumps(features), 0
-            ))
+    def _save_signal(self, signal: Dict, features: np.ndarray):
+        """Salva sinal no banco de dados com otimizações."""
+        try:
+            save_signal(signal)  # Função existente
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    INSERT INTO signals (
+                        id, symbol, direction, entry_price, sl, tp, atr,
+                        timestamp, expires, timeframe, score, context,
+                        success_prob, features
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    f"{signal['symbol']}_{datetime.now().isoformat()}",
+                    signal['symbol'],
+                    signal['direction'],
+                    signal['entry_price'],
+                    signal['sl'],
+                    signal['tp'],
+                    signal['atr'],
+                    signal['timestamp'],
+                    signal['expires'],
+                    signal['timeframe'],
+                    signal['score'],
+                    signal['context'],
+                    signal.get('success_prob', 0.5),
+                    sqlite3.Binary(features.tobytes())
+                ))
+        except Exception as e:
+            logger.error(f"Falha ao salvar sinal: {str(e)}")
 
     def generate_signal(self, symbol: str) -> Optional[Dict]:
-        logger.info(f"🔍 Analisando {symbol} para geração de sinal...")
+        """Versão otimizada do gerador de sinais."""
+        logger.info(f"🔍 Analisando {symbol}...")
+        
         try:
+            # 1. Análise de Contexto
             context_score, context_reason = self.context_engine.analyze(symbol, self.context_text)
             if context_score < self.config.get("min_context_score", 0.6):
-                logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
+                logger.debug(f"Contexto insuficiente: {context_score:.2f}")
                 return None
 
-            trend_direction = self.check_trend(symbol, '4h')
-            if trend_direction == 'UNKNOWN':
+            # 2. Tendência
+            trend = self._check_trend(symbol)
+            if trend == 'UNKNOWN':
                 return None
 
-            df = fetch_data(symbol, '15m', limit=self.feature_window)
-            if df.empty or len(df) < 50:
+            # 3. Dados e Indicadores
+            df = fetch_data(symbol, '15m', limit=self.config.get("feature_window", 50))
+            if df.empty or len(df) < 20:
                 logger.warning(f"Dados insuficientes para {symbol}")
                 return None
 
             df = self._calculate_technical_indicators(df)
-            if not confirm_volume(df):
+            
+            # 4. Confirmações
+            if not all([
+                confirm_volume(df),
+                confirm_candle_pattern(df, trend)
+            ]):
                 return None
-            if not confirm_candle_pattern(df, trend_direction):
+
+            # 5. Machine Learning
+            features = self._extract_features(df)
+            success_prob = self.trainer.predict(features)[0]
+            if success_prob < self.config.get("min_success_prob", 0.6):
+                logger.info(f"Probabilidade baixa: {success_prob:.2%}")
                 return None
 
-            features = self.extract_features(df)
-
-            if self.learning_enabled:
-                prob = self.trainer.predict(features)[0]
-                if prob < self.min_success_prob:
-                    logger.info(f"🛑 Probabilidade de sucesso baixa: {prob:.2%}")
-                    return None
-            else:
-                prob = 0.5
-
-            entry_data = generate_entry(symbol, trend_direction, '15m')
+            # 6. Geração do Sinal
+            entry_data = generate_entry(symbol, trend, '15m')
             if not entry_data:
                 return None
 
             signal = {
                 'symbol': symbol,
-                'direction': 'BUY' if trend_direction == 'UP' else 'SELL',
+                'direction': 'BUY' if trend == 'UP' else 'SELL',
                 'entry_price': round(entry_data['entry'], 6),
                 'sl': round(entry_data['sl'], 6),
                 'tp': round(entry_data['tp'], 6),
@@ -124,21 +177,25 @@ class TradeAgent:
                 'timeframe': 'hybrid_realtime',
                 'score': round(context_score, 2),
                 'context': context_reason,
-                'success_prob': round(prob, 4),
-                'result': None
+                'success_prob': round(success_prob, 4)
             }
 
-            save_signal(signal)
-            self._save_to_sqlite(signal, features)
-            logger.info(f"✅ Sinal gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
+            self._save_signal(signal, features)
+            logger.info(f"✅ Sinal {signal['direction']} {signal['entry_price']} ({success_prob:.2%})")
             return signal
 
         except Exception as e:
-            logger.exception(f"Erro ao gerar sinal para {symbol}")
+            logger.exception(f"Falha crítica em {symbol}")
             return None
 
     def run(self, symbols: List[str]):
-        for symbol in symbols:
-            signal = self.generate_signal(symbol)
-            if signal:
-                self.alert_sender.send_signal(signal)
+        """Loop principal com tratamento de erros global."""
+        while True:
+            try:
+                for symbol in symbols:
+                    if signal := self.generate_signal(symbol):
+                        self.alert_sender.send_signal(signal)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                logger.error(f"Erro no loop principal: {str(e)}")
