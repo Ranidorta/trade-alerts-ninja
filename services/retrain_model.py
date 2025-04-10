@@ -1,24 +1,30 @@
+import os
 import numpy as np
-from trainer import MLTrainer
-from data.fetch_data import fetch_training_data  # Você precisará implementar essa função
+from services.trainer import MLTrainer
+from api.fetch_data import fetch_training_data
 
 def main():
     # Configurações
     MODEL_PATH = "models/trade_agent_model.pkl"
-    RETRAIN_INTERVAL_DAYS = 7
+    RETRAIN_INTERVAL_DAYS = 7  # Tempo mínimo entre retreinamentos
 
-    # 1. Carrega dados históricos para treino
-    # (Implemente fetch_training_data conforme sua necessidade)
-    X, y = fetch_training_data(symbols=["BTC/USDT", "ETH/USDT"], lookback_days=30)
+    # Garante que a pasta models exista
+    os.makedirs("models", exist_ok=True)
 
-    # 2. Inicializa o trainer
-    trainer = MLTrainer(model_path=MODEL_PATH, retrain_interval_days=RETRAIN_INTERVAL_DAYS)
+    print("🔄 Carregando dados históricos para retreinamento...")
+    X, y = fetch_training_data()  # Função já preparada no fetch_data.py
 
-    # 3. Retreina se necessário
+    print(f"📊 {len(X)} amostras carregadas. Iniciando verificação de modelo...")
+
+    trainer = MLTrainer(
+        model_path=MODEL_PATH,
+        retrain_interval_days=RETRAIN_INTERVAL_DAYS
+    )
+
     if trainer.auto_retrain_if_needed(X, y):
-        print("✅ Modelo retreinado com sucesso!")
+        print("✅ Modelo retreinado e salvo com sucesso!")
     else:
-        print("⏭️ Modelo atual ainda válido. Nenhum retreinamento necessário.")
+        print("⏭️ Nenhuma atualização necessária. Modelo ainda válido.")
 
 if __name__ == "__main__":
     main()
