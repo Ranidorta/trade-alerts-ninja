@@ -2,21 +2,36 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory, fetchHybridSignals } from "@/lib/signalsApi";
-import { TradingSignal } from "@/lib/types";
+import { TradingSignal, SignalResult } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import SignalsList from "@/components/signals/SignalsList";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
 import PageHeader from "@/components/signals/PageHeader";
 import SignalHistorySummary from "@/components/signals/SignalHistorySummary";
-import { History, Brain, RefreshCw } from "lucide-react";
+import { History, Brain, RefreshCw, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveSignalsToHistory, getSignalHistory } from "@/lib/signal-storage";
 import { reprocessAllHistory } from "@/lib/signalHistoryService";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SignalsHistory: React.FC = () => {
   const { toast } = useToast();
   const [signalFilter, setSignalFilter] = useState<string | undefined>(undefined);
+  const [resultFilter, setResultFilter] = useState<SignalResult | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [localMode, setLocalMode] = useState<boolean>(false);
   const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
@@ -28,8 +43,11 @@ const SignalsHistory: React.FC = () => {
     error,
     refetch
   } = useQuery({
-    queryKey: ["signalsHistory", signalFilter],
-    queryFn: () => fetchSignalsHistory({ symbol: signalFilter }),
+    queryKey: ["signalsHistory", signalFilter, resultFilter],
+    queryFn: () => fetchSignalsHistory({ 
+      symbol: signalFilter,
+      result: resultFilter 
+    }),
     refetchOnWindowFocus: false,
     retry: 1,
     meta: {
@@ -64,12 +82,20 @@ const SignalsHistory: React.FC = () => {
   // Determine which signals to display
   const signals = localMode ? localSignals : (apiSignals || []);
 
+  // Apply result filter if set
+  const filteredSignals = resultFilter 
+    ? signals.filter(s => 
+        s.result === resultFilter || 
+        (typeof s.result === 'string' && s.result.toUpperCase() === resultFilter)
+      )
+    : signals;
+
   // Set the first signal as selected when signals are loaded
   useEffect(() => {
-    if (signals && signals.length > 0 && !selectedSignal) {
-      setSelectedSignal(signals[0]);
+    if (filteredSignals && filteredSignals.length > 0 && !selectedSignal) {
+      setSelectedSignal(filteredSignals[0]);
     }
-  }, [signals, selectedSignal]);
+  }, [filteredSignals, selectedSignal]);
 
   // Handle refresh
   const handleRefresh = async () => {
@@ -111,6 +137,15 @@ const SignalsHistory: React.FC = () => {
     setSelectedSignal(signal);
   };
 
+  // Handle result filter
+  const handleResultFilterChange = (value: string) => {
+    if (value === "all") {
+      setResultFilter(undefined);
+    } else {
+      setResultFilter(value as SignalResult);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -120,31 +155,82 @@ const SignalsHistory: React.FC = () => {
       
       <div className="flex justify-between items-center mb-6">
         <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList>
-            <TabsTrigger value="all">Todos Sinais</TabsTrigger>
-            <TabsTrigger value="hybrid">
-              <Brain className="mr-2 h-4 w-4" />
-              Híbridos Premium
-            </TabsTrigger>
-          </TabsList>
-          
-          <div className="flex justify-end my-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleRefresh}
-              className="gap-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Atualizar
-            </Button>
+          <div className="flex justify-between items-center mb-4">
+            <TabsList>
+              <TabsTrigger value="all">Todos Sinais</TabsTrigger>
+              <TabsTrigger value="hybrid">
+                <Brain className="mr-2 h-4 w-4" />
+                Híbridos Premium
+              </TabsTrigger>
+            </TabsList>
+            
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filtros
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="p-2">
+                    <p className="text-sm font-medium mb-2">Resultado</p>
+                    <Select 
+                      onValueChange={handleResultFilterChange}
+                      defaultValue="all"
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos resultados" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos resultados</SelectItem>
+                        <SelectItem value="WINNER">Winner</SelectItem>
+                        <SelectItem value="PARTIAL">Parcial</SelectItem>
+                        <SelectItem value="LOSER">Loser</SelectItem>
+                        <SelectItem value="FALSE">Falso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <div className="p-2">
+                    <p className="text-sm font-medium mb-2">Par</p>
+                    <Select 
+                      onValueChange={setSignalFilter}
+                      defaultValue={signalFilter || "all"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos pares" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos pares</SelectItem>
+                        {Array.from(new Set(signals.map(s => s.symbol))).map(symbol => (
+                          <SelectItem key={symbol} value={symbol}>
+                            {symbol}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRefresh}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
           </div>
           
           <TabsContent value="all" className="mt-6">
-            <SignalHistorySummary signal={selectedSignal} className="mb-6" />
+            <SignalHistorySummary signal={selectedSignal} />
             
             <SignalsList
-              signals={signals}
+              signals={filteredSignals}
               isLoading={isLoading}
               error={error}
               activeStrategy="ALL"

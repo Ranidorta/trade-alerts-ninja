@@ -19,7 +19,7 @@ interface SignalsListProps {
   onRefresh?: () => void;
   autoRefresh?: boolean;
   autoRefreshInterval?: number; // in seconds
-  onSignalSelect?: (signal: TradingSignal) => void; // Added this prop
+  onSignalSelect?: (signal: TradingSignal) => void;
 }
 
 // Using memo to prevent unnecessary re-renders
@@ -152,8 +152,9 @@ const SignalsList = memo(({
       {signals.map((signal) => (
         <SignalCard 
           key={signal.id} 
-          signal={signal} 
-          onClick={() => onSignalSelect && onSignalSelect(signal)}
+          signal={signal}
+          // Passar props separadas em vez de usar onClick
+          onSelect={() => onSignalSelect && onSignalSelect(signal)}
         />
       ))}
     </div>

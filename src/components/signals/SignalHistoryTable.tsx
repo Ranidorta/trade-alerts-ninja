@@ -43,7 +43,7 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
       case "1":
         return "bg-green-100 text-green-800 border-green-300";
       case "partial":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300";
+        return "bg-amber-100 text-amber-800 border-amber-300";
       case "loser":
       case "loss":
       case "0":
@@ -76,6 +76,61 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
     return resultMap[result.toString().toLowerCase()] || result.toString().toUpperCase();
   };
 
+  const formatTakeProfit = (signal: TradingSignal): string => {
+    // Verificar se temos um array de takeProfit
+    if (signal.takeProfit && signal.takeProfit.length > 0) {
+      return Number(signal.takeProfit[0]).toFixed(2);
+    }
+    
+    // Verificar se temos targets estruturados
+    if (signal.targets && signal.targets.length > 0) {
+      return Number(signal.targets[0].price).toFixed(2);
+    }
+    
+    // Verificar campos específicos para sinais híbridos (tp1, tp2, tp3)
+    if (typeof signal.tp1 !== 'undefined') {
+      return Number(signal.tp1).toFixed(2);
+    }
+    
+    // Verificar campo tp genérico (pode ser um array ou número)
+    if (typeof signal.tp !== 'undefined') {
+      if (Array.isArray(signal.tp)) {
+        return signal.tp.map(t => Number(t).toFixed(2)).join(', ');
+      }
+      return Number(signal.tp).toFixed(2);
+    }
+    
+    return 'N/A';
+  };
+
+  const getEntryPrice = (signal: TradingSignal): string => {
+    if (typeof signal.entryPrice !== 'undefined') {
+      return Number(signal.entryPrice).toFixed(2);
+    }
+    
+    if (typeof signal.entry_price !== 'undefined') {
+      return Number(signal.entry_price).toFixed(2);
+    }
+    
+    return 'N/A';
+  };
+
+  const getStopLoss = (signal: TradingSignal): string => {
+    if (typeof signal.stopLoss !== 'undefined') {
+      return Number(signal.stopLoss).toFixed(2);
+    }
+    
+    if (typeof signal.sl !== 'undefined') {
+      return Number(signal.sl).toFixed(2);
+    }
+    
+    return 'N/A';
+  };
+
+  const getTimestamp = (signal: TradingSignal): string => {
+    return signal.timestamp || signal.createdAt;
+  };
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -103,10 +158,10 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
               onClick={() => onSignalSelect && onSignalSelect(signal)}
             >
               <TableCell className="font-mono text-xs">
-                {formatDate(signal.createdAt)}
+                {formatDate(getTimestamp(signal))}
               </TableCell>
               <TableCell className="font-semibold">
-                {signal.symbol}
+                {signal.symbol || signal.pair || 'N/A'}
               </TableCell>
               <TableCell>
                 <Badge variant={signal.direction === "BUY" ? "success" : "destructive"}>
@@ -114,29 +169,13 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
                 </Badge>
               </TableCell>
               <TableCell>
-                {typeof signal.entryPrice !== 'undefined' 
-                  ? Number(signal.entryPrice).toFixed(2) 
-                  : typeof signal.entry_price !== 'undefined'
-                    ? Number(signal.entry_price).toFixed(2)
-                    : 'N/A'}
+                {getEntryPrice(signal)}
               </TableCell>
               <TableCell className="text-red-600 dark:text-red-400">
-                {typeof signal.stopLoss !== 'undefined' 
-                  ? Number(signal.stopLoss).toFixed(2) 
-                  : typeof signal.sl !== 'undefined'
-                    ? Number(signal.sl).toFixed(2)
-                    : 'N/A'}
+                {getStopLoss(signal)}
               </TableCell>
               <TableCell className="text-green-600 dark:text-green-400">
-                {signal.takeProfit && signal.takeProfit.length > 0 
-                  ? Number(signal.takeProfit[0]).toFixed(2) 
-                  : signal.targets && signal.targets.length > 0 
-                    ? Number(signal.targets[0].price).toFixed(2)
-                    : typeof signal.tp1 !== 'undefined'
-                      ? Number(signal.tp1).toFixed(2)
-                      : typeof signal.tp !== 'undefined'
-                        ? Number(signal.tp).toFixed(2)
-                        : 'N/A'}
+                {formatTakeProfit(signal)}
               </TableCell>
               <TableCell>
                 <Badge 
@@ -147,7 +186,7 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
                 </Badge>
               </TableCell>
               <TableCell className="text-xs">
-                {signal.strategy || "N/A"}
+                {signal.strategy || "-"}
               </TableCell>
               <TableCell>
                 <Button 
