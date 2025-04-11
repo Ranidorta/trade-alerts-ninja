@@ -9,7 +9,7 @@ import SignalsList from "@/components/signals/SignalsList";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
 import PageHeader from "@/components/signals/PageHeader";
 import SignalHistorySummary from "@/components/signals/SignalHistorySummary";
-import { ArrowClockwise, History, Brain } from "lucide-react";
+import { History, Brain, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveSignalsToHistory, getSignalHistory } from "@/lib/signal-storage";
 import { reprocessAllHistory } from "@/lib/signalHistoryService";
@@ -31,10 +31,12 @@ const SignalsHistory: React.FC = () => {
     queryFn: () => fetchSignalsHistory({ symbol: signalFilter }),
     refetchOnWindowFocus: false,
     retry: 1,
-    onError: (error) => {
-      console.error("Failed to load signals:", error);
-      // On API error, fall back to local storage signals
-      setLocalMode(true);
+    meta: {
+      onError: (error: any) => {
+        console.error("Failed to load signals:", error);
+        // On API error, fall back to local storage signals
+        setLocalMode(true);
+      }
     }
   });
   
@@ -48,8 +50,10 @@ const SignalsHistory: React.FC = () => {
     queryFn: fetchHybridSignals,
     refetchOnWindowFocus: false,
     retry: 1,
-    onError: (error) => {
-      console.error("Failed to load hybrid signals:", error);
+    meta: {
+      onError: (error: any) => {
+        console.error("Failed to load hybrid signals:", error);
+      }
     }
   });
 
@@ -99,7 +103,6 @@ const SignalsHistory: React.FC = () => {
       <PageHeader 
         title="Histórico de Sinais" 
         description="Veja o histórico completo de sinais e seus resultados"
-        icon={<History className="h-6 w-6 text-primary" />}
       />
       
       <div className="flex justify-between items-center mb-6">
@@ -119,13 +122,13 @@ const SignalsHistory: React.FC = () => {
               onClick={handleRefresh}
               className="gap-2"
             >
-              <ArrowClockwise className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4" />
               Atualizar
             </Button>
           </div>
           
           <TabsContent value="all" className="mt-6">
-            <SignalHistorySummary signals={signals} className="mb-6" />
+            <SignalHistorySummary data={signals} className="mb-6" />
             
             <SignalsList
               signals={signals}
