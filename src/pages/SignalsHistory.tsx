@@ -19,6 +19,7 @@ const SignalsHistory: React.FC = () => {
   const [signalFilter, setSignalFilter] = useState<string | undefined>(undefined);
   const [activeTab, setActiveTab] = useState<string>("all");
   const [localMode, setLocalMode] = useState<boolean>(false);
+  const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
   
   // Load signals from API
   const {
@@ -63,6 +64,13 @@ const SignalsHistory: React.FC = () => {
   // Determine which signals to display
   const signals = localMode ? localSignals : (apiSignals || []);
 
+  // Set the first signal as selected when signals are loaded
+  useEffect(() => {
+    if (signals && signals.length > 0 && !selectedSignal) {
+      setSelectedSignal(signals[0]);
+    }
+  }, [signals, selectedSignal]);
+
   // Handle refresh
   const handleRefresh = async () => {
     if (localMode) {
@@ -98,6 +106,11 @@ const SignalsHistory: React.FC = () => {
     }
   }, [apiSignals, localMode]);
 
+  // Handle signal selection
+  const handleSelectSignal = (signal: TradingSignal) => {
+    setSelectedSignal(signal);
+  };
+
   return (
     <div className="container mx-auto py-6">
       <PageHeader 
@@ -128,7 +141,7 @@ const SignalsHistory: React.FC = () => {
           </div>
           
           <TabsContent value="all" className="mt-6">
-            <SignalHistorySummary data={signals} className="mb-6" />
+            <SignalHistorySummary signal={selectedSignal} className="mb-6" />
             
             <SignalsList
               signals={signals}
@@ -139,6 +152,7 @@ const SignalsHistory: React.FC = () => {
               onSelectStrategy={() => {}}
               viewMode="table"
               autoRefresh={false}
+              onSignalSelect={handleSelectSignal}
             />
           </TabsContent>
           

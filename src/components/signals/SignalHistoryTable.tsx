@@ -1,380 +1,172 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { TradingSignal } from "@/lib/types";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+import { 
+  Table, 
+  TableBody, 
+  TableCaption, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { format, formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  ChevronDown, 
-  ChevronUp, 
-  ArrowUp, 
-  ArrowDown,
-  AlertCircle,
-  CheckCircle2,
-  Diff,
-  Calendar
-} from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { format } from "date-fns";
+import { Button } from "../ui/button";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
-  onVerifySingleSignal?: (signalId: string) => Promise<void>;
+  onSignalSelect?: (signal: TradingSignal) => void;
 }
 
-export default function SignalHistoryTable({ signals, onVerifySingleSignal }: SignalHistoryTableProps) {
-  const [sortField, setSortField] = useState<keyof TradingSignal>("createdAt");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [verifyingSignal, setVerifyingSignal] = useState<string | null>(null);
-  
-  const handleSort = (field: keyof TradingSignal) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("desc");
-    }
-  };
-  
-  const handleVerifySignal = async (signalId: string) => {
-    if (!onVerifySingleSignal) return;
-    
-    setVerifyingSignal(signalId);
+const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({ 
+  signals,
+  onSignalSelect
+}) => {
+  const formatDate = (dateString: string) => {
     try {
-      await onVerifySingleSignal(signalId);
-    } finally {
-      setVerifyingSignal(null);
-    }
-  };
-  
-  const sortedSignals = [...signals].sort((a, b) => {
-    let aValue = a[sortField];
-    let bValue = b[sortField];
-    
-    if (sortField === "createdAt") {
-      aValue = new Date(a.createdAt || 0).getTime();
-      bValue = new Date(b.createdAt || 0).getTime();
-    } else if (sortField === "profit") {
-      aValue = a.profit || 0;
-      bValue = b.profit || 0;
-    } else if (sortField === "result") {
-      // Convert result values to numeric for sorting
-      const resultToNumber = (result: any) => {
-        if (result === 1 || result === "win" || result === "WINNER") return 3;
-        if (result === "partial" || result === "PARTIAL") return 2;
-        if (result === 0 || result === "loss" || result === "LOSER") return 1;
-        if (result === "missed" || result === "FALSE") return 0;
-        return -1;
-      };
-      aValue = resultToNumber(a.result);
-      bValue = resultToNumber(b.result);
-    }
-    
-    if (aValue === bValue) return 0;
-    
-    const comparison = aValue < bValue ? -1 : 1;
-    return sortDirection === "asc" ? comparison : -comparison;
-  });
-  
-  const SortIndicator = ({ field }: { field: keyof TradingSignal }) => {
-    if (sortField !== field) return null;
-    
-    return sortDirection === "asc" ? 
-      <ChevronUp className="inline-block ml-1 h-4 w-4" /> : 
-      <ChevronDown className="inline-block ml-1 h-4 w-4" />;
-  };
-  
-  const formatDate = (dateStr?: string, verifiedAt?: string) => {
-    if (!dateStr) return "—";
-    
-    try {
-      // Exibir data e hora completas em formato brasileiro
-      const formattedFullDate = format(new Date(dateStr), "dd/MM/yyyy HH:mm", { locale: ptBR });
-      
-      // Exibir também "há quanto tempo" para referência rápida
-      const timeAgo = formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: ptBR });
-      
-      if (verifiedAt) {
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex flex-col">
-                  <span className="flex items-center text-xs font-medium">
-                    {formattedFullDate}
-                    <CheckCircle2 className="ml-1 h-3 w-3 text-green-500" />
-                  </span>
-                  <span className="text-xs text-muted-foreground">{timeAgo}</span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Verificado em {new Date(verifiedAt).toLocaleString('pt-BR')}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        );
-      }
-      
-      return (
-        <div className="flex flex-col">
-          <span className="text-xs font-medium">{formattedFullDate}</span>
-          <span className="text-xs text-muted-foreground">{timeAgo}</span>
-        </div>
-      );
-    } catch (e) {
-      console.error("Erro ao formatar data:", e);
-      return dateStr;
+      return format(new Date(dateString), "dd/MM/yyyy HH:mm");
+    } catch {
+      return dateString;
     }
   };
 
-  const formatPrice = (price?: number) => {
-    if (price === undefined) return "—";
-    return price < 0.1 ? price.toFixed(6) : price < 1 ? price.toFixed(4) : price.toFixed(2);
-  };
-  
-  const getResultColor = (result: string | number | undefined) => {
-    if (result === 1 || result === "win" || result === "WINNER") {
-      return "text-green-600 dark:text-green-400";
-    } else if (result === 0 || result === "loss" || result === "LOSER") {
-      return "text-red-600 dark:text-red-400";
-    } else if (result === "missed" || result === "FALSE") {
-      return "text-gray-500";
-    } else if (result === "partial" || result === "PARTIAL") {
-      return "text-amber-500";
-    }
-    return "";
-  };
-  
-  const formatResult = (result: string | number | undefined) => {
-    if (result === 1 || result === "win" || result === "WINNER") return "Vencedor";
-    if (result === 0 || result === "loss" || result === "LOSER") return "Perdedor";
-    if (result === "partial" || result === "PARTIAL") return "Parcial";
-    if (result === "missed" || result === "FALSE") return "Falso";
-    return result ? String(result) : "—";
-  };
-  
-  const getStatusBadge = (signal: TradingSignal) => {
-    if (signal.status === "COMPLETED") {
-      if (signal.result === 1 || signal.result === "win" || signal.result === "WINNER") {
-        return (
-          <Badge variant="success" className="flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />
-            Vencedor
-          </Badge>
-        );
-      } else if (signal.result === 0 || signal.result === "loss" || signal.result === "LOSER") {
-        return (
-          <Badge variant="destructive" className="flex items-center gap-1">
-            <XCircle className="h-3 w-3" />
-            Perdedor
-          </Badge>
-        );
-      } else if (signal.result === "partial" || signal.result === "PARTIAL") {
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Parcial
-          </Badge>
-        );
-      } else if (signal.result === "missed" || signal.result === "FALSE") {
-        return (
-          <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            Falso
-          </Badge>
-        );
-      } else {
-        return (
-          <Badge variant="outline" className="flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" />
-            Concluído
-          </Badge>
-        );
-      }
-    } else {
-      return (
-        <Badge variant="outline" className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          {signal.status || "PENDING"}
-        </Badge>
-      );
+  const getResultColor = (result: any): string => {
+    if (!result) return "bg-gray-100 text-gray-800";
+    
+    const resultStr = typeof result === 'number' ? 
+      (result === 1 ? "win" : "loss") : result.toString().toLowerCase();
+    
+    switch(resultStr) {
+      case "winner":
+      case "win":
+      case "1":
+        return "bg-green-100 text-green-800 border-green-300";
+      case "partial":
+        return "bg-yellow-100 text-yellow-800 border-yellow-300";
+      case "loser":
+      case "loss":
+      case "0":
+        return "bg-red-100 text-red-800 border-red-300";
+      case "false":
+      case "missed":
+        return "bg-gray-100 text-gray-800 border-gray-300";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
-  
-  const shouldShowVerifyButton = (signal: TradingSignal) => {
-    return signal.result === undefined && 
-           signal.status !== "COMPLETED" && 
-           signal.status !== "WAITING";
+
+  const formatResultText = (result: any): string => {
+    if (!result) return "PENDENTE";
+    
+    if (typeof result === 'number') {
+      return result === 1 ? "WINNER" : "LOSER";
+    }
+    
+    const resultMap: Record<string, string> = {
+      "win": "WINNER",
+      "loss": "LOSER",
+      "partial": "PARTIAL",
+      "missed": "FALSE",
+      "winner": "WINNER",
+      "loser": "LOSER",
+      "false": "FALSE"
+    };
+    
+    return resultMap[result.toString().toLowerCase()] || result.toString().toUpperCase();
   };
-  
-  if (signals.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Nenhum sinal no histórico</p>
-      </div>
-    );
-  }
-  
+
   return (
-    <div className="w-full overflow-auto">
+    <div className="rounded-md border">
       <Table>
+        <TableCaption>
+          Total de {signals.length} sinais no histórico
+        </TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("symbol")}
-            >
-              Par <SortIndicator field="symbol" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("direction")}
-            >
-              Direção <SortIndicator field="direction" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("entryPrice")}
-            >
-              Entrada <SortIndicator field="entryPrice" />
-            </TableHead>
-            <TableHead>
-              Alvos (TP)
-            </TableHead>
-            <TableHead>
-              Stop Loss
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("result")}
-            >
-              Resultado <SortIndicator field="result" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("createdAt")}
-            >
-              Data/Hora <SortIndicator field="createdAt" />
-            </TableHead>
-            {onVerifySingleSignal && (
-              <TableHead>Ação</TableHead>
-            )}
+            <TableHead>Data</TableHead>
+            <TableHead>Símbolo</TableHead>
+            <TableHead>Direção</TableHead>
+            <TableHead>Entrada</TableHead>
+            <TableHead>Stop Loss</TableHead>
+            <TableHead>Take Profit</TableHead>
+            <TableHead>Resultado</TableHead>
+            <TableHead>Estratégia</TableHead>
+            <TableHead>Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedSignals.map((signal) => (
-            <TableRow key={signal.id} className={
-              signal.result === 1 || signal.result === "win" ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 || signal.result === "loss" ? "bg-red-50 dark:bg-red-950/20" :
-              signal.result === "missed" ? "bg-gray-50 dark:bg-gray-900/20" :
-              signal.result === "partial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
-            }>
-              <TableCell className="font-medium">
-                {signal.error ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex items-center">
-                          {signal.symbol}
-                          <AlertCircle className="ml-1 h-3 w-3 text-amber-500" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Erro na verificação: {signal.error}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : signal.verifiedAt ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex items-center">
-                          {signal.symbol}
-                          <Diff className="ml-1 h-3 w-3 text-blue-500" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Verificado com dados da Binance</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  signal.symbol
-                )}
+          {signals.map((signal) => (
+            <TableRow 
+              key={signal.id} 
+              className="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+              onClick={() => onSignalSelect && onSignalSelect(signal)}
+            >
+              <TableCell className="font-mono text-xs">
+                {formatDate(signal.createdAt)}
+              </TableCell>
+              <TableCell className="font-semibold">
+                {signal.symbol}
               </TableCell>
               <TableCell>
-                <Badge variant={signal.direction === "BUY" ? "default" : "destructive"} className="flex items-center gap-1">
-                  {signal.direction === "BUY" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                <Badge variant={signal.direction === "BUY" ? "success" : "destructive"}>
                   {signal.direction}
                 </Badge>
               </TableCell>
-              <TableCell>${formatPrice(signal.entryPrice)}</TableCell>
               <TableCell>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 1)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP1: ${formatPrice(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 2)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP2: ${formatPrice(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 3)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP3: ${formatPrice(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price)}
-                    </Badge>
-                  </div>
-                </div>
+                {typeof signal.entryPrice !== 'undefined' 
+                  ? Number(signal.entryPrice).toFixed(2) 
+                  : typeof signal.entry_price !== 'undefined'
+                    ? Number(signal.entry_price).toFixed(2)
+                    : 'N/A'}
               </TableCell>
               <TableCell className="text-red-600 dark:text-red-400">
-                ${formatPrice(signal.stopLoss)}
+                {typeof signal.stopLoss !== 'undefined' 
+                  ? Number(signal.stopLoss).toFixed(2) 
+                  : typeof signal.sl !== 'undefined'
+                    ? Number(signal.sl).toFixed(2)
+                    : 'N/A'}
               </TableCell>
-              <TableCell className={getResultColor(signal.result)}>
-                {getStatusBadge(signal)}
+              <TableCell className="text-green-600 dark:text-green-400">
+                {signal.takeProfit && signal.takeProfit.length > 0 
+                  ? Number(signal.takeProfit[0]).toFixed(2) 
+                  : signal.targets && signal.targets.length > 0 
+                    ? Number(signal.targets[0].price).toFixed(2)
+                    : typeof signal.tp1 !== 'undefined'
+                      ? Number(signal.tp1).toFixed(2)
+                      : typeof signal.tp !== 'undefined'
+                        ? Number(signal.tp).toFixed(2)
+                        : 'N/A'}
               </TableCell>
               <TableCell>
-                {formatDate(signal.createdAt, signal.verifiedAt)}
+                <Badge 
+                  variant="outline" 
+                  className={`${getResultColor(signal.result)}`}
+                >
+                  {formatResultText(signal.result)}
+                </Badge>
               </TableCell>
-              {onVerifySingleSignal && (
-                <TableCell>
-                  {shouldShowVerifyButton(signal) ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleVerifySignal(signal.id)}
-                      disabled={verifyingSignal === signal.id}
-                    >
-                      {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
-                    </Button>
-                  ) : null}
-                </TableCell>
-              )}
+              <TableCell className="text-xs">
+                {signal.strategy || "N/A"}
+              </TableCell>
+              <TableCell>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSignalSelect && onSignalSelect(signal);
+                  }}
+                >
+                  Detalhes
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
     </div>
   );
-}
+};
+
+export default SignalHistoryTable;
