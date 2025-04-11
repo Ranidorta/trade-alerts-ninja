@@ -33,6 +33,7 @@ class BybitDataFetcher:
             )
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df['symbol'] = symbol
             return df
         except Exception as e:
             logger.error(f"Falha ao buscar {symbol}: {str(e)}")
@@ -49,7 +50,9 @@ class BybitDataFetcher:
         # Indicadores
         df['rsi'] = 100 - (100 / (1 + df['mid_price'].rolling(14).mean()))
         df['atr'] = df['high'].rolling(14).max() - df['low'].rolling(14).min()
-        df['ema_diff'] = df['mid_price'].ewm(span=50).mean() - df['mid_price'].ewm(span=200).mean()
+        df['ema_50'] = df['mid_price'].ewm(span=50).mean()
+        df['ema_200'] = df['mid_price'].ewm(span=200).mean()
+        df['ema_diff'] = df['ema_50'] - df['ema_200']
         df['volume_oi_ratio'] = df['volume'] / df['volume'].rolling(20).mean()
 
         return df.dropna()
