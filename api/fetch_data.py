@@ -10,8 +10,8 @@ logger = logging.getLogger("BybitFetcher")
 class BybitDataFetcher:
     def __init__(self, api_keys: dict = None):
         self.exchange = ccxt.bybit({
-            'apiKey': api_keys.get("bybit_key"),
-            'secret': api_keys.get("bybit_secret"),
+            'apiKey': api_keys.get("bybit_key") if api_keys else None,
+            'secret': api_keys.get("bybit_secret") if api_keys else None,
             'enableRateLimit': True,
             'options': {
                 'defaultType': 'contract'  # Modo futuros
@@ -23,6 +23,7 @@ class BybitDataFetcher:
         """Busca dados OHLCV de futuros da Bybit."""
         since = self.exchange.parse8601(
             (datetime.now() - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
+        )
         try:
             ohlcv = self.exchange.fetch_ohlcv(
                 symbol=symbol,
@@ -80,6 +81,7 @@ class BybitDataFetcher:
         return np.array(X), np.array(y)
 
 # Função de conveniência
+
 def fetch_training_data() -> Tuple[np.ndarray, np.ndarray]:
     fetcher = BybitDataFetcher()
     return fetcher.prepare_training_data(lookback_days=60)  # 2 meses de dados
