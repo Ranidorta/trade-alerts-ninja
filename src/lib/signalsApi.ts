@@ -90,12 +90,22 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    // Fix: Use correct API endpoint with properly formed URL
+    // Tentar buscar do backend primeiro
+    console.log("Fetching signals history with filters:", filters);
     const response = await api.get('/api/signals/history', { params: filters });
     return response.data as TradingSignal[];
   } catch (error) {
-    console.error('Error fetching signals history:', error);
-    throw error;
+    console.error('Error fetching signals history from API:', error);
+    
+    // Em caso de erro, tentar buscar do banco de dados local
+    try {
+      console.log("Falling back to local database");
+      const localResponse = await api.get('/api/revalidate/signals', { params: filters });
+      return localResponse.data as TradingSignal[];
+    } catch (localError) {
+      console.error('Error fetching signals from local database:', localError);
+      throw localError; // Re-throw para tratamento de erro no componente
+    }
   }
 };
 

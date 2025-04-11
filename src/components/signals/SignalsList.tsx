@@ -153,8 +153,7 @@ const SignalsList = memo(({
         <SignalCard 
           key={signal.id} 
           signal={signal}
-          // Passar props separadas em vez de usar onClick
-          onSelect={() => onSignalSelect && onSignalSelect(signal)}
+          onClick={() => onSignalSelect && onSignalSelect(signal)}
         />
       ))}
     </div>

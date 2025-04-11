@@ -86,7 +86,7 @@ const SignalsHistory: React.FC = () => {
   const filteredSignals = resultFilter 
     ? signals.filter(s => 
         s.result === resultFilter || 
-        (typeof s.result === 'string' && s.result.toUpperCase() === resultFilter)
+        (typeof s.result === 'string' && s.result.toString().toUpperCase() === resultFilter.toString())
       )
     : signals;
 

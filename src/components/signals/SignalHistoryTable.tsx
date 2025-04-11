@@ -79,21 +79,24 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
   const formatTakeProfit = (signal: TradingSignal): string => {
     // Verificar se temos um array de takeProfit
     if (signal.takeProfit && signal.takeProfit.length > 0) {
-      return Number(signal.takeProfit[0]).toFixed(2);
+      return signal.takeProfit.map(tp => Number(tp).toFixed(2)).join(', ');
     }
     
     // Verificar se temos targets estruturados
     if (signal.targets && signal.targets.length > 0) {
-      return Number(signal.targets[0].price).toFixed(2);
+      return signal.targets.map(t => Number(t.price).toFixed(2)).join(', ');
     }
     
     // Verificar campos específicos para sinais híbridos (tp1, tp2, tp3)
-    if (typeof signal.tp1 !== 'undefined') {
-      return Number(signal.tp1).toFixed(2);
+    if (signal.tp1 !== undefined) {
+      let tpArray = [signal.tp1];
+      if (signal.tp2 !== undefined) tpArray.push(signal.tp2);
+      if (signal.tp3 !== undefined) tpArray.push(signal.tp3);
+      return tpArray.map(tp => Number(tp).toFixed(2)).join(', ');
     }
     
     // Verificar campo tp genérico (pode ser um array ou número)
-    if (typeof signal.tp !== 'undefined') {
+    if (signal.tp !== undefined) {
       if (Array.isArray(signal.tp)) {
         return signal.tp.map(t => Number(t).toFixed(2)).join(', ');
       }
@@ -104,11 +107,11 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
   };
 
   const getEntryPrice = (signal: TradingSignal): string => {
-    if (typeof signal.entryPrice !== 'undefined') {
+    if (signal.entryPrice !== undefined) {
       return Number(signal.entryPrice).toFixed(2);
     }
     
-    if (typeof signal.entry_price !== 'undefined') {
+    if (signal.entry_price !== undefined) {
       return Number(signal.entry_price).toFixed(2);
     }
     
@@ -116,11 +119,11 @@ const SignalHistoryTable: React.FC<SignalHistoryTableProps> = ({
   };
 
   const getStopLoss = (signal: TradingSignal): string => {
-    if (typeof signal.stopLoss !== 'undefined') {
+    if (signal.stopLoss !== undefined) {
       return Number(signal.stopLoss).toFixed(2);
     }
     
-    if (typeof signal.sl !== 'undefined') {
+    if (signal.sl !== undefined) {
       return Number(signal.sl).toFixed(2);
     }
     
