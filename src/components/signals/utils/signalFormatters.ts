@@ -26,16 +26,16 @@ export const getResultColor = (result: any): string => {
     case "winner":
     case "win":
     case "1":
-      return "bg-green-100 text-green-800 border-green-300";
+      return "bg-green-500/20 text-green-700 border-green-200";
     case "partial":
-      return "bg-amber-100 text-amber-800 border-amber-300";
+      return "bg-orange-500/20 text-orange-700 border-orange-200";
     case "loser":
     case "loss":
     case "0":
-      return "bg-red-100 text-red-800 border-red-300";
+      return "bg-red-500/20 text-red-700 border-red-200";
     case "false":
     case "missed":
-      return "bg-gray-100 text-gray-800 border-gray-300";
+      return "bg-slate-400/20 text-slate-700 border-slate-200";
     default:
       return "bg-gray-100 text-gray-800";
   }
@@ -69,13 +69,13 @@ export const formatResultText = (result: any): string => {
  */
 export const formatTakeProfit = (signal: TradingSignal): string => {
   // Verificar se temos um array de takeProfit
-  if (signal.takeProfit && signal.takeProfit.length > 0) {
-    return signal.takeProfit.map(tp => Number(tp).toFixed(2)).join(', ');
+  if (Array.isArray(signal.tp)) {
+    return signal.tp.map(tp => Number(tp).toFixed(2)).join(' / ');
   }
   
   // Verificar se temos targets estruturados
   if (signal.targets && signal.targets.length > 0) {
-    return signal.targets.map(t => Number(t.price).toFixed(2)).join(', ');
+    return signal.targets.map(t => Number(t.price).toFixed(2)).join(' / ');
   }
   
   // Verificar campos específicos para sinais híbridos (tp1, tp2, tp3)
@@ -83,14 +83,11 @@ export const formatTakeProfit = (signal: TradingSignal): string => {
     let tpArray = [signal.tp1];
     if (signal.tp2 !== undefined) tpArray.push(signal.tp2);
     if (signal.tp3 !== undefined) tpArray.push(signal.tp3);
-    return tpArray.map(tp => Number(tp).toFixed(2)).join(', ');
+    return tpArray.map(tp => Number(tp).toFixed(2)).join(' / ');
   }
   
   // Verificar campo tp genérico (pode ser um array ou número)
-  if (signal.tp !== undefined) {
-    if (Array.isArray(signal.tp)) {
-      return signal.tp.map(t => Number(t).toFixed(2)).join(', ');
-    }
+  if (signal.tp !== undefined && !Array.isArray(signal.tp)) {
     return Number(signal.tp).toFixed(2);
   }
   

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory, fetchHybridSignals } from "@/lib/signalsApi";
@@ -84,10 +85,19 @@ const SignalsHistory: React.FC = () => {
 
   // Apply result filter if set
   const filteredSignals = resultFilter 
-    ? signals.filter(s => 
-        s.result === resultFilter || 
-        (typeof s.result === 'string' && s.result.toString().toUpperCase() === resultFilter.toString())
-      )
+    ? signals.filter(s => {
+        if (!s.result) return false;
+        
+        // Normalize result to handle different formats
+        const normalizedResult = typeof s.result === 'number'
+          ? (s.result === 1 ? "WINNER" : "LOSER")
+          : String(s.result).toUpperCase();
+        
+        // Convert resultFilter to string for comparison
+        const targetResult = String(resultFilter).toUpperCase();
+        
+        return normalizedResult === targetResult;
+      })
     : signals;
 
   // Set the first signal as selected when signals are loaded
@@ -189,10 +199,10 @@ const SignalsHistory: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos resultados</SelectItem>
-                        <SelectItem value="WINNER">Winner</SelectItem>
-                        <SelectItem value="PARTIAL">Parcial</SelectItem>
-                        <SelectItem value="LOSER">Loser</SelectItem>
-                        <SelectItem value="FALSE">Falso</SelectItem>
+                        <SelectItem value="WINNER">✅ Winner</SelectItem>
+                        <SelectItem value="PARTIAL">🟠 Parcial</SelectItem>
+                        <SelectItem value="LOSER">❌ Loser</SelectItem>
+                        <SelectItem value="FALSE">⚪ Falso</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
