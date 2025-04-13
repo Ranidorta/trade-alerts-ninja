@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory, fetchHybridSignals } from "@/lib/signalsApi";
 import { TradingSignal, SignalResult } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import SignalsList from "@/components/signals/SignalsList";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
 import PageHeader from "@/components/signals/PageHeader";
@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import CryptoTicker from "@/components/CryptoTicker";
 
 const SignalsHistory: React.FC = () => {
   const { toast } = useToast();
@@ -167,6 +168,11 @@ const SignalsHistory: React.FC = () => {
         title="Histórico de Sinais" 
         description="Veja o histórico completo de sinais e seus resultados"
       />
+      
+      {/* Crypto Ticker - Added here for Market-like display */}
+      <div className="mb-6">
+        <CryptoTicker />
+      </div>
       
       <div className="flex justify-between items-center mb-6">
         <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">

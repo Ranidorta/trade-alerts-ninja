@@ -153,7 +153,7 @@ const SignalsList = memo(({
         <SignalCard 
           key={signal.id} 
           signal={signal}
-          onSelect={() => onSignalSelect && onSignalSelect(signal)}
+          onSignalSelect={() => onSignalSelect && onSignalSelect(signal)}
         />
       ))}
     </div>
