@@ -1,3 +1,4 @@
+
 import React, { useEffect, memo } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
@@ -152,7 +153,7 @@ const SignalsList = memo(({
         <SignalCard 
           key={signal.id} 
           signal={signal}
-          onSelect={() => onSignalSelect && onSignalSelect(signal)}
+          onSignalSelect={() => onSignalSelect && onSignalSelect(signal)}
         />
       ))}
     </div>

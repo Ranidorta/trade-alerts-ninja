@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory, fetchHybridSignals } from "@/lib/signalsApi";
@@ -35,7 +34,8 @@ const SignalsHistory: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("all");
   const [localMode, setLocalMode] = useState<boolean>(false);
   const [selectedSignal, setSelectedSignal] = useState<TradingSignal | null>(null);
-  
+  const [timeRange, setTimeRange] = useState<string>("");
+
   // Load signals from API
   const {
     data: apiSignals,
@@ -144,6 +144,11 @@ const SignalsHistory: React.FC = () => {
     } else {
       setResultFilter(value as SignalResult);
     }
+  };
+
+  // Handle time range change
+  const handleTimeRangeChange = (value: string) => {
+    setTimeRange(value);
   };
 
   return (
