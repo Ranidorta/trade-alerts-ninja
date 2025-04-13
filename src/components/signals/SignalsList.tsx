@@ -19,7 +19,6 @@ interface SignalsListProps {
   onRefresh?: () => void;
   autoRefresh?: boolean;
   autoRefreshInterval?: number; // in seconds
-  onSignalSelect?: (signal: TradingSignal) => void;
 }
 
 // Using memo to prevent unnecessary re-renders
@@ -33,8 +32,7 @@ const SignalsList = memo(({
   viewMode = "cards",
   onRefresh,
   autoRefresh = false,
-  autoRefreshInterval = 60,
-  onSignalSelect
+  autoRefreshInterval = 60
 }: SignalsListProps) => {
   const { toast } = useToast();
 
@@ -60,13 +58,6 @@ const SignalsList = memo(({
       }
     };
   }, [autoRefresh, autoRefreshInterval, onRefresh, toast]);
-
-  // Select first signal when signals are loaded
-  useEffect(() => {
-    if (signals && signals.length > 0 && onSignalSelect) {
-      onSignalSelect(signals[0]);
-    }
-  }, [signals, onSignalSelect]);
 
   // Function to handle switching to local mode
   const handleLocalModeClick = () => {
@@ -140,21 +131,14 @@ const SignalsList = memo(({
 
   // Renderizar como tabela se viewMode for "table"
   if (viewMode === "table") {
-    return <SignalHistoryTable 
-      signals={signals} 
-      onSignalSelect={onSignalSelect} 
-    />;
+    return <SignalHistoryTable signals={signals} />;
   }
 
   // Caso contrário, renderizar como cards (default)
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {signals.map((signal) => (
-        <SignalCard 
-          key={signal.id} 
-          signal={signal}
-          onSignalSelect={() => onSignalSelect && onSignalSelect(signal)}
-        />
+        <SignalCard key={signal.id} signal={signal} />
       ))}
     </div>
   );

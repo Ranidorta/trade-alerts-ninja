@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
+import SignalsHistory from "./pages/SignalsHistory";
 import CryptoMarket from "./pages/CryptoMarket";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -52,6 +54,11 @@ const AppRoutes = () => {
       <Route path="/signals" element={
         <ProtectedRoute>
           <SignalsDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/history" element={
+        <ProtectedRoute>
+          <SignalsHistory />
         </ProtectedRoute>
       } />
       <Route path="/market" element={

@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   BarChart4,
   Presentation,
+  Clock,
   LineChart,
   Menu,
   X,
@@ -29,6 +31,7 @@ const Navbar = () => {
 
   const navLinks = [
     { path: "/signals", name: "Sinais", icon: <BarChart4 size={18} /> },
+    { path: "/history", name: "Histórico", icon: <Clock size={18} /> },
     { 
       path: "/performance", 
       name: "Performance", 

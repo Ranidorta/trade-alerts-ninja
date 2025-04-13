@@ -90,79 +90,12 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    // Tentar buscar do backend primeiro
-    console.log("Fetching signals history with filters:", filters);
-    
-    // Transformar o resultado para o formato reconhecido pelo backend
-    let apiFilters = { ...filters };
-    if (filters?.result) {
-      // Normaliza o valor do resultado para maiúsculas
-      apiFilters.result = String(filters.result).toUpperCase();
-    }
-    
-    const response = await api.get('/api/signals/history', { params: apiFilters });
-    
-    // Normalizar os resultados para garantir que sejam consistentes
-    const signals = response.data.map((signal: any) => {
-      // Se o resultado não estiver em um formato padrão, normalizá-lo
-      if (signal.result) {
-        // Verificar se é número e converter para string padrão
-        if (typeof signal.result === 'number') {
-          signal.result = signal.result === 1 ? "WINNER" : "LOSER";
-        } else {
-          // Normalizar strings para o formato padrão
-          const resultLower = String(signal.result).toLowerCase();
-          if (resultLower === "win" || resultLower === "winner") {
-            signal.result = "WINNER";
-          } else if (resultLower === "loss" || resultLower === "loser") {
-            signal.result = "LOSER";
-          } else if (resultLower === "partial") {
-            signal.result = "PARTIAL";
-          } else if (resultLower === "missed" || resultLower === "false") {
-            signal.result = "FALSE";
-          }
-        }
-      }
-      
-      return signal;
-    });
-    
-    return signals as TradingSignal[];
+    // Fix: Use correct API endpoint with properly formed URL
+    const response = await api.get('/api/signals/history', { params: filters });
+    return response.data as TradingSignal[];
   } catch (error) {
-    console.error('Error fetching signals history from API:', error);
-    
-    // Em caso de erro, tentar buscar do banco de dados local
-    try {
-      console.log("Falling back to local database");
-      const localResponse = await api.get('/api/revalidate/signals', { params: filters });
-      
-      // Normalizar resultados da mesma forma
-      const signals = localResponse.data.map((signal: any) => {
-        if (signal.result) {
-          if (typeof signal.result === 'number') {
-            signal.result = signal.result === 1 ? "WINNER" : "LOSER";
-          } else {
-            const resultLower = String(signal.result).toLowerCase();
-            if (resultLower === "win" || resultLower === "winner") {
-              signal.result = "WINNER";
-            } else if (resultLower === "loss" || resultLower === "loser") {
-              signal.result = "LOSER";
-            } else if (resultLower === "partial") {
-              signal.result = "PARTIAL";
-            } else if (resultLower === "missed" || resultLower === "false") {
-              signal.result = "FALSE";
-            }
-          }
-        }
-        
-        return signal;
-      });
-      
-      return signals as TradingSignal[];
-    } catch (localError) {
-      console.error('Error fetching signals from local database:', localError);
-      throw localError; // Re-throw para tratamento de erro no componente
-    }
+    console.error('Error fetching signals history:', error);
+    throw error;
   }
 };
 

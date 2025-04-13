@@ -24,23 +24,23 @@ export interface TechnicalIndicators {
 export interface TradingSignal {
   id: string;
   symbol: string;
-  asset?: string;
+  asset?: string;          // Added for hybrid signals
   pair?: string;
   direction?: SignalDirection;
   entryPrice?: number;
-  entry_price?: number;
+  entry_price?: number;    // Added for hybrid signals
   entryMin?: number;
   entryMax?: number;
   entryAvg?: number;
-  stopLoss?: number;
-  sl?: number;
+  stopLoss: number;
+  sl?: number;             // Added for hybrid signals
   takeProfit?: number[];
-  tp?: number | number[];
+  tp?: number;             // Added for hybrid signals
   targets?: PriceTarget[];
   leverage?: number;
-  status?: SignalStatus;
+  status: SignalStatus;
   createdAt: string;
-  timestamp?: string;
+  timestamp?: string;      // Added for hybrid signals
   updatedAt?: string;
   completedAt?: string;
   profit?: number;
@@ -58,7 +58,7 @@ export interface TradingSignal {
   verifiedAt?: string;   
   error?: string;        
   confidence?: number;   
-  score?: number;         
+  score?: number;         // Added for hybrid signals
   conf_nivel?: string;   
   tp1?: number;         
   tp2?: number;          

@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useCallback } from "react";
-import { TradingSignal, SignalStatus, CryptoCoin } from "@/lib/types";
+import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,6 @@ import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import CryptoTicker from "@/components/CryptoTicker";
 import {
   Tabs,
   TabsContent,
@@ -21,7 +21,6 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
-import { useQuery } from "@tanstack/react-query";
 
 // Key for storing whether signals have been generated before
 const SIGNALS_GENERATED_KEY = "signals_generated_before";
@@ -52,53 +51,6 @@ const SignalsDashboard = () => {
     getLastActiveSignal,
     setLastActiveSignal
   } = useTradingSignals();
-  
-  // Fetch crypto coins data for the ticker
-  const { data: coins, isLoading: isLoadingCoins } = useQuery({
-    queryKey: ['coins'],
-    queryFn: async () => {
-      try {
-        const response = await fetch(
-          "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false&price_change_percentage=24h",
-          {
-            headers: {
-              "x-cg-api-key": "CG-r1Go4M9HPMrsNaH6tASKaWLr"
-            }
-          }
-        );
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        return data.map((coin: any) => ({
-          id: coin.id,
-          symbol: coin.symbol.toUpperCase(),
-          name: coin.name,
-          image: coin.image,
-          currentPrice: coin.current_price,
-          priceChange24h: coin.price_change_24h,
-          priceChangePercentage24h: coin.price_change_percentage_24h,
-          marketCap: coin.market_cap,
-          volume24h: coin.total_volume,
-          high24h: coin.high_24h,
-          low24h: coin.low_24h,
-          lastUpdated: new Date(coin.last_updated),
-          trend: coin.price_change_percentage_24h > 0 ? "BULLISH" : coin.price_change_percentage_24h < 0 ? "BEARISH" : "NEUTRAL"
-        } as CryptoCoin));
-      } catch (error) {
-        console.error("Error fetching coins data:", error);
-        toast({
-          title: "Erro ao carregar dados de criptomoedas",
-          description: "Não foi possível carregar os dados de preços das criptomoedas.",
-          variant: "destructive"
-        });
-        return [];
-      }
-    },
-    refetchInterval: 60000 // Refetch every minute
-  });
   
   // Check if signals have been generated before
   useEffect(() => {
@@ -359,10 +311,6 @@ const SignalsDashboard = () => {
             </Button>
           )}
         </div>
-      </div>
-      
-      <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-2 overflow-hidden">
-        <CryptoTicker coins={coins || []} isLoading={isLoadingCoins} />
       </div>
       
       <Tabs defaultValue="classic" className="w-full" onValueChange={setActiveTab}>
