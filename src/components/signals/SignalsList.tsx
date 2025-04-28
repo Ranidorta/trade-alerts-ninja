@@ -138,7 +138,7 @@ const SignalsList = memo(({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {signals.map((signal) => (
-        <SignalCard key={signal.id} signal={signal} />
+        <SignalCard key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
       ))}
     </div>
   );

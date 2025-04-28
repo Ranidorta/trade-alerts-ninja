@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI
 from api import revalidate
 
@@ -14,3 +15,4 @@ def root():
 
 # Inclui os endpoints do módulo de revalidação
 app.include_router(revalidate.router, prefix="/signals")
+
