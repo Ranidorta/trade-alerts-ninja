@@ -1,4 +1,3 @@
-
 """
 Serviço de validação automática de sinais de trading.
 Este módulo monitora os sinais abertos e atualiza seus resultados
