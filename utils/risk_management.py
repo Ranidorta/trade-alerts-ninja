@@ -1,18 +1,31 @@
+
 """
-Risk management utility functions with enhanced features.
+Risk management utility functions.
+
+This module provides functions for calculating ATR (Average True Range),
+stop-loss levels, and take-profit targets based on volatility.
 """
 
 import pandas as pd
 import numpy as np
 from ta.volatility import AverageTrueRange
-import logging
 
-logger = logging.getLogger(__name__)
 
-# --- CORE FUNCTIONS (MANTIDAS) ---
 def calculate_atr(df, window=14):
-    """Calcula ATR sem alterações"""
+    """
+    Calculate the Average True Range (ATR) for a DataFrame with OHLC data.
+    
+    Args:
+        df: DataFrame with high, low, and close prices
+        window: ATR calculation window (default: 14)
+        
+    Returns:
+        DataFrame with added 'atr' column
+    """
+    # Make a copy to avoid modifying the original
     df_copy = df.copy()
+    
+    # Calculate ATR using ta library
     atr_indicator = AverageTrueRange(
         high=df_copy['high'], 
         low=df_copy['low'], 
@@ -20,67 +33,91 @@ def calculate_atr(df, window=14):
         window=window
     )
     df_copy['atr'] = atr_indicator.average_true_range()
+    
     return df_copy
 
-def calculate_position_size(capital, risk_percentage, entry_price, stop_loss):
-    """Mantido igual"""
-    risk_amount = capital * (risk_percentage / 100)
-    stop_distance = max(abs(entry_price - stop_loss), 0.0001)
-    return risk_amount / stop_distance
 
-def risk_reward_ratio(entry_price, take_profit, stop_loss):
-    """Mantido igual"""
-    reward = abs(take_profit - entry_price)
-    risk = max(abs(entry_price - stop_loss), 0.0001)
-    return reward / risk
-
-# --- NEW FEATURES ---
-def validate_spread(entry_price: float, bid: float, ask: float, max_pct: float = 0.1) -> bool:
-    """Valida se o spread está dentro do limite aceitável"""
-    spread_pct = ((ask - bid) / entry_price) * 100
-    if spread_pct > max_pct:
-        logger.warning(f"Spread {spread_pct:.2f}% excede limite de {max_pct}%")
-        return False
-    return True
-
-def calculate_liquidity_score(df: pd.DataFrame, window: int = 20) -> float:
-    """Calcula score de liquidez baseado no volume relativo"""
-    mean_volume = df['volume'].rolling(window).mean().iloc[-1]
-    return mean_volume / df['volume'].mean() if df['volume'].mean() > 0 else 0
-
-def dynamic_sl_multiplier(atr: float, price: float, base_multiplier: float = 2.0) -> float:
-    """Ajusta dinamicamente o multiplicador do ATR"""
-    volatility_pct = (atr / price) * 100
-    if volatility_pct > 5:  # Alta volatilidade
-        return base_multiplier * 0.75
-    elif volatility_pct < 1:  # Baixa volatilidade
-        return base_multiplier * 1.25
-    return base_multiplier
-
-def calculate_stop_loss(df, atr_multiplier=2, mode='fixed'):
-    """Versão aprimorada com suporte a modo dinâmico"""
+def calculate_stop_loss(df, atr_multiplier=2):
+    """
+    Calculate stop-loss and take-profit levels based on ATR.
+    
+    Args:
+        df: DataFrame with OHLC data
+        atr_multiplier: Multiplier for ATR to determine levels (default: 2)
+        
+    Returns:
+        DataFrame with stop-loss and take-profit columns
+    """
+    # Make a copy to avoid modifying the original
     df_copy = df.copy()
+    
+    # Calculate ATR if not already present
     if 'atr' not in df_copy.columns:
         df_copy = calculate_atr(df_copy)
     
-    close = df_copy['close'].iloc[-1]
-    atr = df_copy['atr'].iloc[-1]
+    # Calculate stop-loss (below current price)
+    df_copy['stop_loss'] = df_copy['close'] - (df_copy['atr'] * atr_multiplier)
     
-    # Modo dinâmico
-    if isinstance(atr_multiplier, str) and atr_multiplier.lower() == 'auto':
-        atr_multiplier = dynamic_sl_multiplier(atr, close)
+    # Calculate take-profit levels (above current price)
+    df_copy['take_profit_1'] = df_copy['close'] + (df_copy['atr'] * atr_multiplier)
+    df_copy['take_profit_2'] = df_copy['close'] + (df_copy['atr'] * atr_multiplier * 2)
+    df_copy['take_profit_3'] = df_copy['close'] + (df_copy['atr'] * atr_multiplier * 3)
     
-    sl = close - (atr * atr_multiplier)
-    tp1 = close + (atr * atr_multiplier)
-    tp2 = close + (atr * atr_multiplier * 2)
-    tp3 = close + (atr * atr_multiplier * 3)
+    # Return only the relevant columns
+    return df_copy[['timestamp', 'close', 'atr', 'stop_loss', 
+                   'take_profit_1', 'take_profit_2', 'take_profit_3']]
+
+
+def calculate_position_size(capital, risk_percentage, entry_price, stop_loss):
+    """
+    Calculate the optimal position size based on risk management.
     
-    return pd.DataFrame({
-        'timestamp': [df_copy.index[-1]],
-        'close': [close],
-        'atr': [atr],
-        'stop_loss': [sl],
-        'take_profit_1': [tp1],
-        'take_profit_2': [tp2],
-        'take_profit_3': [tp3]
-    })
+    Args:
+        capital: Total capital available
+        risk_percentage: Percentage of capital to risk (e.g., 1 for 1%)
+        entry_price: Entry price for the trade
+        stop_loss: Stop-loss price level
+        
+    Returns:
+        Position size (units/coins to buy/sell)
+    """
+    # Calculate the amount of capital to risk
+    risk_amount = capital * (risk_percentage / 100)
+    
+    # Calculate the distance to stop-loss in price units
+    stop_distance = abs(entry_price - stop_loss)
+    
+    # If stop distance is too small, set a minimum to avoid division by zero
+    if stop_distance < 0.0001:
+        stop_distance = 0.0001
+    
+    # Calculate position size
+    position_size = risk_amount / stop_distance
+    
+    return position_size
+
+
+def risk_reward_ratio(entry_price, take_profit, stop_loss):
+    """
+    Calculate the risk-to-reward ratio for a trade.
+    
+    Args:
+        entry_price: Entry price for the trade
+        take_profit: Take-profit price level
+        stop_loss: Stop-loss price level
+        
+    Returns:
+        Risk-to-reward ratio
+    """
+    # Calculate potential reward
+    reward = abs(take_profit - entry_price)
+    
+    # Calculate potential risk
+    risk = abs(entry_price - stop_loss)
+    
+    # Calculate risk-to-reward ratio
+    if risk == 0:
+        return np.inf  # Avoid division by zero
+    
+    return reward / risk
+

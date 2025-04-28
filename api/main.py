@@ -1,16 +1,12 @@
 from fastapi import FastAPI
 from api import revalidate
 
-app = FastAPI(
-    title="Trade Alerts Ninja API",
-    description="API para revalidação e consulta de sinais de trade",
-    version="1.0.0"
-)
+app = FastAPI(title="Trade Alerts Ninja API")
 
-# Rota básica para verificar status da API
+# Inclui o roteador do revalidate
+app.include_router(revalidate.router)
+
+# Rota simples de status
 @app.get("/")
 def root():
     return {"status": "API online 🚀"}
-
-# Inclui os endpoints do módulo de revalidação
-app.include_router(revalidate.router, prefix="/signals")
