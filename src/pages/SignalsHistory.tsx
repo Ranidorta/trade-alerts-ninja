@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +10,7 @@ import {
   Layers,
   BarChart3,
   X,
-  Search,
-  Check
+  Search
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -86,10 +84,10 @@ const SignalsHistory = () => {
   // Derived calculated data for summary
   const totalSignals = filteredSignals.length;
   const winningTrades = filteredSignals.filter(signal => 
-    signal.result === "WINNER" || signal.result === "win" || signal.result === "1"
+    signal.result === "WINNER" || signal.result === "win" || signal.result === 1
   ).length;
   const losingTrades = filteredSignals.filter(signal => 
-    signal.result === "LOSER" || signal.result === "loss" || signal.result === "0"
+    signal.result === "LOSER" || signal.result === "loss" || signal.result === 0
   ).length;
   const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
@@ -98,10 +96,10 @@ const SignalsHistory = () => {
     const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
     const count = symbolSignals.length;
     const wins = symbolSignals.filter(s => 
-      s.result === "WINNER" || s.result === "win" || s.result === "1"
+      s.result === "WINNER" || s.result === "win" || (typeof s.result === "number" && s.result === 1)
     ).length;
     const losses = symbolSignals.filter(s => 
-      s.result === "LOSER" || s.result === "loss" || s.result === "0"
+      s.result === "LOSER" || s.result === "loss" || (typeof s.result === "number" && s.result === 0)
     ).length;
     const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
     
@@ -164,7 +162,7 @@ const SignalsHistory = () => {
     if (profitSignals.length === 0) return 0;
     
     const totalProfit = profitSignals.reduce((sum, signal) => {
-      return sum + (parseFloat(String(signal.profit) || '0') || 0);
+      return sum + (parseFloat(signal.profit?.toString() || '0') || 0);
     }, 0);
     
     return totalProfit / profitSignals.length;
@@ -559,7 +557,7 @@ const SignalsHistory = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>{signal.entryPrice}</TableCell>
-                        <TableCell>{signal.takeProfit && Array.isArray(signal.takeProfit) ? signal.takeProfit[0] : signal.takeProfit}</TableCell>
+                        <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
                         <TableCell>{signal.stopLoss}</TableCell>
                         <TableCell>
                           <Badge 
@@ -600,6 +598,26 @@ const SignalsHistory = () => {
         </>
       )}
     </div>
+  );
+};
+
+// Add the missing Check component
+const Check = (props: React.SVGProps<SVGSVGElement>) => {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 };
 
