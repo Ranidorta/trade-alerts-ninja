@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import os
 import requests
 from dotenv import load_dotenv
+from services.signal_validation import validate_signal
 
 load_dotenv()
 
@@ -47,7 +48,11 @@ def get_candles(symbol, start_ms, end_ms):
         print(f"Erro ao buscar candles: {e}")
         return []
 
-def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
+def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
+    """
+    Avalia um sinal baseado em dados históricos de candles.
+    Esta função continua sendo usada para avaliações retrospectivas.
+    """
     hit_tp1 = hit_tp2 = hit_tp3 = hit_sl = False
 
     for candle in candles:
@@ -75,6 +80,10 @@ def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
         return "missed"  # Changed from "falso" to "missed"
 
 def main():
+    """
+    Função principal modificada para usar o novo sistema de validação
+    quando disponível, e cair de volta para o método antigo se necessário.
+    """
     # Create tables if they don't exist
     Base.metadata.create_all(engine)
     
@@ -83,18 +92,40 @@ def main():
 
     for s in sinais:
         print(f"📊 Avaliando {s.symbol} - ID {s.id}")
-        start = s.timestamp
-        end = start + timedelta(hours=LOOKAHEAD_HOURS)
-        start_ms = int(start.timestamp() * 1000)
-        end_ms = int(end.timestamp() * 1000)
+        
+        # Primeiro tentamos usar o novo sistema de validação
+        signal_dict = {
+            'id': s.id,
+            'symbol': s.symbol,
+            'direction': s.direction.upper() if s.direction else 'BUY',
+            'tp1': s.tp1,
+            'tp2': s.tp2,
+            'tp3': s.tp3,
+            'sl': s.stop_loss,
+            'timestamp': s.timestamp.isoformat() if s.timestamp else None
+        }
+        
+        result = validate_signal(signal_dict)
+        
+        # Se o novo sistema não conseguir determinar um resultado, usamos o método anterior
+        if result is None:
+            start = s.timestamp
+            end = start + timedelta(hours=LOOKAHEAD_HOURS)
+            start_ms = int(start.timestamp() * 1000)
+            end_ms = int(end.timestamp() * 1000)
 
-        candles = get_candles(s.symbol, start_ms, end_ms)
-        if not candles:
-            continue
+            candles = get_candles(s.symbol, start_ms, end_ms)
+            if not candles:
+                continue
 
-        resultado = evaluate_signal(s.entry, s.tp1, s.tp2, s.tp3, s.stop_loss, s.direction, candles)
-        s.resultado = resultado
-        print(f"✅ Sinal {s.id}: {resultado}")
+            result = evaluate_signal_with_candles(
+                s.entry, s.tp1, s.tp2, s.tp3, s.stop_loss, 
+                s.direction.lower() if s.direction else 'long', 
+                candles
+            )
+        
+        s.resultado = result
+        print(f"✅ Sinal {s.id}: {result}")
 
     session.commit()
     session.close()

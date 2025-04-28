@@ -90,3 +90,48 @@ export async function verifyAllSignals(signalsToVerify?: TradingSignal[]): Promi
     throw error;
   }
 }
+
+/**
+ * Starts automated signal verification on the backend if available
+ */
+export function startAutomatedSignalVerification(): boolean {
+  try {
+    // This function will ping the backend to start verification
+    // In a frontend context, we can just make a request to the backend
+    console.log("Starting automated signal verification...");
+    
+    // Try to fetch from the verification service
+    fetch('/api/start-verification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(response => {
+      if (response.ok) {
+        console.log("Automated verification started successfully");
+      } else {
+        console.warn("Failed to start automated verification", response.status);
+      }
+    })
+    .catch(error => {
+      console.error("Error starting automated verification:", error);
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error starting automated verification:", error);
+    return false;
+  }
+}
+
+/**
+ * Checks if any signal needs verification or update
+ */
+export function checkSignalsForVerification(): number {
+  const signals = getSignalHistory();
+  if (!signals) return 0;
+  
+  const needVerification = signals.filter(s => s.result === undefined && s.status !== 'COMPLETED');
+  return needVerification.length;
+}
