@@ -1,5 +1,5 @@
 
-import React, { useEffect, memo } from "react";
+import React, { useEffect, memo, useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import SignalCard from "@/components/SignalCard";
 import StrategyList from "@/components/signals/StrategyList";
@@ -7,6 +7,7 @@ import ApiConnectionError from "@/components/signals/ApiConnectionError";
 import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import { config } from "@/config/env";
 import { useToast } from "@/components/ui/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface SignalsListProps {
   signals: TradingSignal[];
@@ -35,20 +36,29 @@ const SignalsList = memo(({
   autoRefreshInterval = 60
 }: SignalsListProps) => {
   const { toast } = useToast();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Auto-refresh
+  // Auto-refresh with better state management
   useEffect(() => {
     let intervalId: number | undefined;
     
     if (autoRefresh && onRefresh) {
       intervalId = window.setInterval(() => {
         console.log("Auto-refreshing signals list...");
+        setIsRefreshing(true);
+        
+        // Add a small timeout to ensure the refresh state is visible
         onRefresh();
-        toast({
-          title: "Lista atualizada",
-          description: `Atualizando automaticamente a cada ${autoRefreshInterval} segundos.`,
-          variant: "default",
-        });
+        
+        // Clear refresh state after a delay
+        setTimeout(() => {
+          setIsRefreshing(false);
+          toast({
+            title: "Lista atualizada",
+            description: `Atualizando automaticamente a cada ${autoRefreshInterval} segundos.`,
+            variant: "default",
+          });
+        }, 500);
       }, autoRefreshInterval * 1000);
     }
     
@@ -66,10 +76,13 @@ const SignalsList = memo(({
     window.location.reload();
   };
 
-  if (isLoading) {
+  if (isLoading || isRefreshing) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <p className="text-lg text-muted-foreground">Carregando sinais...</p>
+      <div className="flex flex-col justify-center items-center h-64 gap-4">
+        <Loader2 className="h-10 w-10 text-primary animate-spin" />
+        <p className="text-lg text-muted-foreground">
+          {isRefreshing ? "Atualizando sinais..." : "Carregando sinais..."}
+        </p>
       </div>
     );
   }
@@ -138,7 +151,7 @@ const SignalsList = memo(({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {signals.map((signal) => (
-        <SignalCard key={signal.id} signal={signal} />
+        <SignalCard key={signal.id || `${signal.symbol}-${signal.createdAt}`} signal={signal} />
       ))}
     </div>
   );

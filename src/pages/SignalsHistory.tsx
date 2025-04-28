@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,8 @@ import {
   Layers,
   BarChart3,
   X,
-  Search
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import { 
   Dialog, 
@@ -63,7 +65,12 @@ const formatDate = (dateString: string) => {
 const calculateWinRate = (signals: TradingSignal[]) => {
   if (!signals.length) return 0;
   
-  const winners = signals.filter(signal => signal.result === 'WINNER').length;
+  const winners = signals.filter(signal => 
+    signal.result === 'WINNER' || 
+    signal.result === 'win' || 
+    signal.result === 1
+  ).length;
+  
   return (winners / signals.length) * 100;
 };
 
@@ -71,6 +78,7 @@ const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [apiError, setApiError] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
@@ -84,10 +92,14 @@ const SignalsHistory = () => {
   // Derived calculated data for summary
   const totalSignals = filteredSignals.length;
   const winningTrades = filteredSignals.filter(signal => 
-    signal.result === "WINNER" || signal.result === "win" || signal.result === 1
+    signal.result === "WINNER" || 
+    signal.result === "win" || 
+    signal.result === 1
   ).length;
   const losingTrades = filteredSignals.filter(signal => 
-    signal.result === "LOSER" || signal.result === "loss" || signal.result === 0
+    signal.result === "LOSER" || 
+    signal.result === "loss" || 
+    signal.result === 0
   ).length;
   const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
@@ -96,10 +108,14 @@ const SignalsHistory = () => {
     const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
     const count = symbolSignals.length;
     const wins = symbolSignals.filter(s => 
-      s.result === "WINNER" || s.result === "win" || (typeof s.result === "number" && s.result === 1)
+      s.result === "WINNER" || 
+      s.result === "win" || 
+      (typeof s.result === "number" && s.result === 1)
     ).length;
     const losses = symbolSignals.filter(s => 
-      s.result === "LOSER" || s.result === "loss" || (typeof s.result === "number" && s.result === 0)
+      s.result === "LOSER" || 
+      s.result === "loss" || 
+      (typeof s.result === "number" && s.result === 0)
     ).length;
     const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
     
@@ -117,8 +133,16 @@ const SignalsHistory = () => {
   const strategyData = uniqueStrategies.map(strategy => {
     const strategySignals = filteredSignals.filter(s => (s.strategy || 'Unknown') === strategy);
     const count = strategySignals.length;
-    const wins = strategySignals.filter(s => s.result === 'WINNER').length;
-    const losses = strategySignals.filter(s => s.result === 'LOSER').length;
+    const wins = strategySignals.filter(s => 
+      s.result === "WINNER" || 
+      s.result === "win" || 
+      (typeof s.result === "number" && s.result === 1)
+    ).length;
+    const losses = strategySignals.filter(s => 
+      s.result === "LOSER" || 
+      s.result === "loss" || 
+      (typeof s.result === "number" && s.result === 0)
+    ).length;
     const strategyWinRate = count > 0 ? (wins / count) * 100 : 0;
     
     return {
@@ -145,8 +169,12 @@ const SignalsHistory = () => {
       const day = dailyMap.get(date);
       day.count++;
       
-      if (signal.result === 'WINNER') day.wins++;
-      if (signal.result === 'LOSER') day.losses++;
+      if (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) {
+        day.wins++;
+      }
+      if (signal.result === "LOSER" || signal.result === "loss" || signal.result === 0) {
+        day.losses++;
+      }
     });
     
     return Array.from(dailyMap.values())
@@ -180,74 +208,82 @@ const SignalsHistory = () => {
     avgProfit
   };
 
-  // Load signals from API
-  useEffect(() => {
-    const loadSignals = async () => {
-      try {
+  // Load signals from API - now with memoization and better error handling
+  const loadSignals = useCallback(async (isRefreshRequest = false) => {
+    try {
+      if (isRefreshRequest) {
+        setIsRefreshing(true);
+      } else {
         setIsLoading(true);
-        setApiError(false);
-        
-        // Apply any active filters to the API request
-        const filters: { symbol?: string; result?: string } = {};
-        if (symbolFilter) filters.symbol = symbolFilter;
-        if (resultFilter) filters.result = resultFilter;
-        
-        const response = await fetchSignalsHistory(filters);
-        
-        setSignals(response);
+      }
+      
+      setApiError(false);
+      
+      // Apply any active filters to the API request
+      const filters: { symbol?: string; result?: string } = {};
+      if (symbolFilter) filters.symbol = symbolFilter;
+      if (resultFilter) filters.result = resultFilter;
+      
+      console.log("Fetching signals history with filters:", filters);
+      const response = await fetchSignalsHistory(filters);
+      
+      console.log(`Received ${response.length} signals from API`);
+      setSignals(response);
+      
+      // Apply search filter separately from API filters
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const filtered = response.filter(signal => 
+          signal.symbol.toLowerCase().includes(query) ||
+          (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+          (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+        );
+        setFilteredSignals(filtered);
+      } else {
         setFilteredSignals(response);
-        
+      }
+      
+      if (isRefreshRequest) {
         toast({
-          title: "Sinais carregados",
+          title: "Sinais atualizados",
           description: `${response.length} sinais históricos encontrados.`,
         });
-      } catch (error) {
-        console.error("Failed to load signals:", error);
-        setApiError(true);
-        
-        // Get mock data if API fails
-        try {
-          const mockData = await import('@/lib/mockData');
-          if (mockData && typeof mockData.getMockSignals === 'function') {
-            const mockSignals = mockData.getMockSignals() as TradingSignal[];
-            setSignals(mockSignals);
-            setFilteredSignals(mockSignals);
-            
-            toast({
-              title: "Usando dados locais",
-              description: "Não foi possível conectar à API, usando dados locais.",
-              variant: "destructive"
-            });
-          }
-        } catch (e) {
-          console.error("Failed to load mock data:", e);
-          setSignals([]);
-          setFilteredSignals([]);
-        }
-      } finally {
-        setIsLoading(false);
       }
-    };
-    
-    loadSignals();
-  }, [symbolFilter, resultFilter, toast]);
-  
-  // Handle search filtering
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredSignals(signals);
-      return;
+    } catch (error) {
+      console.error("Failed to load signals:", error);
+      setApiError(true);
+      
+      // Get mock data if API fails
+      try {
+        const mockData = await import('@/lib/mockData');
+        if (mockData && typeof mockData.getMockSignals === 'function') {
+          const mockSignals = mockData.getMockSignals() as TradingSignal[];
+          setSignals(mockSignals);
+          setFilteredSignals(mockSignals);
+          
+          toast({
+            title: "Usando dados locais",
+            description: "Não foi possível conectar à API, usando dados locais.",
+            variant: "destructive"
+          });
+        }
+      } catch (e) {
+        console.error("Failed to load mock data:", e);
+        setSignals([]);
+        setFilteredSignals([]);
+      }
+    } finally {
+      setIsLoading(false);
+      if (isRefreshRequest) {
+        setIsRefreshing(false);
+      }
     }
-    
-    const query = searchQuery.toLowerCase().trim();
-    const filtered = signals.filter(signal => 
-      signal.symbol.toLowerCase().includes(query) ||
-      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
-      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
-    );
-    
-    setFilteredSignals(filtered);
-  }, [signals, searchQuery]);
+  }, [symbolFilter, resultFilter, searchQuery, toast]);
+  
+  // Initial load
+  useEffect(() => {
+    loadSignals();
+  }, [loadSignals]);
   
   // Handle switching to local mode
   const handleLocalModeClick = async () => {
@@ -274,6 +310,30 @@ const SignalsHistory = () => {
     }
   };
   
+  // Handle refreshing data
+  const handleRefresh = () => {
+    loadSignals(true);
+  };
+  
+  // Handle search filtering - debounced search for better performance
+  useEffect(() => {
+    if (!signals.length) return;
+    
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) {
+      setFilteredSignals(signals);
+      return;
+    }
+    
+    const filtered = signals.filter(signal => 
+      signal.symbol.toLowerCase().includes(query) ||
+      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+    );
+    
+    setFilteredSignals(filtered);
+  }, [signals, searchQuery]);
+  
   // If API error is detected and we couldn't get mock data
   if (apiError && signals.length === 0) {
     return (
@@ -283,6 +343,25 @@ const SignalsHistory = () => {
       />
     );
   }
+
+  const Check = (props: React.SVGProps<SVGSVGElement>) => {
+    return (
+      <svg
+        {...props}
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    );
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -305,6 +384,17 @@ const SignalsHistory = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* Refresh button */}
+          <Button 
+            variant="outline" 
+            className="h-9 gap-1"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </Button>
+        
           {/* Symbol filter dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -488,11 +578,20 @@ const SignalsHistory = () => {
       {/* Loading state */}
       {isLoading ? (
         <div className="space-y-4">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+          <div className="flex items-center space-x-4 animate-pulse">
+            <Skeleton className="h-12 w-12 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-[250px]" />
+              <Skeleton className="h-4 w-[200px]" />
+            </div>
+          </div>
+          <Skeleton className="h-[100px] w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton className="h-[150px] w-full" />
+            <Skeleton className="h-[150px] w-full" />
+            <Skeleton className="h-[150px] w-full" />
+          </div>
+          <Skeleton className="h-[200px] w-full" />
         </div>
       ) : (
         <>
@@ -529,65 +628,83 @@ const SignalsHistory = () => {
           
           {/* Table view */}
           {viewMode === 'table' && filteredSignals.length > 0 && (
-            <Card>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data/Hora</TableHead>
-                      <TableHead>Ativo</TableHead>
-                      <TableHead>Direção</TableHead>
-                      <TableHead>Entrada</TableHead>
-                      <TableHead>TP</TableHead>
-                      <TableHead>SL</TableHead>
-                      <TableHead>Resultado</TableHead>
-                      <TableHead>Estratégia</TableHead>
+            <Card className="overflow-hidden">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead onClick={() => {}}>Data/Hora</TableHead>
+                    <TableHead onClick={() => {}}>Ativo</TableHead>
+                    <TableHead onClick={() => {}}>Direção</TableHead>
+                    <TableHead onClick={() => {}}>Entrada</TableHead>
+                    <TableHead onClick={() => {}}>TP</TableHead>
+                    <TableHead onClick={() => {}}>SL</TableHead>
+                    <TableHead onClick={() => {}}>Resultado</TableHead>
+                    <TableHead onClick={() => {}}>Estratégia</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSignals.slice(0, 50).map((signal) => (
+                    <TableRow key={signal.id || `${signal.createdAt}-${signal.symbol}`}>
+                      <TableCell>
+                        {signal.createdAt ? formatDate(signal.createdAt) : 'N/A'}
+                      </TableCell>
+                      <TableCell className="font-medium">{signal.symbol}</TableCell>
+                      <TableCell>
+                        <Badge variant={signal.direction === 'BUY' ? 'success' : 'destructive'}>
+                          {signal.direction}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{signal.entryPrice}</TableCell>
+                      <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
+                      <TableCell>{signal.stopLoss}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={
+                            signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1
+                              ? 'bg-green-500/20 text-green-600 border-green-300/30' 
+                              : signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0
+                                ? 'bg-red-500/20 text-red-600 border-red-300/30'
+                                : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
+                          }
+                        >
+                          {typeof signal.result === 'number' 
+                            ? signal.result === 1 ? 'WINNER' : 'LOSER'
+                            : signal.result}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{signal.strategy || '-'}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredSignals.map((signal) => (
-                      <TableRow key={signal.id || `${signal.createdAt}-${signal.symbol}`}>
-                        <TableCell>
-                          {signal.createdAt ? formatDate(signal.createdAt) : 'N/A'}
-                        </TableCell>
-                        <TableCell className="font-medium">{signal.symbol}</TableCell>
-                        <TableCell>
-                          <Badge variant={signal.direction === 'BUY' ? 'success' : 'destructive'}>
-                            {signal.direction}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{signal.entryPrice}</TableCell>
-                        <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
-                        <TableCell>{signal.stopLoss}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant="outline" 
-                            className={
-                              signal.result === 'WINNER' 
-                                ? 'bg-green-500/20 text-green-600 border-green-300/30' 
-                                : signal.result === 'LOSER'
-                                  ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                                  : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
-                            }
-                          >
-                            {signal.result}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{signal.strategy || '-'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
+              
+              {/* Load more button */}
+              {filteredSignals.length > 50 && (
+                <div className="flex justify-center p-4">
+                  <Button variant="outline">
+                    Carregar mais ({filteredSignals.length - 50} restantes)
+                  </Button>
+                </div>
+              )}
             </Card>
           )}
           
           {/* Cards view */}
           {viewMode === 'cards' && filteredSignals.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSignals.map((signal) => (
+              {filteredSignals.slice(0, 50).map((signal) => (
                 <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
               ))}
+              
+              {/* Load more button */}
+              {filteredSignals.length > 50 && (
+                <div className="col-span-full flex justify-center mt-4">
+                  <Button variant="outline">
+                    Carregar mais ({filteredSignals.length - 50} restantes)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
           
@@ -598,26 +715,6 @@ const SignalsHistory = () => {
         </>
       )}
     </div>
-  );
-};
-
-// Add the missing Check component
-const Check = (props: React.SVGProps<SVGSVGElement>) => {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
   );
 };
 

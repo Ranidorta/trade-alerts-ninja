@@ -37,6 +37,7 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   const [sortField, setSortField] = useState<keyof TradingSignal>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [verifyingSignal, setVerifyingSignal] = useState<string | null>(null);
+  const [visibleRows, setVisibleRows] = useState<number>(50); // Initial number of rows to show
   
   const handleSort = (field: keyof TradingSignal) => {
     if (sortField === field) {
@@ -86,6 +87,14 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
     const comparison = aValue < bValue ? -1 : 1;
     return sortDirection === "asc" ? comparison : -comparison;
   });
+
+  // Slice the data to only show the visible rows
+  const displayedSignals = sortedSignals.slice(0, visibleRows);
+  
+  // Handle loading more rows
+  const handleLoadMore = () => {
+    setVisibleRows(prev => prev + 50);
+  };
   
   const SortIndicator = ({ field }: { field: keyof TradingSignal }) => {
     if (sortField !== field) return null;
@@ -227,154 +236,165 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   }
   
   return (
-    <div className="w-full overflow-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("symbol")}
-            >
-              Par <SortIndicator field="symbol" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("direction")}
-            >
-              Direção <SortIndicator field="direction" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("entryPrice")}
-            >
-              Entrada <SortIndicator field="entryPrice" />
-            </TableHead>
-            <TableHead>
-              Alvos (TP)
-            </TableHead>
-            <TableHead>
-              Stop Loss
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("result")}
-            >
-              Resultado <SortIndicator field="result" />
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer"
-              onClick={() => handleSort("createdAt")}
-            >
-              Data/Hora <SortIndicator field="createdAt" />
-            </TableHead>
-            {onVerifySingleSignal && (
-              <TableHead>Ação</TableHead>
-            )}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedSignals.map((signal) => (
-            <TableRow key={signal.id} className={
-              signal.result === 1 || signal.result === "win" ? "bg-green-50 dark:bg-green-950/20" : 
-              signal.result === 0 || signal.result === "loss" ? "bg-red-50 dark:bg-red-950/20" :
-              signal.result === "missed" ? "bg-gray-50 dark:bg-gray-900/20" :
-              signal.result === "partial" ? "bg-amber-50 dark:bg-amber-900/20" : ""
-            }>
-              <TableCell className="font-medium">
-                {signal.error ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex items-center">
-                          {signal.symbol}
-                          <AlertCircle className="ml-1 h-3 w-3 text-amber-500" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Erro na verificação: {signal.error}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : signal.verifiedAt ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="flex items-center">
-                          {signal.symbol}
-                          <Diff className="ml-1 h-3 w-3 text-blue-500" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Verificado com dados da Binance</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  signal.symbol
-                )}
-              </TableCell>
-              <TableCell>
-                <Badge variant={signal.direction === "BUY" ? "default" : "destructive"} className="flex items-center gap-1">
-                  {signal.direction === "BUY" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                  {signal.direction}
-                </Badge>
-              </TableCell>
-              <TableCell>${formatPrice(signal.entryPrice)}</TableCell>
-              <TableCell>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 1)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP1: ${formatPrice(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 2)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP2: ${formatPrice(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price)}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Badge 
-                      variant={signal.targets?.find(t => t.level === 3)?.hit ? "success" : "outline"} 
-                      className="text-xs"
-                    >
-                      TP3: ${formatPrice(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price)}
-                    </Badge>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-red-600 dark:text-red-400">
-                ${formatPrice(signal.stopLoss)}
-              </TableCell>
-              <TableCell className={getResultColor(signal.result)}>
-                {getStatusBadge(signal)}
-              </TableCell>
-              <TableCell>
-                {formatDate(signal.createdAt, signal.verifiedAt)}
-              </TableCell>
+    <div className="w-full">
+      <div className="overflow-auto rounded-md border">
+        <Table>
+          <TableHeader className="sticky top-0 bg-background z-10">
+            <TableRow>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort("symbol")}
+              >
+                Par <SortIndicator field="symbol" />
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort("direction")}
+              >
+                Direção <SortIndicator field="direction" />
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort("entryPrice")}
+              >
+                Entrada <SortIndicator field="entryPrice" />
+              </TableHead>
+              <TableHead>
+                Alvos (TP)
+              </TableHead>
+              <TableHead>
+                Stop Loss
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort("result")}
+              >
+                Resultado <SortIndicator field="result" />
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer"
+                onClick={() => handleSort("createdAt")}
+              >
+                Data/Hora <SortIndicator field="createdAt" />
+              </TableHead>
               {onVerifySingleSignal && (
-                <TableCell>
-                  {shouldShowVerifyButton(signal) ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleVerifySignal(signal.id)}
-                      disabled={verifyingSignal === signal.id}
-                    >
-                      {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
-                    </Button>
-                  ) : null}
-                </TableCell>
+                <TableHead>Ação</TableHead>
               )}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {displayedSignals.map((signal) => (
+              <TableRow key={signal.id || `${signal.symbol}-${signal.createdAt}`} className={
+                signal.result === 1 || signal.result === "win" || signal.result === "WINNER" ? "bg-green-50 dark:bg-green-950/20" : 
+                signal.result === 0 || signal.result === "loss" || signal.result === "LOSER" ? "bg-red-50 dark:bg-red-950/20" :
+                signal.result === "missed" || signal.result === "FALSE" ? "bg-gray-50 dark:bg-gray-900/20" :
+                signal.result === "partial" || signal.result === "PARTIAL" ? "bg-amber-50 dark:bg-amber-900/20" : ""
+              }>
+                <TableCell className="font-medium">
+                  {signal.error ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center">
+                            {signal.symbol}
+                            <AlertCircle className="ml-1 h-3 w-3 text-amber-500" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Erro na verificação: {signal.error}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : signal.verifiedAt ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex items-center">
+                            {signal.symbol}
+                            <Diff className="ml-1 h-3 w-3 text-blue-500" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Verificado com dados da Binance</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    signal.symbol
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={signal.direction === "BUY" ? "default" : "destructive"} className="flex items-center gap-1">
+                    {signal.direction === "BUY" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                    {signal.direction}
+                  </Badge>
+                </TableCell>
+                <TableCell>${formatPrice(signal.entryPrice)}</TableCell>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 text-xs">
+                      <Badge 
+                        variant={signal.targets?.find(t => t.level === 1)?.hit ? "success" : "outline"} 
+                        className="text-xs"
+                      >
+                        TP1: ${formatPrice(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs">
+                      <Badge 
+                        variant={signal.targets?.find(t => t.level === 2)?.hit ? "success" : "outline"} 
+                        className="text-xs"
+                      >
+                        TP2: ${formatPrice(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs">
+                      <Badge 
+                        variant={signal.targets?.find(t => t.level === 3)?.hit ? "success" : "outline"} 
+                        className="text-xs"
+                      >
+                        TP3: ${formatPrice(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price)}
+                      </Badge>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-red-600 dark:text-red-400">
+                  ${formatPrice(signal.stopLoss)}
+                </TableCell>
+                <TableCell className={getResultColor(signal.result)}>
+                  {getStatusBadge(signal)}
+                </TableCell>
+                <TableCell>
+                  {formatDate(signal.createdAt, signal.verifiedAt)}
+                </TableCell>
+                {onVerifySingleSignal && (
+                  <TableCell>
+                    {shouldShowVerifyButton(signal) ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleVerifySignal(signal.id)}
+                        disabled={verifyingSignal === signal.id}
+                      >
+                        {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
+                      </Button>
+                    ) : null}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      
+      {/* Load more button if there are more signals to display */}
+      {sortedSignals.length > visibleRows && (
+        <div className="flex justify-center mt-4">
+          <Button variant="outline" onClick={handleLoadMore}>
+            Carregar mais ({sortedSignals.length - visibleRows} restantes)
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
