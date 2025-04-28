@@ -9,10 +9,10 @@ import time
 from datetime import datetime, timedelta
 import logging
 import threading
-import pandas as pd
 
 # Importações da estrutura existente
-from api.fetch_data import fetch_data  # Usamos a função existente de fetch_data.py
+from api.fetch_data import fetch_data
+from services.evaluate_signals_pg import Signal, Session
 
 # Configurações
 VALIDATION_INTERVAL = 60  # segundos entre cada validação
@@ -66,7 +66,7 @@ def validate_signal(signal):
     tp3 = signal.get('tp3') or (signal.get('takeProfit', [None, None, None])[2] if len(signal.get('takeProfit', [])) > 2 else None)
     
     # Nível de stop loss
-    sl = signal.get('sl') or signal.get('stopLoss')
+    sl = signal.get('sl') or signal.get('stopLoss') or signal.get('stop_loss')
     
     if not all([tp1, sl]):
         logger.warning(f"Sinal {signal.get('id')} sem níveis de TP ou SL completos")
@@ -76,15 +76,15 @@ def validate_signal(signal):
     tp2 = tp2 or tp1 * 1.05 if direction == "BUY" else tp1 * 0.95
     tp3 = tp3 or tp1 * 1.1 if direction == "BUY" else tp1 * 0.9
     
-    if direction == 'BUY':
+    if direction.upper() == 'BUY':
         if current_price >= float(tp3):
-            return "win"  # Alterado de "WINNER" para "win"
+            return "win"
         elif current_price >= float(tp2) or current_price >= float(tp1):
-            return "partial"  # Alterado de "PARTIAL" para "partial"
+            return "partial"
         elif current_price <= float(sl):
-            return "loss"  # Alterado de "LOSER" para "loss"
+            return "loss"
 
-    elif direction == 'SELL':
+    elif direction.upper() == 'SELL':
         if current_price <= float(tp3):
             return "win"
         elif current_price <= float(tp2) or current_price <= float(tp1):
@@ -94,63 +94,74 @@ def validate_signal(signal):
 
     return None  # Ainda não bateu nenhuma condição
 
-def get_open_signals():
+def get_open_signals_db():
     """
     Busca sinais abertos do banco de dados.
-    Adaptado para usar o sistema existente de armazenamento.
+    
+    Returns:
+        list: Lista de sinais ativos sem resultado
     """
+    session = Session()
     try:
-        from src.lib.signalVerification import verifyAllSignals
-        from src.lib.signal_storage import getSignalHistory
+        # Buscar sinais sem resultado (abertos)
+        signals = session.query(Signal).filter(Signal.resultado == None).all()
         
-        # Usar o sistema existente para obter sinais não verificados
-        signals = getSignalHistory()
-        if not signals:
-            return []
+        # Converter objetos do SQLAlchemy para dicionários
+        result_signals = []
+        for signal in signals:
+            result_signals.append({
+                'id': signal.id,
+                'symbol': signal.symbol,
+                'timestamp': signal.timestamp.isoformat() if signal.timestamp else None,
+                'direction': signal.direction.upper() if signal.direction else None,
+                'entry': signal.entry,
+                'tp1': signal.tp1,
+                'tp2': signal.tp2,
+                'tp3': signal.tp3,
+                'sl': signal.stop_loss,
+                'stop_loss': signal.stop_loss
+            })
             
-        # Filtrar apenas sinais ativos sem resultado
-        active_signals = [s for s in signals if s.get('status') == 'ACTIVE' and not s.get('result')]
-        return active_signals
+        return result_signals
     except Exception as e:
         logger.error(f"Erro ao buscar sinais abertos: {e}")
         return []
+    finally:
+        session.close()
 
 def update_signal_result(signal_id, result):
     """
     Atualiza o resultado de um sinal no banco de dados.
-    Adaptado para usar o sistema existente.
+    
+    Args:
+        signal_id (int): ID do sinal a ser atualizado
+        result (str): Resultado do sinal (win, loss, partial, missed)
+        
+    Returns:
+        bool: True se a atualização foi bem-sucedida, False caso contrário
     """
+    session = Session()
     try:
-        from src.lib.signalVerification import verifySingleSignal
-        from src.lib.signal_storage import getSignalHistory, saveSignalsToHistory
+        # Buscar o sinal pelo ID
+        signal = session.query(Signal).filter(Signal.id == signal_id).first()
         
-        signals = getSignalHistory()
-        if not signals:
-            logger.error(f"Não foi possível encontrar sinais para atualizar {signal_id}")
+        if not signal:
+            logger.warning(f"Sinal {signal_id} não encontrado para atualização")
             return False
-            
-        # Atualiza o sinal específico
-        updated = False
-        for i, signal in enumerate(signals):
-            if signal.get('id') == signal_id:
-                signals[i]['result'] = result
-                signals[i]['verifiedAt'] = datetime.now().isoformat()
-                if result != 'missed':  # Se for um resultado conclusivo
-                    signals[i]['status'] = 'COMPLETED'
-                    signals[i]['completedAt'] = datetime.now().isoformat()
-                updated = True
-                break
         
-        if updated:
-            saveSignalsToHistory(signals)
-            logger.info(f"Sinal {signal_id} atualizado com resultado: {result}")
-            return True
+        # Atualizar o resultado
+        signal.resultado = result
         
-        logger.warning(f"Sinal {signal_id} não encontrado para atualização")
-        return False
+        # Salvar a atualização
+        session.commit()
+        logger.info(f"Sinal {signal_id} atualizado com resultado: {result}")
+        return True
     except Exception as e:
+        session.rollback()
         logger.error(f"Erro ao atualizar resultado do sinal {signal_id}: {e}")
         return False
+    finally:
+        session.close()
 
 class SignalMonitor:
     """
@@ -192,12 +203,12 @@ class SignalMonitor:
     
     def _process_signals(self):
         """Processa todos os sinais abertos"""
-        open_signals = get_open_signals()
+        open_signals = get_open_signals_db()
         now = datetime.utcnow()
         
         for signal in open_signals:
             # Determina o timestamp do sinal
-            timestamp_str = signal.get('createdAt') or signal.get('timestamp')
+            timestamp_str = signal.get('timestamp')
             if not timestamp_str:
                 logger.warning(f"Sinal sem timestamp: {signal.get('id')}")
                 continue
@@ -218,7 +229,7 @@ class SignalMonitor:
             # Validação por timeout
             if now - signal_time >= timedelta(minutes=TIMEOUT_MINUTES):
                 result = validate_signal(signal)
-                final_result = result if result else 'missed'  # "FALSE" alterado para "missed"
+                final_result = result if result else 'missed'
                 update_signal_result(signal['id'], final_result)
                 logger.info(f"Sinal {signal['id']} atualizado por timeout como {final_result}")
                 continue

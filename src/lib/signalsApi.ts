@@ -90,11 +90,17 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    // Fix: Use correct API endpoint with properly formed URL
+    // Usar o endpoint atualizado que agora busca do banco de dados
     const response = await api.get('/api/signals/history', { params: filters });
+    console.log(`Fetched ${response.data.length} signals from database`);
     return response.data as TradingSignal[];
   } catch (error) {
     console.error('Error fetching signals history:', error);
+    // Se ocorrer um erro 404, retornar um array vazio em vez de lançar o erro
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      console.log('No signals found in database (404 response)');
+      return [];
+    }
     throw error;
   }
 };

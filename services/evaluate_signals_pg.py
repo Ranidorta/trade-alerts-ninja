@@ -33,6 +33,17 @@ INTERVAL = "15"
 LOOKAHEAD_HOURS = 24
 
 def get_candles(symbol, start_ms, end_ms):
+    """
+    Busca dados de candles da API Bybit.
+    
+    Args:
+        symbol (str): Símbolo do par de trading
+        start_ms (int): Timestamp inicial em milissegundos
+        end_ms (int): Timestamp final em milissegundos
+        
+    Returns:
+        list: Lista de candles
+    """
     params = {
         "category": "linear",
         "symbol": symbol,
@@ -52,6 +63,18 @@ def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
     """
     Avalia um sinal baseado em dados históricos de candles.
     Esta função continua sendo usada para avaliações retrospectivas.
+    
+    Args:
+        entry (float): Preço de entrada
+        tp1 (float): Take profit 1
+        tp2 (float): Take profit 2
+        tp3 (float): Take profit 3
+        sl (float): Stop loss
+        direction (str): Direção do trade (long/short)
+        candles (list): Lista de candles
+        
+    Returns:
+        str: Resultado da avaliação (win, loss, partial, missed)
     """
     hit_tp1 = hit_tp2 = hit_tp3 = hit_sl = False
 
@@ -71,64 +94,75 @@ def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
             if high >= sl: hit_sl = True; break
 
     if hit_sl:
-        return "loss"    # Changed from "perdedor" to "loss"
+        return "loss"
     elif hit_tp3:
-        return "win"     # Changed from "vencedor" to "win"
+        return "win"
     elif hit_tp1:
-        return "partial" # Changed from "parcial" to "partial"
+        return "partial"
     else:
-        return "missed"  # Changed from "falso" to "missed"
+        return "missed"
 
 def main():
     """
-    Função principal modificada para usar o novo sistema de validação
-    quando disponível, e cair de volta para o método antigo se necessário.
+    Função principal para avaliar sinais não avaliados ainda.
+    Usa o novo sistema de validação quando possível, e o método antigo quando necessário.
     """
     # Create tables if they don't exist
     Base.metadata.create_all(engine)
     
     session = Session()
-    sinais = session.query(Signal).filter(Signal.resultado == None).all()
+    try:
+        # Buscar sinais sem resultado
+        sinais = session.query(Signal).filter(Signal.resultado == None).all()
 
-    for s in sinais:
-        print(f"📊 Avaliando {s.symbol} - ID {s.id}")
-        
-        # Primeiro tentamos usar o novo sistema de validação
-        signal_dict = {
-            'id': s.id,
-            'symbol': s.symbol,
-            'direction': s.direction.upper() if s.direction else 'BUY',
-            'tp1': s.tp1,
-            'tp2': s.tp2,
-            'tp3': s.tp3,
-            'sl': s.stop_loss,
-            'timestamp': s.timestamp.isoformat() if s.timestamp else None
-        }
-        
-        result = validate_signal(signal_dict)
-        
-        # Se o novo sistema não conseguir determinar um resultado, usamos o método anterior
-        if result is None:
-            start = s.timestamp
-            end = start + timedelta(hours=LOOKAHEAD_HOURS)
-            start_ms = int(start.timestamp() * 1000)
-            end_ms = int(end.timestamp() * 1000)
+        for s in sinais:
+            print(f"📊 Avaliando {s.symbol} - ID {s.id}")
+            
+            # Preparar sinal para avaliação
+            signal_dict = {
+                'id': s.id,
+                'symbol': s.symbol,
+                'direction': s.direction.upper() if s.direction else 'BUY',
+                'entry': s.entry,
+                'tp1': s.tp1,
+                'tp2': s.tp2,
+                'tp3': s.tp3,
+                'sl': s.stop_loss,
+                'stop_loss': s.stop_loss,
+                'timestamp': s.timestamp.isoformat() if s.timestamp else None
+            }
+            
+            # Tentar usar o sistema de validação em tempo real
+            result = validate_signal(signal_dict)
+            
+            # Se não conseguir determinar o resultado, usar o método histórico
+            if result is None:
+                start = s.timestamp
+                end = start + timedelta(hours=LOOKAHEAD_HOURS)
+                start_ms = int(start.timestamp() * 1000)
+                end_ms = int(end.timestamp() * 1000)
 
-            candles = get_candles(s.symbol, start_ms, end_ms)
-            if not candles:
-                continue
+                candles = get_candles(s.symbol, start_ms, end_ms)
+                if not candles:
+                    continue
 
-            result = evaluate_signal_with_candles(
-                s.entry, s.tp1, s.tp2, s.tp3, s.stop_loss, 
-                s.direction.lower() if s.direction else 'long', 
-                candles
-            )
-        
-        s.resultado = result
-        print(f"✅ Sinal {s.id}: {result}")
+                result = evaluate_signal_with_candles(
+                    s.entry, s.tp1, s.tp2, s.tp3, s.stop_loss, 
+                    s.direction.lower() if s.direction else 'long', 
+                    candles
+                )
+            
+            # Atualizar resultado no banco
+            s.resultado = result
+            print(f"✅ Sinal {s.id}: {result}")
 
-    session.commit()
-    session.close()
+        # Salvar todas as mudanças
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Erro na avaliação de sinais: {e}")
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     main()
