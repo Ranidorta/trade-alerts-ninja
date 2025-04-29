@@ -90,8 +90,12 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
+    console.log(`Fetching signals history with filters:`, filters);
+    console.log(`API URL: ${api.defaults.baseURL}/api/signals/history`);
+    
     // Usar o endpoint atualizado que agora busca do banco de dados
     const response = await api.get('/api/signals/history', { params: filters });
+    
     console.log(`Fetched ${response.data.length} signals from database`);
     return response.data as TradingSignal[];
   } catch (error) {
