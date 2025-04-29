@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,10 +85,8 @@ const SignalsHistory = () => {
   const [viewMode, setViewMode] = useState<'table' | 'cards' | 'summary'>('table');
   const { toast } = useToast();
   
-  // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
   
-  // Derived calculated data for summary
   const totalSignals = filteredSignals.length;
   const winningTrades = filteredSignals.filter(signal => 
     signal.result === "WINNER" || 
@@ -103,7 +100,6 @@ const SignalsHistory = () => {
   ).length;
   const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
-  // Symbol-based statistics
   const symbolsData = uniqueSymbols.map(symbol => {
     const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
     const count = symbolSignals.length;
@@ -128,7 +124,6 @@ const SignalsHistory = () => {
     };
   }).sort((a, b) => b.count - a.count);
   
-  // Strategy-based statistics
   const uniqueStrategies = [...new Set(filteredSignals.map(signal => signal.strategy || 'Unknown'))];
   const strategyData = uniqueStrategies.map(strategy => {
     const strategySignals = filteredSignals.filter(s => (s.strategy || 'Unknown') === strategy);
@@ -154,7 +149,6 @@ const SignalsHistory = () => {
     };
   }).sort((a, b) => b.count - a.count);
   
-  // Daily performance statistics
   const dailyData = (() => {
     const dailyMap = new Map();
     
@@ -196,7 +190,6 @@ const SignalsHistory = () => {
     return totalProfit / profitSignals.length;
   })();
   
-  // Summary data object
   const summaryData = {
     totalSignals,
     winningTrades,
@@ -208,7 +201,6 @@ const SignalsHistory = () => {
     avgProfit
   };
 
-  // Load signals from API - now with memoization and better error handling
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -219,7 +211,6 @@ const SignalsHistory = () => {
       
       setApiError(false);
       
-      // Apply any active filters to the API request
       const filters: { symbol?: string; result?: string } = {};
       if (symbolFilter) filters.symbol = symbolFilter;
       if (resultFilter) filters.result = resultFilter;
@@ -227,33 +218,37 @@ const SignalsHistory = () => {
       console.log("Fetching signals history with filters:", filters);
       const response = await fetchSignalsHistory(filters);
       
-      console.log(`Received ${response.length} signals from API`);
-      setSignals(response);
-      
-      // Apply search filter separately from API filters
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const filtered = response.filter(signal => 
-          signal.symbol.toLowerCase().includes(query) ||
-          (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
-          (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
-        );
-        setFilteredSignals(filtered);
+      if (Array.isArray(response)) {
+        console.log(`Received ${response.length} signals from API`);
+        setSignals(response);
+        
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim();
+          const filtered = response.filter(signal => 
+            signal.symbol?.toLowerCase().includes(query) ||
+            (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+            (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+          );
+          setFilteredSignals(filtered);
+        } else {
+          setFilteredSignals(response);
+        }
+        
+        if (isRefreshRequest && response.length > 0) {
+          toast({
+            title: "Sinais atualizados",
+            description: `${response.length} sinais históricos encontrados.`,
+          });
+        }
       } else {
-        setFilteredSignals(response);
-      }
-      
-      if (isRefreshRequest) {
-        toast({
-          title: "Sinais atualizados",
-          description: `${response.length} sinais históricos encontrados.`,
-        });
+        console.error("API returned non-array response:", response);
+        setSignals([]);
+        setFilteredSignals([]);
       }
     } catch (error) {
       console.error("Failed to load signals:", error);
       setApiError(true);
       
-      // Get mock data if API fails
       try {
         const mockData = await import('@/lib/mockData');
         if (mockData && typeof mockData.getMockSignals === 'function') {
@@ -280,12 +275,10 @@ const SignalsHistory = () => {
     }
   }, [symbolFilter, resultFilter, searchQuery, toast]);
   
-  // Initial load
   useEffect(() => {
     loadSignals();
   }, [loadSignals]);
   
-  // Handle switching to local mode
   const handleLocalModeClick = async () => {
     try {
       const mockData = await import('@/lib/mockData');
@@ -310,12 +303,10 @@ const SignalsHistory = () => {
     }
   };
   
-  // Handle refreshing data
   const handleRefresh = () => {
     loadSignals(true);
   };
   
-  // Handle search filtering - debounced search for better performance
   useEffect(() => {
     if (!signals.length) return;
     
@@ -334,7 +325,6 @@ const SignalsHistory = () => {
     setFilteredSignals(filtered);
   }, [signals, searchQuery]);
   
-  // If API error is detected and we couldn't get mock data
   if (apiError && signals.length === 0) {
     return (
       <ApiConnectionError 
@@ -371,7 +361,6 @@ const SignalsHistory = () => {
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
-        {/* Search and filter controls */}
         <div className="relative w-full sm:w-64 flex-shrink-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -384,7 +373,6 @@ const SignalsHistory = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {/* Refresh button */}
           <Button 
             variant="outline" 
             className="h-9 gap-1"
@@ -395,7 +383,6 @@ const SignalsHistory = () => {
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
         
-          {/* Symbol filter dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-9 gap-1">
@@ -435,7 +422,6 @@ const SignalsHistory = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          {/* Result filter dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-9 gap-1">
@@ -495,7 +481,6 @@ const SignalsHistory = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          {/* View mode selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-9 gap-1">
@@ -533,7 +518,6 @@ const SignalsHistory = () => {
             </DropdownMenuContent>
           </DropdownMenu>
           
-          {/* Clear filters button */}
           {(symbolFilter || resultFilter || searchQuery) && (
             <Button 
               variant="ghost" 
@@ -551,7 +535,6 @@ const SignalsHistory = () => {
         </div>
       </div>
       
-      {/* Results summary section */}
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -575,7 +558,6 @@ const SignalsHistory = () => {
         </CardContent>
       </Card>
       
-      {/* Loading state */}
       {isLoading ? (
         <div className="space-y-4">
           <div className="flex items-center space-x-4 animate-pulse">
@@ -595,7 +577,6 @@ const SignalsHistory = () => {
         </div>
       ) : (
         <>
-          {/* No results message */}
           {filteredSignals.length === 0 && (
             <Card className="col-span-full">
               <CardContent className="p-8 text-center">
@@ -626,7 +607,6 @@ const SignalsHistory = () => {
             </Card>
           )}
           
-          {/* Table view */}
           {viewMode === 'table' && filteredSignals.length > 0 && (
             <Card className="overflow-hidden">
               <Table>
@@ -679,7 +659,6 @@ const SignalsHistory = () => {
                 </TableBody>
               </Table>
               
-              {/* Load more button */}
               {filteredSignals.length > 50 && (
                 <div className="flex justify-center p-4">
                   <Button variant="outline">
@@ -690,14 +669,12 @@ const SignalsHistory = () => {
             </Card>
           )}
           
-          {/* Cards view */}
           {viewMode === 'cards' && filteredSignals.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredSignals.slice(0, 50).map((signal) => (
                 <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
               ))}
               
-              {/* Load more button */}
               {filteredSignals.length > 50 && (
                 <div className="col-span-full flex justify-center mt-4">
                   <Button variant="outline">
@@ -708,7 +685,6 @@ const SignalsHistory = () => {
             </div>
           )}
           
-          {/* Summary view */}
           {viewMode === 'summary' && (
             <SignalsSummary signals={filteredSignals} />
           )}

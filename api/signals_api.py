@@ -55,7 +55,13 @@ def get_all_signals_db(symbol=None, result=None):
                 'tp3': float(signal.tp3) if signal.tp3 is not None else None,
                 'stop_loss': float(signal.stop_loss) if signal.stop_loss is not None else None,
                 'sl': float(signal.stop_loss) if signal.stop_loss is not None else None,  # Alias for frontend compatibility
-                'result': signal.resultado
+                'result': signal.resultado,
+                'status': "COMPLETED" if signal.resultado else "ACTIVE",
+                'entryPrice': float(signal.entry) if signal.entry is not None else None,
+                'createdAt': signal.timestamp.isoformat() if signal.timestamp else None,
+                'type': "LONG" if signal.direction and signal.direction.upper() == "BUY" else "SHORT",
+                'pair': signal.symbol, # Alias for frontend compatibility
+                'strategy': "CLASSIC"  # Default strategy if not available
             })
             
         return result_signals
@@ -85,10 +91,13 @@ def get_signals_history():
         # Get signals from database
         signals = get_all_signals_db(symbol, result)
         
-        # If no signals found, return 404
+        # Return empty array instead of error if no signals found
         if not signals:
-            return jsonify({"error": "Nenhum sinal encontrado."}), 404
+            print(f"No signals found in database with filters: symbol={symbol}, result={result}")
+            return jsonify([])
             
+        print(f"Found {len(signals)} signals in database")
         return jsonify(signals)
     except Exception as e:
+        print(f"Error processing signals: {str(e)}")
         return jsonify({"error": f"Erro ao processar sinais: {str(e)}"}), 500

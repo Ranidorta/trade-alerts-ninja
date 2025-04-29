@@ -19,7 +19,7 @@ class Signal(Base):
 
     id = Column(Integer, primary_key=True)
     symbol = Column(String)
-    timestamp = Column(DateTime)
+    timestamp = Column(DateTime, default=datetime.utcnow)
     direction = Column(String)
     entry = Column(Float)
     tp1 = Column(Float)
@@ -27,6 +27,12 @@ class Signal(Base):
     tp3 = Column(Float)
     stop_loss = Column(Float)
     resultado = Column(String)
+
+    def __repr__(self):
+        return f"<Signal(symbol='{self.symbol}', direction='{self.direction}', entry={self.entry})>"
+
+# Make sure the database tables exist
+Base.metadata.create_all(engine)
 
 BYBIT_ENDPOINT = "https://api.bybit.com/v5/market/kline"
 INTERVAL = "15"
@@ -59,7 +65,7 @@ def get_candles(symbol, start_ms, end_ms):
         print(f"Erro ao buscar candles: {e}")
         return []
 
-def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
+def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
     """
     Avalia um sinal baseado em dados históricos de candles.
     Esta função continua sendo usada para avaliações retrospectivas.
@@ -82,12 +88,12 @@ def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
         high = float(candle[2])
         low = float(candle[3])
 
-        if direction == "long":
+        if direction.lower() == "long" or direction.lower() == "buy":
             if not hit_tp1 and high >= tp1: hit_tp1 = True
             if not hit_tp2 and high >= tp2: hit_tp2 = True
             if not hit_tp3 and high >= tp3: hit_tp3 = True
             if low <= sl: hit_sl = True; break
-        elif direction == "short":
+        elif direction.lower() == "short" or direction.lower() == "sell":
             if not hit_tp1 and low <= tp1: hit_tp1 = True
             if not hit_tp2 and low <= tp2: hit_tp2 = True
             if not hit_tp3 and low <= tp3: hit_tp3 = True
@@ -102,6 +108,64 @@ def evaluate_signal_with_candles(entry, tp1, tp2, tp3, sl, direction, candles):
     else:
         return "missed"
 
+def evaluate_signal_with_candles(*args, **kwargs):
+    """Alias for evaluate_signal for backward compatibility"""
+    return evaluate_signal(*args, **kwargs)
+
+def insert_test_data():
+    """
+    Insert test data into the database if it's empty.
+    This is just for development purposes.
+    """
+    session = Session()
+    # Check if database is empty
+    count = session.query(Signal).count()
+    if count == 0:
+        print("Database is empty. Inserting test data...")
+        
+        # Sample data
+        test_signals = [
+            Signal(
+                symbol="BTCUSDT",
+                timestamp=datetime.utcnow() - timedelta(hours=24),
+                direction="BUY",
+                entry=93500.0,
+                tp1=94000.0,
+                tp2=94500.0,
+                tp3=95000.0,
+                stop_loss=93000.0,
+                resultado="win"
+            ),
+            Signal(
+                symbol="ETHUSDT",
+                timestamp=datetime.utcnow() - timedelta(hours=12),
+                direction="SELL",
+                entry=1800.0,
+                tp1=1750.0,
+                tp2=1700.0,
+                tp3=1650.0,
+                stop_loss=1850.0,
+                resultado="loss"
+            ),
+            Signal(
+                symbol="ADAUSDT",
+                timestamp=datetime.utcnow() - timedelta(hours=6),
+                direction="BUY",
+                entry=0.70,
+                tp1=0.71,
+                tp2=0.72,
+                tp3=0.73,
+                stop_loss=0.69,
+                resultado="partial"
+            )
+        ]
+        
+        session.add_all(test_signals)
+        session.commit()
+        print(f"Added {len(test_signals)} test signals to database")
+    
+    session.close()
+
 def main():
     """
     Função principal para avaliar sinais não avaliados ainda.
@@ -109,6 +173,9 @@ def main():
     """
     # Create tables if they don't exist
     Base.metadata.create_all(engine)
+    
+    # Insert test data if database is empty
+    insert_test_data()
     
     session = Session()
     try:
@@ -146,7 +213,7 @@ def main():
                 if not candles:
                     continue
 
-                result = evaluate_signal_with_candles(
+                result = evaluate_signal(
                     s.entry, s.tp1, s.tp2, s.tp3, s.stop_loss, 
                     s.direction.lower() if s.direction else 'long', 
                     candles

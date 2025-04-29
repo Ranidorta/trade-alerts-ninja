@@ -96,14 +96,41 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     // Usar o endpoint atualizado que agora busca do banco de dados
     const response = await api.get('/api/signals/history', { params: filters });
     
-    console.log(`Fetched ${response.data.length} signals from database`);
-    return response.data as TradingSignal[];
+    if (Array.isArray(response.data)) {
+      console.log(`Fetched ${response.data.length} signals from database`);
+      
+      // Transform data for frontend compatibility if needed
+      const transformedSignals = response.data.map((signal: any) => {
+        return {
+          ...signal,
+          // Ensure these properties are present for frontend components
+          id: signal.id || `${signal.symbol}-${signal.timestamp}`,
+          pair: signal.pair || signal.symbol,
+          type: signal.type || (signal.direction === 'BUY' ? 'LONG' : 'SHORT'),
+          entryPrice: signal.entryPrice || signal.entry,
+          createdAt: signal.createdAt || signal.timestamp,
+          status: signal.status || (signal.result ? 'COMPLETED' : 'ACTIVE'),
+          stopLoss: signal.stopLoss || signal.stop_loss || signal.sl,
+          targets: signal.targets || [
+            { level: 1, price: signal.tp1, hit: false },
+            { level: 2, price: signal.tp2, hit: false },
+            { level: 3, price: signal.tp3, hit: false }
+          ],
+          strategy: signal.strategy || 'CLASSIC'
+        };
+      });
+      
+      return transformedSignals as TradingSignal[];
+    } else {
+      console.log('API returned non-array response:', response.data);
+      return [] as TradingSignal[];
+    }
   } catch (error) {
     console.error('Error fetching signals history:', error);
     // Se ocorrer um erro 404, retornar um array vazio em vez de lançar o erro
     if (axios.isAxiosError(error) && error.response?.status === 404) {
       console.log('No signals found in database (404 response)');
-      return [];
+      return [] as TradingSignal[];
     }
     throw error;
   }
