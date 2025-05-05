@@ -6,6 +6,10 @@ import os
 import requests
 from dotenv import load_dotenv
 from services.signal_validation import validate_signal
+import logging
+
+# Set up logger
+logger = logging.getLogger("evaluate_signals")
 
 load_dotenv()
 
@@ -62,7 +66,7 @@ def get_candles(symbol, start_ms, end_ms):
         resp = requests.get(BYBIT_ENDPOINT, params=params)
         return resp.json().get("result", {}).get("list", [])
     except Exception as e:
-        print(f"Erro ao buscar candles: {e}")
+        logger.error(f"Erro ao buscar candles: {e}")
         return []
 
 def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
@@ -121,7 +125,7 @@ def insert_test_data():
     # Check if database is empty
     count = session.query(Signal).count()
     if count == 0:
-        print("Database is empty. Inserting test data...")
+        logger.info("Database is empty. Inserting test data...")
         
         # Sample data
         test_signals = [
@@ -157,12 +161,34 @@ def insert_test_data():
                 tp3=0.73,
                 stop_loss=0.69,
                 resultado="partial"
+            ),
+            Signal(
+                symbol="SOLUSDT",
+                timestamp=datetime.utcnow() - timedelta(hours=3),
+                direction="BUY",
+                entry=180.0,
+                tp1=185.0,
+                tp2=190.0,
+                tp3=195.0,
+                stop_loss=175.0,
+                resultado="win"
+            ),
+            Signal(
+                symbol="BNBUSDT",
+                timestamp=datetime.utcnow() - timedelta(hours=9),
+                direction="SELL",
+                entry=560.0,
+                tp1=550.0,
+                tp2=540.0,
+                tp3=530.0,
+                stop_loss=570.0,
+                resultado="partial"
             )
         ]
         
         session.add_all(test_signals)
         session.commit()
-        print(f"Added {len(test_signals)} test signals to database")
+        logger.info(f"Added {len(test_signals)} test signals to database")
     
     session.close()
 
@@ -183,7 +209,7 @@ def main():
         sinais = session.query(Signal).filter(Signal.resultado == None).all()
 
         for s in sinais:
-            print(f"📊 Avaliando {s.symbol} - ID {s.id}")
+            logger.info(f"📊 Avaliando {s.symbol} - ID {s.id}")
             
             # Preparar sinal para avaliação
             signal_dict = {
@@ -221,15 +247,16 @@ def main():
             
             # Atualizar resultado no banco
             s.resultado = result
-            print(f"✅ Sinal {s.id}: {result}")
+            logger.info(f"✅ Sinal {s.id}: {result}")
 
         # Salvar todas as mudanças
         session.commit()
     except Exception as e:
         session.rollback()
-        print(f"Erro na avaliação de sinais: {e}")
+        logger.error(f"Erro na avaliação de sinais: {e}")
     finally:
         session.close()
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
     main()
