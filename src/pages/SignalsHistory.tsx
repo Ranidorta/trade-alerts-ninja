@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchSignalsHistory } from '@/lib/signalsApi';
+import { fetchSignalsHistory, evaluateSignal } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -12,7 +12,11 @@ import {
   BarChart3,
   X,
   Search,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Clock
 } from 'lucide-react';
 import { 
   DropdownMenu,
@@ -32,7 +36,7 @@ import SignalHistoryTable from '@/components/signals/SignalHistoryTable';
 import SignalsSummary from '@/components/signals/SignalsSummary';
 import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
 import { getSignalHistory } from '@/lib/signal-storage';
 
@@ -41,6 +45,7 @@ const SignalsHistory = () => {
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [apiError, setApiError] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
@@ -61,7 +66,16 @@ const SignalsHistory = () => {
     signal.result === "loss" || 
     signal.result === 0
   ).length;
-  const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
+  const partialTrades = filteredSignals.filter(signal => 
+    signal.result === "PARTIAL" || 
+    signal.result === "partial"
+  ).length;
+  const falseTrades = filteredSignals.filter(signal => 
+    signal.result === "FALSE" || 
+    signal.result === "missed" || 
+    signal.result === "false"
+  ).length;
+  const winRate = totalSignals > 0 ? ((winningTrades + partialTrades) / totalSignals) * 100 : 0;
   
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
@@ -146,7 +160,7 @@ const SignalsHistory = () => {
         toast({
           title: "Usando dados locais",
           description: "Não foi possível conectar à API, usando dados locais.",
-          variant: "warning"
+          variant: "destructive"
         });
         
         return;
@@ -205,6 +219,62 @@ const SignalsHistory = () => {
     loadSignals(true);
   };
   
+  const handleEvaluateSignals = async () => {
+    setIsEvaluating(true);
+    
+    try {
+      const pendingSignals = signals.filter(signal => 
+        !signal.result || 
+        signal.result === undefined || 
+        signal.result === null
+      );
+      
+      if (pendingSignals.length === 0) {
+        toast({
+          title: "Nenhum sinal para avaliar",
+          description: "Todos os sinais já possuem avaliação.",
+        });
+        return;
+      }
+      
+      toast({
+        title: "Avaliação iniciada",
+        description: `Avaliando ${pendingSignals.length} sinais...`,
+      });
+      
+      let evaluatedCount = 0;
+      const evaluationPromises = pendingSignals.slice(0, 10).map(async (signal) => {
+        try {
+          const result = await evaluateSignal(signal.id);
+          if (result) {
+            evaluatedCount++;
+          }
+        } catch (error) {
+          console.error(`Error evaluating signal ${signal.id}:`, error);
+        }
+      });
+      
+      await Promise.all(evaluationPromises);
+      
+      toast({
+        title: "Avaliação concluída",
+        description: `${evaluatedCount} sinais foram avaliados com sucesso.`,
+      });
+      
+      // Refresh signals to show updated results
+      loadSignals(true);
+    } catch (error) {
+      toast({
+        title: "Erro na avaliação",
+        description: "Ocorreu um erro ao avaliar os sinais.",
+        variant: "destructive"
+      });
+      console.error("Error evaluating signals:", error);
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+  
   const handleLocalModeClick = async () => {
     try {
       const mockData = await import('@/lib/mockData');
@@ -247,6 +317,30 @@ const SignalsHistory = () => {
       </svg>
     );
   };
+  
+  const getResultIcon = (result?: string | number) => {
+    if (!result) return <Clock className="h-4 w-4" />;
+    
+    switch(result) {
+      case "win":
+      case "WINNER":
+      case 1:
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "loss":
+      case "LOSER":
+      case 0:
+        return <XCircle className="h-4 w-4 text-red-500" />;
+      case "partial":
+      case "PARTIAL":
+        return <CheckCircle2 className="h-4 w-4 text-amber-500" />;
+      case "false":
+      case "FALSE":
+      case "missed":
+        return <AlertTriangle className="h-4 w-4 text-gray-500" />;
+      default:
+        return <Clock className="h-4 w-4" />;
+    }
+  };
 
   if (apiError && signals.length === 0) {
     return (
@@ -285,6 +379,16 @@ const SignalsHistory = () => {
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Atualizar</span>
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            className="h-9 gap-1"
+            onClick={handleEvaluateSignals}
+            disabled={isEvaluating || isLoading}
+          >
+            <BarChart3 className={`h-4 w-4 ${isEvaluating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Avaliar Sinais</span>
           </Button>
         
           <DropdownMenu>
@@ -339,7 +443,9 @@ const SignalsHistory = () => {
                         ? 'bg-green-500/20 text-green-600 border-green-300/30' 
                         : resultFilter === 'LOSER' || resultFilter === 'loss'
                           ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                          : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
+                          : resultFilter === 'PARTIAL' || resultFilter === 'partial'
+                            ? 'bg-orange-500/20 text-orange-600 border-orange-300/30'
+                            : 'bg-gray-500/20 text-gray-600 border-gray-300/30'
                     }`}
                   >
                     {resultFilter}
@@ -378,6 +484,13 @@ const SignalsHistory = () => {
               >
                 <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">Parcial</Badge>
                 {(resultFilter === 'partial' || resultFilter === 'PARTIAL') && <Check className="ml-auto h-4 w-4" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onSelect={() => setResultFilter('false')}
+                className={resultFilter === 'false' || resultFilter === 'FALSE' || resultFilter === 'missed' ? "bg-primary/10" : ""}
+              >
+                <Badge className="mr-2 bg-gray-500/20 text-gray-600 border-gray-300/30">Falso</Badge>
+                {(resultFilter === 'false' || resultFilter === 'FALSE' || resultFilter === 'missed') && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -438,7 +551,7 @@ const SignalsHistory = () => {
       
       <Card className="mb-6">
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Total de Sinais</span>
               <span className="text-2xl font-bold">{totalSignals}</span>
@@ -448,12 +561,16 @@ const SignalsHistory = () => {
               <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
             </div>
             <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Sinais Parciais</span>
+              <span className="text-2xl font-bold text-amber-500">{partialTrades}</span>
+            </div>
+            <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Sinais Perdedores</span>
               <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
-              <span className="text-2xl font-bold text-amber-500">{winRate.toFixed(1)}%</span>
+              <span className="text-2xl font-bold text-blue-500">{winRate.toFixed(1)}%</span>
             </div>
           </div>
         </CardContent>

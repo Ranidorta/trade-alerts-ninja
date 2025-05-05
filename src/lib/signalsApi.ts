@@ -113,9 +113,9 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
           status: signal.status || (signal.result ? 'COMPLETED' : 'ACTIVE'),
           stopLoss: signal.stopLoss || signal.stop_loss || signal.sl,
           targets: signal.targets || [
-            { level: 1, price: signal.tp1, hit: signal.result === 'win' || signal.result === 'partial' },
-            { level: 2, price: signal.tp2, hit: signal.result === 'win' },
-            { level: 3, price: signal.tp3, hit: signal.result === 'win' }
+            { level: 1, price: signal.tp1, hit: signal.result === "win" || signal.result === "partial" },
+            { level: 2, price: signal.tp2, hit: signal.result === "win" },
+            { level: 3, price: signal.tp3, hit: signal.result === "win" }
           ],
           strategy: signal.strategy || 'CLASSIC'
         };
@@ -176,7 +176,7 @@ export const saveSignalToHistory = async (signal: TradingSignal) => {
       toast({
         title: "Sinal salvo localmente",
         description: "O sinal foi salvo localmente pois não foi possível conectar ao servidor.",
-        variant: "warning"
+        variant: "destructive"
       });
       return true;
     } catch (e) {
@@ -188,6 +188,35 @@ export const saveSignalToHistory = async (signal: TradingSignal) => {
       });
       return false;
     }
+  }
+};
+
+// New function to evaluate a signal
+export const evaluateSignal = async (signalId: string | number) => {
+  try {
+    console.log(`Evaluating signal ID: ${signalId}`);
+    
+    const response = await api.get(`/api/signals/evaluate/${signalId}`);
+    
+    if (response.status === 200) {
+      console.log('Signal evaluation result:', response.data);
+      toast({
+        title: "Sinal avaliado",
+        description: `Resultado: ${response.data.resultado || 'Desconhecido'}`,
+      });
+      return response.data;
+    } else {
+      console.error('Error evaluating signal:', response.data);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error evaluating signal:', error);
+    toast({
+      title: "Erro na avaliação",
+      description: "Não foi possível avaliar o sinal.",
+      variant: "destructive"
+    });
+    return null;
   }
 };
 
