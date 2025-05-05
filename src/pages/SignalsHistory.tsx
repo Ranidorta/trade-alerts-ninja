@@ -71,6 +71,7 @@ const SignalsHistory = () => {
     signal.result === "partial"
   ).length;
   const falseTrades = filteredSignals.filter(signal => 
+    // Fix: Use the correct string for FALSE signals
     signal.result === "FALSE" || 
     signal.result === "missed" || 
     signal.result === "false"
