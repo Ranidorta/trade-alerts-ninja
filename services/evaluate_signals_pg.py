@@ -1,3 +1,4 @@
+
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timedelta
@@ -70,63 +71,46 @@ def get_candles(symbol, start_ms, end_ms):
 
 def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
     """
-    Evaluate a trading signal based on the rules:
-    
-    - WINNER: Price reached TP3 (or the last target) before hitting the Stop Loss
-    - PARTIAL: Price hit TP1 or TP2, but not TP3, then hit the SL
-    - LOSER: Price went directly to the SL without hitting any TP
-    - FALSE: Signal didn't hit any TP or the SL within the time frame
+    Avalia um sinal baseado em dados históricos de candles.
+    Esta função continua sendo usada para avaliações retrospectivas.
     
     Args:
-        entry (float): Entry price
-        tp1 (float): First take profit level
-        tp2 (float): Second take profit level
-        tp3 (float): Third take profit level
-        sl (float): Stop loss level
-        direction (str): BUY or SELL
-        candles (list): List of candles with OHLC data
+        entry (float): Preço de entrada
+        tp1 (float): Take profit 1
+        tp2 (float): Take profit 2
+        tp3 (float): Take profit 3
+        sl (float): Stop loss
+        direction (str): Direção do trade (long/short)
+        candles (list): Lista de candles
         
     Returns:
-        str: Evaluation result ("win", "partial", "loss", "false")
+        str: Resultado da avaliação (win, loss, partial, missed)
     """
-    if not candles or len(candles) < 2:
-        return "false"
-        
-    # Extract high and low prices from candles
-    highs = [float(candle['high']) for candle in candles]
-    lows = [float(candle['low']) for candle in candles]
-    
-    max_high = max(highs)
-    min_low = min(lows)
-    
-    hit_tp1 = False
-    hit_tp2 = False
-    hit_tp3 = False
-    hit_sl = False
-    
-    # Determine if price targets were hit based on direction
-    if direction.upper() == 'BUY':
-        hit_tp1 = tp1 and max_high >= float(tp1)
-        hit_tp2 = tp2 and max_high >= float(tp2)
-        hit_tp3 = tp3 and max_high >= float(tp3)
-        hit_sl = sl and min_low <= float(sl)
-    else:  # SELL
-        hit_tp1 = tp1 and min_low <= float(tp1)
-        hit_tp2 = tp2 and min_low <= float(tp2)
-        hit_tp3 = tp3 and min_low <= float(tp3)
-        hit_sl = sl and max_high >= float(sl)
-    
-    # Process according to rules
-    if hit_tp3:
-        return "win"
-    elif (hit_tp1 or hit_tp2) and hit_sl:
-        return "partial"
-    elif hit_sl:
+    hit_tp1 = hit_tp2 = hit_tp3 = hit_sl = False
+
+    for candle in candles:
+        high = float(candle[2])
+        low = float(candle[3])
+
+        if direction.lower() == "long" or direction.lower() == "buy":
+            if not hit_tp1 and high >= tp1: hit_tp1 = True
+            if not hit_tp2 and high >= tp2: hit_tp2 = True
+            if not hit_tp3 and high >= tp3: hit_tp3 = True
+            if low <= sl: hit_sl = True; break
+        elif direction.lower() == "short" or direction.lower() == "sell":
+            if not hit_tp1 and low <= tp1: hit_tp1 = True
+            if not hit_tp2 and low <= tp2: hit_tp2 = True
+            if not hit_tp3 and low <= tp3: hit_tp3 = True
+            if high >= sl: hit_sl = True; break
+
+    if hit_sl:
         return "loss"
-    elif hit_tp1 or hit_tp2:
+    elif hit_tp3:
+        return "win"
+    elif hit_tp1:
         return "partial"
     else:
-        return "false"
+        return "missed"
 
 def evaluate_signal_with_candles(*args, **kwargs):
     """Alias for evaluate_signal for backward compatibility"""
