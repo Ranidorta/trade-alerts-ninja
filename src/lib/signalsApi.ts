@@ -94,7 +94,7 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     console.log(`Fetching signals history with filters:`, filters);
     console.log(`API URL: ${api.defaults.baseURL}/api/signals/history`);
     
-    // Usar o endpoint atualizado que agora busca do banco de dados
+    // Use the updated endpoint that fetches from the database
     const response = await api.get('/api/signals/history', { params: filters });
     
     if (Array.isArray(response.data)) {
@@ -102,9 +102,9 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
       
       // Transform data for frontend compatibility if needed
       const transformedSignals = response.data.map((signal: any) => {
+        // Ensure these properties are present for frontend components
         return {
           ...signal,
-          // Ensure these properties are present for frontend components
           id: signal.id || `${signal.symbol}-${signal.timestamp}`,
           pair: signal.pair || signal.symbol,
           type: signal.type || (signal.direction === 'BUY' ? 'LONG' : 'SHORT'),
@@ -128,7 +128,7 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     }
   } catch (error) {
     console.error('Error fetching signals history:', error);
-    // Se ocorrer um erro 404, retornar um array vazio em vez de lançar o erro
+    // If a 404 error occurs, return an empty array instead of throwing the error
     if (axios.isAxiosError(error) && error.response?.status === 404) {
       console.log('No signals found in database (404 response)');
       return [] as TradingSignal[];
@@ -146,6 +146,10 @@ export const saveSignalToHistory = async (signal: TradingSignal) => {
     
     if (response.status === 200) {
       console.log('Signal saved to history successfully');
+      toast({
+        title: "Sinal salvo",
+        description: "O sinal foi salvo com sucesso no histórico.",
+      });
       return true;
     } else {
       console.error('Error saving signal to history:', response.data);
@@ -168,9 +172,20 @@ export const saveSignalToHistory = async (signal: TradingSignal) => {
       
       localStorage.setItem('trade_signal_history', JSON.stringify(localHistory.slice(0, 100)));
       console.log('Signal saved to local history');
+      
+      toast({
+        title: "Sinal salvo localmente",
+        description: "O sinal foi salvo localmente pois não foi possível conectar ao servidor.",
+        variant: "warning"
+      });
       return true;
     } catch (e) {
       console.error('Error saving signal to local history:', e);
+      toast({
+        title: "Erro ao salvar",
+        description: "Não foi possível salvar o sinal no histórico.",
+        variant: "destructive"
+      });
       return false;
     }
   }

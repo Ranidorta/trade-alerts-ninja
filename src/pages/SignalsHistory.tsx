@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,14 +15,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogTrigger,
-  DialogClose
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -29,49 +22,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
-import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
+import SignalHistoryTable from '@/components/signals/SignalHistoryTable';
 import SignalsSummary from '@/components/signals/SignalsSummary';
 import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-const calculateWinRate = (signals: TradingSignal[]) => {
-  if (!signals.length) return 0;
-  
-  const winners = signals.filter(signal => 
-    signal.result === 'WINNER' || 
-    signal.result === 'win' || 
-    signal.result === 1
-  ).length;
-  
-  return (winners / signals.length) * 100;
-};
+import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
+import { getSignalHistory } from '@/lib/signal-storage';
 
 const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -100,107 +63,6 @@ const SignalsHistory = () => {
   ).length;
   const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
-  const symbolsData = uniqueSymbols.map(symbol => {
-    const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
-    const count = symbolSignals.length;
-    const wins = symbolSignals.filter(s => 
-      s.result === "WINNER" || 
-      s.result === "win" || 
-      (typeof s.result === "number" && s.result === 1)
-    ).length;
-    const losses = symbolSignals.filter(s => 
-      s.result === "LOSER" || 
-      s.result === "loss" || 
-      (typeof s.result === "number" && s.result === 0)
-    ).length;
-    const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
-    
-    return {
-      symbol,
-      count,
-      wins,
-      losses,
-      winRate: symbolWinRate
-    };
-  }).sort((a, b) => b.count - a.count);
-  
-  const uniqueStrategies = [...new Set(filteredSignals.map(signal => signal.strategy || 'Unknown'))];
-  const strategyData = uniqueStrategies.map(strategy => {
-    const strategySignals = filteredSignals.filter(s => (s.strategy || 'Unknown') === strategy);
-    const count = strategySignals.length;
-    const wins = strategySignals.filter(s => 
-      s.result === "WINNER" || 
-      s.result === "win" || 
-      (typeof s.result === "number" && s.result === 1)
-    ).length;
-    const losses = strategySignals.filter(s => 
-      s.result === "LOSER" || 
-      s.result === "loss" || 
-      (typeof s.result === "number" && s.result === 0)
-    ).length;
-    const strategyWinRate = count > 0 ? (wins / count) * 100 : 0;
-    
-    return {
-      strategy,
-      count,
-      wins,
-      losses,
-      winRate: strategyWinRate
-    };
-  }).sort((a, b) => b.count - a.count);
-  
-  const dailyData = (() => {
-    const dailyMap = new Map();
-    
-    filteredSignals.forEach(signal => {
-      if (!signal.createdAt) return;
-      
-      const date = new Date(signal.createdAt).toLocaleDateString();
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, { date, count: 0, wins: 0, losses: 0 });
-      }
-      
-      const day = dailyMap.get(date);
-      day.count++;
-      
-      if (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) {
-        day.wins++;
-      }
-      if (signal.result === "LOSER" || signal.result === "loss" || signal.result === 0) {
-        day.losses++;
-      }
-    });
-    
-    return Array.from(dailyMap.values())
-      .map(day => ({
-        ...day,
-        winRate: day.count > 0 ? (day.wins / day.count) * 100 : 0
-      }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  })();
-  
-  const avgProfit = (() => {
-    const profitSignals = filteredSignals.filter(s => s.profit);
-    if (profitSignals.length === 0) return 0;
-    
-    const totalProfit = profitSignals.reduce((sum, signal) => {
-      return sum + (parseFloat(signal.profit?.toString() || '0') || 0);
-    }, 0);
-    
-    return totalProfit / profitSignals.length;
-  })();
-  
-  const summaryData = {
-    totalSignals,
-    winningTrades,
-    losingTrades,
-    winRate,
-    symbolsData,
-    strategyData,
-    dailyData,
-    avgProfit
-  };
-
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -216,39 +78,81 @@ const SignalsHistory = () => {
       if (resultFilter) filters.result = resultFilter;
       
       console.log("Fetching signals history with filters:", filters);
-      const response = await fetchSignalsHistory(filters);
       
-      if (Array.isArray(response)) {
-        console.log(`Received ${response.length} signals from API`);
-        setSignals(response);
+      // Try to fetch from API first
+      try {
+        const response = await fetchSignalsHistory(filters);
+        
+        if (Array.isArray(response) && response.length > 0) {
+          console.log(`Received ${response.length} signals from API`);
+          setSignals(response);
+          
+          if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase().trim();
+            const filtered = response.filter(signal => 
+              signal.symbol?.toLowerCase().includes(query) ||
+              (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+              (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+            );
+            setFilteredSignals(filtered);
+          } else {
+            setFilteredSignals(response);
+          }
+          
+          if (isRefreshRequest) {
+            toast({
+              title: "Sinais atualizados",
+              description: `${response.length} sinais históricos encontrados.`,
+            });
+          }
+          
+          return;
+        } else {
+          console.log("API returned empty array or invalid data, trying local storage");
+        }
+      } catch (error) {
+        console.error("Failed to load signals from API:", error);
+        setApiError(true);
+      }
+      
+      // If API fails or returns no signals, try local storage
+      const localSignals = getSignalHistory();
+      if (localSignals.length > 0) {
+        console.log(`Using ${localSignals.length} signals from local storage`);
+        
+        // Apply filters to local signals
+        let filtered = localSignals;
+        if (symbolFilter) {
+          filtered = filtered.filter(s => s.symbol === symbolFilter);
+        }
+        if (resultFilter) {
+          filtered = filtered.filter(s => s.result === resultFilter);
+        }
+        
+        setSignals(filtered);
         
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase().trim();
-          const filtered = response.filter(signal => 
+          const searchFiltered = filtered.filter(signal => 
             signal.symbol?.toLowerCase().includes(query) ||
             (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
             (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
           );
-          setFilteredSignals(filtered);
+          setFilteredSignals(searchFiltered);
         } else {
-          setFilteredSignals(response);
+          setFilteredSignals(filtered);
         }
         
-        if (isRefreshRequest && response.length > 0) {
-          toast({
-            title: "Sinais atualizados",
-            description: `${response.length} sinais históricos encontrados.`,
-          });
-        }
-      } else {
-        console.error("API returned non-array response:", response);
-        setSignals([]);
-        setFilteredSignals([]);
+        toast({
+          title: "Usando dados locais",
+          description: "Não foi possível conectar à API, usando dados locais.",
+          variant: "warning"
+        });
+        
+        return;
       }
-    } catch (error) {
-      console.error("Failed to load signals:", error);
-      setApiError(true);
       
+      // If no signals found in API or local storage, try mock data
       try {
         const mockData = await import('@/lib/mockData');
         if (mockData && typeof mockData.getMockSignals === 'function') {
@@ -257,8 +161,8 @@ const SignalsHistory = () => {
           setFilteredSignals(mockSignals);
           
           toast({
-            title: "Usando dados locais",
-            description: "Não foi possível conectar à API, usando dados locais.",
+            title: "Usando dados de exemplo",
+            description: "Não foi possível encontrar sinais reais, usando dados de exemplo.",
             variant: "destructive"
           });
         }
@@ -278,6 +182,28 @@ const SignalsHistory = () => {
   useEffect(() => {
     loadSignals();
   }, [loadSignals]);
+  
+  useEffect(() => {
+    if (!signals.length) return;
+    
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) {
+      setFilteredSignals(signals);
+      return;
+    }
+    
+    const filtered = signals.filter(signal => 
+      signal.symbol.toLowerCase().includes(query) ||
+      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
+      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+    );
+    
+    setFilteredSignals(filtered);
+  }, [signals, searchQuery]);
+  
+  const handleRefresh = () => {
+    loadSignals(true);
+  };
   
   const handleLocalModeClick = async () => {
     try {
@@ -302,37 +228,6 @@ const SignalsHistory = () => {
       });
     }
   };
-  
-  const handleRefresh = () => {
-    loadSignals(true);
-  };
-  
-  useEffect(() => {
-    if (!signals.length) return;
-    
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) {
-      setFilteredSignals(signals);
-      return;
-    }
-    
-    const filtered = signals.filter(signal => 
-      signal.symbol.toLowerCase().includes(query) ||
-      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
-      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
-    );
-    
-    setFilteredSignals(filtered);
-  }, [signals, searchQuery]);
-  
-  if (apiError && signals.length === 0) {
-    return (
-      <ApiConnectionError 
-        apiUrl={config.apiUrl || 'http://localhost:5000'} 
-        onLocalModeClick={handleLocalModeClick} 
-      />
-    );
-  }
 
   const Check = (props: React.SVGProps<SVGSVGElement>) => {
     return (
@@ -352,6 +247,15 @@ const SignalsHistory = () => {
       </svg>
     );
   };
+
+  if (apiError && signals.length === 0) {
+    return (
+      <ApiConnectionError 
+        apiUrl={config.apiUrl || 'http://localhost:5000'} 
+        onLocalModeClick={handleLocalModeClick} 
+      />
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -431,9 +335,9 @@ const SignalsHistory = () => {
                   <Badge 
                     variant="secondary" 
                     className={`ml-1 ${
-                      resultFilter === 'WINNER' 
+                      resultFilter === 'WINNER' || resultFilter === 'win'
                         ? 'bg-green-500/20 text-green-600 border-green-300/30' 
-                        : resultFilter === 'LOSER'
+                        : resultFilter === 'LOSER' || resultFilter === 'loss'
                           ? 'bg-red-500/20 text-red-600 border-red-300/30'
                           : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
                     }`}
@@ -455,28 +359,25 @@ const SignalsHistory = () => {
                 {!resultFilter && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onSelect={() => setResultFilter('WINNER')}
-                className={resultFilter === 'WINNER' ? "bg-primary/10" : ""}
+                onSelect={() => setResultFilter('win')}
+                className={resultFilter === 'win' || resultFilter === 'WINNER' ? "bg-primary/10" : ""}
               >
-                <Badge className="mr-2 bg-green-500/20 text-green-600 border-green-300/30">WINNER</Badge>
-                Vencedor
-                {resultFilter === 'WINNER' && <Check className="ml-auto h-4 w-4" />}
+                <Badge className="mr-2 bg-green-500/20 text-green-600 border-green-300/30">Vencedor</Badge>
+                {(resultFilter === 'win' || resultFilter === 'WINNER') && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onSelect={() => setResultFilter('LOSER')}
-                className={resultFilter === 'LOSER' ? "bg-primary/10" : ""}
+                onSelect={() => setResultFilter('loss')}
+                className={resultFilter === 'loss' || resultFilter === 'LOSER' ? "bg-primary/10" : ""}
               >
-                <Badge className="mr-2 bg-red-500/20 text-red-600 border-red-300/30">LOSER</Badge>
-                Perdedor
-                {resultFilter === 'LOSER' && <Check className="ml-auto h-4 w-4" />}
+                <Badge className="mr-2 bg-red-500/20 text-red-600 border-red-300/30">Perdedor</Badge>
+                {(resultFilter === 'loss' || resultFilter === 'LOSER') && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onSelect={() => setResultFilter('PARTIAL')}
-                className={resultFilter === 'PARTIAL' ? "bg-primary/10" : ""}
+                onSelect={() => setResultFilter('partial')}
+                className={resultFilter === 'partial' || resultFilter === 'PARTIAL' ? "bg-primary/10" : ""}
               >
-                <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">PARTIAL</Badge>
-                Parcial
-                {resultFilter === 'PARTIAL' && <Check className="ml-auto h-4 w-4" />}
+                <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">Parcial</Badge>
+                {(resultFilter === 'partial' || resultFilter === 'PARTIAL') && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -573,11 +474,10 @@ const SignalsHistory = () => {
             <Skeleton className="h-[150px] w-full" />
             <Skeleton className="h-[150px] w-full" />
           </div>
-          <Skeleton className="h-[200px] w-full" />
         </div>
       ) : (
         <>
-          {filteredSignals.length === 0 && (
+          {filteredSignals.length === 0 ? (
             <Card className="col-span-full">
               <CardContent className="p-8 text-center">
                 <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
@@ -605,88 +505,38 @@ const SignalsHistory = () => {
                 )}
               </CardContent>
             </Card>
-          )}
-          
-          {viewMode === 'table' && filteredSignals.length > 0 && (
-            <Card className="overflow-hidden">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead onClick={() => {}}>Data/Hora</TableHead>
-                    <TableHead onClick={() => {}}>Ativo</TableHead>
-                    <TableHead onClick={() => {}}>Direção</TableHead>
-                    <TableHead onClick={() => {}}>Entrada</TableHead>
-                    <TableHead onClick={() => {}}>TP</TableHead>
-                    <TableHead onClick={() => {}}>SL</TableHead>
-                    <TableHead onClick={() => {}}>Resultado</TableHead>
-                    <TableHead onClick={() => {}}>Estratégia</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+          ) : (
+            <>
+              {viewMode === 'table' && (
+                <SignalHistoryTable signals={filteredSignals} />
+              )}
+              
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filteredSignals.slice(0, 50).map((signal) => (
-                    <TableRow key={signal.id || `${signal.createdAt}-${signal.symbol}`}>
-                      <TableCell>
-                        {signal.createdAt ? formatDate(signal.createdAt) : 'N/A'}
-                      </TableCell>
-                      <TableCell className="font-medium">{signal.symbol}</TableCell>
-                      <TableCell>
-                        <Badge variant={signal.direction === 'BUY' ? 'success' : 'destructive'}>
-                          {signal.direction}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{signal.entryPrice}</TableCell>
-                      <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
-                      <TableCell>{signal.stopLoss}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline" 
-                          className={
-                            signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1
-                              ? 'bg-green-500/20 text-green-600 border-green-300/30' 
-                              : signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0
-                                ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                                : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
-                          }
-                        >
-                          {typeof signal.result === 'number' 
-                            ? signal.result === 1 ? 'WINNER' : 'LOSER'
-                            : signal.result}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{signal.strategy || '-'}</TableCell>
-                    </TableRow>
+                    <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
                   ))}
-                </TableBody>
-              </Table>
-              
-              {filteredSignals.length > 50 && (
-                <div className="flex justify-center p-4">
-                  <Button variant="outline">
-                    Carregar mais ({filteredSignals.length - 50} restantes)
-                  </Button>
+                  
+                  {filteredSignals.length > 50 && (
+                    <div className="col-span-full flex justify-center mt-4">
+                      <Button 
+                        variant="outline"
+                        onClick={() => toast({
+                          title: "Limite atingido",
+                          description: "Apenas os 50 primeiros sinais são exibidos em modo cards. Use a tabela para ver todos."
+                        })}  
+                      >
+                        Carregar mais ({filteredSignals.length - 50} restantes)
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-            </Card>
-          )}
-          
-          {viewMode === 'cards' && filteredSignals.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSignals.slice(0, 50).map((signal) => (
-                <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
-              ))}
               
-              {filteredSignals.length > 50 && (
-                <div className="col-span-full flex justify-center mt-4">
-                  <Button variant="outline">
-                    Carregar mais ({filteredSignals.length - 50} restantes)
-                  </Button>
-                </div>
+              {viewMode === 'summary' && (
+                <SignalsSummary signals={filteredSignals} />
               )}
-            </div>
-          )}
-          
-          {viewMode === 'summary' && (
-            <SignalsSummary signals={filteredSignals} />
+            </>
           )}
         </>
       )}
