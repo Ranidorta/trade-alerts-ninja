@@ -63,6 +63,11 @@ const HistoryPage = () => {
     setFilters({});
   };
 
+  // Handler for manual refetch
+  const handleRefetch = () => {
+    refetch();
+  };
+
   // Verify a single signal
   const handleVerifySingleSignal = async (signalId: string) => {
     setVerifyingSignal(signalId);
@@ -274,7 +279,7 @@ const HistoryPage = () => {
               <Button variant="secondary" onClick={handleClearFilters}>
                 Limpar
               </Button>
-              <Button variant="ghost" onClick={refetch}>
+              <Button variant="ghost" onClick={handleRefetch}>
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -335,7 +340,7 @@ const HistoryPage = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Tente remover os filtros ou atualize a página
               </p>
-              <Button variant="outline" onClick={refetch} className="mt-4">
+              <Button variant="outline" onClick={handleRefetch}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Atualizar
               </Button>
