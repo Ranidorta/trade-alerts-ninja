@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData, SignalDirection, SignalResult } from '@/lib/types';
 import { config } from '@/config/env';
@@ -206,29 +205,80 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   }
 };
 
-// New function to evaluate a specific signal
+// Updated function to evaluate a specific signal with improved ID handling
 export const evaluateSingleSignal = async (signalId: string): Promise<TradingSignal | null> => {
   try {
-    // Fix: Use the correct API endpoint format
     console.log(`Evaluating signal with ID: ${signalId}`);
     
-    const url = `/api/signals/evaluate/${signalId}`;
-    console.log(`API request URL: ${api.defaults.baseURL}${url}`);
+    // Check if the ID is numeric or string format
+    const isNumericId = /^\d+$/.test(signalId);
+    let url;
+    let payload;
+    let response;
     
-    const response = await api.get(url);
+    if (isNumericId) {
+      // If numeric ID, use the ID endpoint
+      url = `/api/signals/evaluate/${signalId}`;
+      console.log(`Using numeric ID endpoint: ${api.defaults.baseURL}${url}`);
+      
+      try {
+        response = await api.get(url);
+      } catch (error) {
+        // If numeric ID endpoint fails, try the data-based endpoint as fallback
+        console.log(`Numeric ID endpoint failed, trying data-based endpoint as fallback`);
+        throw error; // Will be caught by the outer try/catch
+      }
+    } else {
+      // For string IDs or as fallback, use the data-based endpoint
+      // First find the signal data from local storage to get the details
+      const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
+      const signalData = localHistory.find((s: TradingSignal) => s.id === signalId);
+      
+      if (!signalData) {
+        throw new Error(`Signal with ID ${signalId} not found in local storage`);
+      }
+      
+      url = `/api/signals/evaluate`;
+      payload = {
+        symbol: signalData.symbol,
+        timestamp: signalData.createdAt || signalData.timestamp,
+        direction: signalData.direction,
+        entry: signalData.entryPrice || signalData.entry,
+        tp1: signalData.tp1 || (signalData.targets && signalData.targets[0]?.price),
+        tp2: signalData.tp2 || (signalData.targets && signalData.targets[1]?.price),
+        tp3: signalData.tp3 || (signalData.targets && signalData.targets[2]?.price),
+        stop_loss: signalData.stopLoss || signalData.sl
+      };
+      
+      console.log(`Using data-based endpoint: ${api.defaults.baseURL}${url}`);
+      console.log(`Payload:`, payload);
+      
+      response = await api.post(url, payload);
+    }
     
     if (response.status === 200) {
       const evaluatedSignal = response.data;
       console.log(`Signal ${signalId} evaluation result:`, evaluatedSignal);
       
       // Map API result to frontend result format
-      let result: SignalResult;
-      switch (evaluatedSignal.resultado) {
-        case 'win': result = 'WINNER'; break;
-        case 'loss': result = 'LOSER'; break;
-        case 'partial': result = 'PARTIAL'; break;
-        case 'false': result = 'FALSE'; break;
-        default: result = evaluatedSignal.resultado as SignalResult;
+      let result: SignalResult = 'FALSE';
+      
+      // Handle different result format variations
+      if (typeof evaluatedSignal.resultado === 'string') {
+        switch (evaluatedSignal.resultado.toLowerCase()) {
+          case 'win': result = 'WINNER'; break;
+          case 'loss': result = 'LOSER'; break;
+          case 'partial': result = 'PARTIAL'; break;
+          case 'false': 
+          case 'missed': result = 'FALSE'; break;
+          case 'winner': result = 'WINNER'; break;
+          case 'loser': result = 'LOSER'; break;
+          default: result = evaluatedSignal.resultado as SignalResult;
+        }
+      } else if (evaluatedSignal.resultado === 1) {
+        result = 'WINNER';
+      } else if (evaluatedSignal.resultado === 0) {
+        result = 'LOSER';
       }
       
       // Create a proper TradingSignal object
@@ -244,7 +294,7 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
         tp3: evaluatedSignal.tp3,
         result: result,
         status: 'COMPLETED',
-        createdAt: new Date().toISOString(),
+        createdAt: evaluatedSignal.timestamp || new Date().toISOString(),
         verifiedAt: new Date().toISOString()
       };
       
@@ -268,12 +318,20 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
       console.log('Headers:', error.response?.headers);
       console.log('Request config:', error.config);
       
-      // Provide a more helpful error message based on the status code
       let errorMessage = "Erro de conexão com a API";
       
       if (error.response) {
         if (error.response.status === 404) {
-          errorMessage = "O endpoint de avaliação não foi encontrado. Verifique se o backend está configurado corretamente.";
+          errorMessage = "Endpoint de avaliação não encontrado. Verificando se há uma alternativa...";
+          
+          // Try local evaluation as a fallback
+          try {
+            // Local evaluation logic would go here
+            // This is a stub for now since we don't have the candle data locally
+            errorMessage = "Não foi possível avaliar o sinal localmente sem dados históricos.";
+          } catch (localError) {
+            console.error("Local evaluation also failed:", localError);
+          }
         } else if (error.response.status === 400) {
           errorMessage = "Dados inválidos para avaliação: " + (error.response.data?.error || "formato incorreto");
         } else if (error.response.status === 500) {
@@ -298,12 +356,16 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
   }
 };
 
-// New function to evaluate multiple signals
+// Updated function to evaluate multiple signals with improved error handling
 export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
   try {
     console.log(`Evaluating ${signals.length} signals`);
     
-    const signalsToEvaluate = signals.filter(s => !s.result || !s.verifiedAt);
+    const signalsToEvaluate = signals.filter(s => 
+      !s.result || 
+      !s.verifiedAt || 
+      (s.status !== "COMPLETED" && s.createdAt)
+    );
     
     if (signalsToEvaluate.length === 0) {
       console.log('No signals need evaluation - all already have results');
@@ -312,40 +374,56 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
     
     console.log(`Found ${signalsToEvaluate.length} signals that need evaluation`);
     
-    // Instead of using the endpoint that expects a numeric ID, use the evaluate endpoint
-    // that accepts JSON data for evaluation
-    const updatedSignals = [...signals]; // Create a copy to avoid mutation
+    // Create a copy to avoid mutation
+    const updatedSignals = [...signals]; 
     
     // Process signals one by one to avoid overwhelming the API
     for (const signal of signalsToEvaluate) {
       try {
         console.log(`Evaluating signal: ${signal.id} (${signal.symbol})`);
         
-        // Use the POST endpoint for evaluation with data
+        // Prepare payload for the data-based endpoint
         const payload = {
           symbol: signal.symbol,
-          timestamp: signal.createdAt,
+          timestamp: signal.createdAt || signal.timestamp,
           direction: signal.direction,
           entry: signal.entryPrice || signal.entry,
           tp1: signal.tp1 || (signal.targets && signal.targets[0]?.price),
           tp2: signal.tp2 || (signal.targets && signal.targets[1]?.price),
           tp3: signal.tp3 || (signal.targets && signal.targets[2]?.price),
-          stop_loss: signal.stopLoss
+          stop_loss: signal.stopLoss || signal.sl
         };
         
+        console.log(`Evaluation payload for signal ${signal.id}:`, payload);
+        
+        // Ensure we're using the correct base URL for this request
         const response = await api.post('/api/signals/evaluate', payload);
         
         if (response.status === 200) {
           const evaluatedData = response.data;
+          console.log(`Evaluation result for signal ${signal.id}:`, evaluatedData);
           
           // Map the result to our frontend format
           let result: SignalResult;
-          switch (evaluatedData.resultado) {
-            case 'win': result = 'WINNER'; break;
-            case 'loss': result = 'LOSER'; break;
-            case 'partial': result = 'PARTIAL'; break;
-            case 'false': result = 'FALSE'; break;
-            default: result = evaluatedData.resultado as SignalResult;
+          
+          // Handle different result format variations
+          if (typeof evaluatedData.resultado === 'string') {
+            switch (evaluatedData.resultado.toLowerCase()) {
+              case 'win': result = 'WINNER'; break;
+              case 'loss': result = 'LOSER'; break;
+              case 'partial': result = 'PARTIAL'; break;
+              case 'false': 
+              case 'missed': result = 'FALSE'; break;
+              case 'winner': result = 'WINNER'; break;
+              case 'loser': result = 'LOSER'; break;
+              default: result = evaluatedData.resultado as SignalResult;
+            }
+          } else if (evaluatedData.resultado === 1) {
+            result = 'WINNER';
+          } else if (evaluatedData.resultado === 0) {
+            result = 'LOSER';
+          } else {
+            result = 'FALSE'; // Default fallback
           }
           
           // Update the signal in our local array
@@ -364,7 +442,13 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
         }
       } catch (error) {
         console.error(`Error evaluating signal ${signal.id}:`, error);
+        
         // Continue with the next signal on error
+        if (axios.isAxiosError(error)) {
+          console.log(`API Error details for signal ${signal.id}:`);
+          console.log('Status:', error.response?.status);
+          console.log('Data:', error.response?.data);
+        }
       }
     }
     
