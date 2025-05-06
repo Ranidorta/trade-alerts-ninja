@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Brain, Shield, Info } from "lucide-react";
 import { fetchHybridSignals } from "@/lib/signalsApi";
 import { TradingSignal, SignalResult } from "@/lib/types";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { 
   Table, 
   TableBody, 
@@ -157,7 +157,10 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
     );
   }
 
-  if (!hybridSignals || hybridSignals.length === 0) {
+  // Ensure hybridSignals is an array before using length or map
+  const signalsArray = Array.isArray(hybridSignals) ? hybridSignals : [];
+  
+  if (signalsArray.length === 0) {
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
         <div className="flex justify-center mb-4">
@@ -172,7 +175,7 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
   }
 
   // Filter signals by selected timeframe if needed
-  let filteredSignals = hybridSignals;
+  let filteredSignals = signalsArray;
   
   return (
     <div className="space-y-6">

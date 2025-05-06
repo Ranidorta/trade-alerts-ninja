@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { TradingSignal, SignalResult } from './types';
+import { TradingSignal, SignalResult, PerformanceData } from './types';
 import { getSignalHistory, saveSignalsToHistory } from './signal-storage';
 import { determineSignalResult, calculateSignalProfit } from './signalHistoryService';
 import { config } from '@/config/env';
@@ -17,6 +17,87 @@ const api = axios.create({
     'Content-Type': 'application/json',
   }
 });
+
+// Auth token management
+let authToken: string | null = null;
+
+/**
+ * Set auth token for API requests
+ */
+export const setAuthToken = (token: string) => {
+  authToken = token;
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+};
+
+/**
+ * Clear auth token
+ */
+export const clearAuthToken = () => {
+  authToken = null;
+  delete api.defaults.headers.common['Authorization'];
+};
+
+/**
+ * Prefetch common data to speed up application
+ */
+export const prefetchCommonData = async () => {
+  try {
+    // Prefetch signals history
+    await fetchSignalsHistory();
+    return true;
+  } catch (error) {
+    console.error('Error prefetching common data:', error);
+    return false;
+  }
+};
+
+/**
+ * Fetch signals with parameters
+ */
+export const fetchSignals = async (params?: any): Promise<TradingSignal[]> => {
+  try {
+    const response = await api.get('/signals', { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching signals:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch hybrid signals
+ */
+export const fetchHybridSignals = async (): Promise<TradingSignal[]> => {
+  try {
+    const response = await api.get('/signals/history/hybrid');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching hybrid signals:', error);
+    return [];
+  }
+};
+
+/**
+ * Fetch performance metrics
+ */
+export const fetchPerformanceMetrics = async ({ queryKey }: any): Promise<PerformanceData> => {
+  const [_, days] = queryKey;
+  
+  try {
+    const response = await api.get(`/metrics/performance?days=${days || 30}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching performance metrics:', error);
+    // Return default empty data
+    return {
+      total: 0,
+      vencedor: { quantidade: 0, percentual: 0 },
+      parcial: { quantidade: 0, percentual: 0 },
+      perdedor: { quantidade: 0, percentual: 0 },
+      falso: { quantidade: 0, percentual: 0 }
+    };
+  }
+};
 
 /**
  * Fetch signals history
@@ -95,7 +176,8 @@ const normalizeSignalResult = (result: any): SignalResult => {
     return 'missed';
   }
   
-  return 'pending';
+  // Default to 'missed' instead of 'pending' to match the SignalResult type
+  return 'missed';
 };
 
 /**
@@ -192,8 +274,15 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
   }
 };
 
+// Default export for backward compatibility
 export default {
   fetchSignalsHistory,
   evaluateSingleSignal,
-  evaluateMultipleSignals
+  evaluateMultipleSignals,
+  fetchSignals,
+  fetchHybridSignals,
+  fetchPerformanceMetrics,
+  setAuthToken,
+  clearAuthToken,
+  prefetchCommonData
 };
