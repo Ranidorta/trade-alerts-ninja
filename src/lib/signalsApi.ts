@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { TradingSignal, PerformanceData } from '@/lib/types';
+import { TradingSignal, PerformanceData, SignalDirection, SignalResult } from '@/lib/types';
 import { config } from '@/config/env';
 import { toast } from '@/components/ui/use-toast';
 
@@ -175,7 +175,7 @@ export const saveSignalToHistory = async (signal: TradingSignal) => {
       toast({
         title: "Sinal salvo localmente",
         description: "O sinal foi salvo localmente pois não foi possível conectar ao servidor.",
-        variant: "warning"
+        variant: "default"
       });
       return true;
     } catch (e) {
@@ -216,13 +216,13 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
       console.log(`Signal ${signalId} evaluation result: ${evaluatedSignal.resultado}`);
       
       // Map API result to frontend result format
-      let result: string;
+      let result: SignalResult;
       switch (evaluatedSignal.resultado) {
         case 'win': result = 'WINNER'; break;
         case 'loss': result = 'LOSER'; break;
         case 'partial': result = 'PARTIAL'; break;
         case 'false': result = 'FALSE'; break;
-        default: result = evaluatedSignal.resultado;
+        default: result = evaluatedSignal.resultado as SignalResult;
       }
       
       // Create a proper TradingSignal object
@@ -236,7 +236,7 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
         tp1: evaluatedSignal.tp1,
         tp2: evaluatedSignal.tp2,
         tp3: evaluatedSignal.tp3,
-        result: result as SignalResult,
+        result: result,
         status: 'COMPLETED',
         createdAt: new Date().toISOString(),
         verifiedAt: new Date().toISOString()

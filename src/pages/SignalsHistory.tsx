@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -156,7 +155,7 @@ const SignalsHistory = () => {
         toast({
           title: "Usando dados locais",
           description: "Não foi possível conectar à API, usando dados locais.",
-          variant: "warning"
+          variant: "default"
         });
         
         return;
