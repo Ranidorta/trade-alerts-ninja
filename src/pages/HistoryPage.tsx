@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals } from "@/lib/signalsApi";
 import { TradingSignal } from "@/lib/types";
@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Filter, Download, Check, ChevronDown } from "lucide-react";
+import { RefreshCw, Filter, Download, Check, Search } from "lucide-react";
 import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import PageHeader from "@/components/signals/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { getSignalHistory } from "@/lib/signal-storage";
 
 const HistoryPage = () => {
   const { toast } = useToast();
@@ -31,13 +32,40 @@ const HistoryPage = () => {
     refetch
   } = useQuery({
     queryKey: ["signalsHistory", filters],
-    queryFn: () => fetchSignalsHistory(filters),
+    queryFn: async () => {
+      try {
+        // Try to fetch from API first
+        const apiSignals = await fetchSignalsHistory(filters);
+        return apiSignals;
+      } catch (apiError) {
+        console.error("API error, using local signals:", apiError);
+        
+        // Fall back to local storage if API fails
+        const localSignals = getSignalHistory();
+        
+        // Apply filters to local signals
+        if (filters.symbol || filters.result) {
+          return localSignals.filter(signal => {
+            const matchesSymbol = !filters.symbol || signal.symbol === filters.symbol;
+            
+            const matchesResult = !filters.result || 
+              (filters.result === 'win' && (signal.result === 'win' || signal.result === 1 || signal.result === 'WINNER')) ||
+              (filters.result === 'loss' && (signal.result === 'loss' || signal.result === 0 || signal.result === 'LOSER')) ||
+              (filters.result === 'partial' && signal.result === 'partial');
+            
+            return matchesSymbol && matchesResult;
+          });
+        }
+        
+        return localSignals;
+      }
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false
   });
 
   // Handle API connection errors
-  useEffect(() => {
+  React.useEffect(() => {
     if (isError) {
       console.error("Error fetching signals history:", error);
       toast({
@@ -226,6 +254,20 @@ const HistoryPage = () => {
     }
   };
 
+  // Get unique symbols for filter dropdown
+  const uniqueSymbols = React.useMemo(() => {
+    if (!signals) return [];
+    
+    const symbolsSet = new Set<string>();
+    signals.forEach(signal => {
+      if (signal.symbol) {
+        symbolsSet.add(signal.symbol);
+      }
+    });
+    
+    return Array.from(symbolsSet).sort();
+  }, [signals]);
+
   return (
     <div className="container py-8">
       <PageHeader 
@@ -240,15 +282,17 @@ const HistoryPage = () => {
               <label htmlFor="symbolFilter" className="text-sm font-medium">
                 Filtrar por Ativo
               </label>
-              <div className="flex space-x-2">
-                <Input
-                  id="symbolFilter"
-                  placeholder="Ex: BTCUSDT"
-                  value={filterSymbol}
-                  onChange={(e) => setFilterSymbol(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
+              <Select value={filterSymbol} onValueChange={setFilterSymbol}>
+                <SelectTrigger id="symbolFilter">
+                  <SelectValue placeholder="Selecione um ativo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos os ativos</SelectItem>
+                  {uniqueSymbols.map(symbol => (
+                    <SelectItem key={symbol} value={symbol}>{symbol}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex flex-col space-y-2">
@@ -259,7 +303,7 @@ const HistoryPage = () => {
                 value={filterResult} 
                 onValueChange={setFilterResult}
               >
-                <SelectTrigger id="resultFilter" className="w-full">
+                <SelectTrigger id="resultFilter">
                   <SelectValue placeholder="Selecione um resultado" />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,7 +323,7 @@ const HistoryPage = () => {
               <Button variant="secondary" onClick={handleClearFilters}>
                 Limpar
               </Button>
-              <Button variant="ghost" onClick={handleRefetch}>
+              <Button variant="ghost" onClick={() => handleRefetch()}>
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -294,7 +338,7 @@ const HistoryPage = () => {
         <div className="flex space-x-2">
           <Button 
             variant="outline"
-            onClick={handleEvaluateAllSignals}
+            onClick={() => handleEvaluateAllSignals()}
             disabled={isEvaluatingAll || isLoading}
             className="gap-2"
           >
@@ -340,7 +384,7 @@ const HistoryPage = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Tente remover os filtros ou atualize a página
               </p>
-              <Button variant="outline" onClick={handleRefetch}>
+              <Button variant="outline" onClick={() => handleRefetch()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Atualizar
               </Button>
@@ -440,90 +484,90 @@ const HistoryPage = () => {
 
               <Card className="md:col-span-2">
                 <CardContent className="pt-6">
-                  <h3 className="text-lg font-semibold mb-4">Sinais por Ativo</h3>
-                  <Accordion type="single" collapsible>
-                    {(() => {
-                      // Group signals by symbol
-                      const symbolGroups = signals.reduce((acc: Record<string, TradingSignal[]>, signal) => {
-                        const symbol = signal.symbol;
-                        if (!acc[symbol]) acc[symbol] = [];
-                        acc[symbol].push(signal);
-                        return acc;
-                      }, {});
+                  <h3 className="text-lg font-semibold mb-4">Desempenho por Ativo</h3>
+                  {(() => {
+                    const symbolStats = new Map<string, {
+                      total: number;
+                      wins: number;
+                      losses: number;
+                      partials: number;
+                    }>();
+                    
+                    signals.forEach(signal => {
+                      const symbol = signal.symbol || 'unknown';
                       
-                      // Sort by number of signals
-                      return Object.entries(symbolGroups)
-                        .sort(([, a], [, b]) => b.length - a.length)
-                        .map(([symbol, symbolSignals], index) => {
-                          // Calculate win rate for this symbol
-                          const totalEvaluated = symbolSignals.filter(s => 
-                            s.result && 
-                            s.result !== 'FALSE' && 
-                            s.result !== 'false'
-                          ).length;
-                          
-                          const winners = symbolSignals.filter(s => 
-                            s.result === 'WINNER' || 
-                            s.result === 'win' || 
-                            s.result === 1 ||
-                            s.result === 'PARTIAL' || 
-                            s.result === 'partial'
-                          ).length;
-                          
-                          const winRate = totalEvaluated > 0 ? (winners / totalEvaluated) * 100 : 0;
-                          
+                      if (!symbolStats.has(symbol)) {
+                        symbolStats.set(symbol, {
+                          total: 0,
+                          wins: 0,
+                          losses: 0,
+                          partials: 0
+                        });
+                      }
+                      
+                      const stats = symbolStats.get(symbol)!;
+                      stats.total++;
+                      
+                      if (signal.result === 'win' || signal.result === 'WINNER' || signal.result === 1) {
+                        stats.wins++;
+                      } else if (signal.result === 'loss' || signal.result === 'LOSER' || signal.result === 0) {
+                        stats.losses++;
+                      } else if (signal.result === 'partial' || signal.result === 'PARTIAL') {
+                        stats.partials++;
+                      }
+                    });
+                    
+                    const sortedSymbols = Array.from(symbolStats.entries())
+                      .sort((a, b) => b[1].total - a[1].total)
+                      .slice(0, 10); // Top 10 symbols
+                    
+                    return (
+                      <div className="space-y-4">
+                        {sortedSymbols.map(([symbol, stats]) => {
+                          const winRate = (stats.total > 0) 
+                            ? ((stats.wins + stats.partials) / stats.total) * 100 
+                            : 0;
+                            
                           return (
-                            <AccordionItem value={`symbol-${index}`} key={`symbol-${index}`}>
-                              <AccordionTrigger>
-                                <div className="flex justify-between w-full pr-4">
-                                  <span>{symbol}</span>
-                                  <span className="text-muted-foreground">
-                                    {symbolSignals.length} sinais ({winRate.toFixed(1)}% win)
+                            <div key={symbol} className="border rounded-md p-3">
+                              <div className="flex justify-between items-center">
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant="outline">{symbol}</Badge>
+                                  <span className="text-sm text-muted-foreground">
+                                    {stats.total} sinais
                                   </span>
                                 </div>
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <div className="pl-4 space-y-2">
-                                  <div className="flex justify-between">
-                                    <span>Total:</span>
-                                    <span>{symbolSignals.length}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Vencedores:</span>
-                                    <span className="text-green-600">{
-                                      symbolSignals.filter(s => 
-                                        s.result === 'WINNER' || 
-                                        s.result === 'win' || 
-                                        s.result === 1
-                                      ).length
-                                    }</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Perdedores:</span>
-                                    <span className="text-red-600">{
-                                      symbolSignals.filter(s => 
-                                        s.result === 'LOSER' || 
-                                        s.result === 'loss' || 
-                                        s.result === 0
-                                      ).length
-                                    }</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Parciais:</span>
-                                    <span className="text-amber-600">{
-                                      symbolSignals.filter(s => 
-                                        s.result === 'PARTIAL' || 
-                                        s.result === 'partial'
-                                      ).length
-                                    }</span>
-                                  </div>
+                                <div>
+                                  <span 
+                                    className={`text-sm font-medium ${
+                                      winRate >= 50 ? 'text-green-600' : 'text-red-600'
+                                    }`}
+                                  >
+                                    {winRate.toFixed(1)}% taxa de sucesso
+                                  </span>
                                 </div>
-                              </AccordionContent>
-                            </AccordionItem>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-2 mt-2">
+                                <div className="text-center">
+                                  <div className="text-xs text-muted-foreground">Vitórias</div>
+                                  <div className="text-green-600 font-medium">{stats.wins}</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs text-muted-foreground">Parciais</div>
+                                  <div className="text-amber-600 font-medium">{stats.partials}</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-xs text-muted-foreground">Derrotas</div>
+                                  <div className="text-red-600 font-medium">{stats.losses}</div>
+                                </div>
+                              </div>
+                            </div>
                           );
-                        });
-                    })()}
-                  </Accordion>
+                        })}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
