@@ -3,7 +3,118 @@ import { TradingSignal } from "./types";
 import { verifyAllSignals } from "./signalVerification";
 
 /**
- * Analyzes signal history to generate performance metrics
+ * Determines if a signal is a winner or loser based on its targets and current price
+ */
+export const determineSignalResult = (signal: TradingSignal, currentPrice?: number): TradingSignal => {
+  // If already has result and status completed, don't alter
+  if (signal.status === "COMPLETED" && 
+      (signal.result === 1 || signal.result === 0 || 
+       signal.result === "win" || signal.result === "loss" || 
+       signal.result === "partial") && 
+      typeof signal.profit === 'number') {
+    return signal;
+  }
+  
+  // Clone the signal to not modify the original
+  const updatedSignal = { ...signal };
+  
+  // If no current price or entry price, can't calculate
+  if (!currentPrice && !updatedSignal.currentPrice) {
+    return updatedSignal;
+  }
+  
+  const price = currentPrice || updatedSignal.currentPrice || 0;
+  const entryPrice = updatedSignal.entryPrice || updatedSignal.entryAvg || 0;
+  
+  if (!entryPrice) return updatedSignal;
+  
+  // Check if stop loss was hit
+  if (updatedSignal.stopLoss) {
+    const isStopLossHit = updatedSignal.direction === "BUY" || updatedSignal.type === "LONG"
+      ? price <= updatedSignal.stopLoss
+      : price >= updatedSignal.stopLoss;
+      
+    if (isStopLossHit) {
+      updatedSignal.result = "loss";
+      updatedSignal.status = "COMPLETED";
+      updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
+      updatedSignal.profit = calculateSignalProfit(updatedSignal);
+      return updatedSignal;
+    }
+  }
+  
+  // Check if any targets were hit
+  if (updatedSignal.targets && updatedSignal.targets.length > 0) {
+    let anyTargetHit = false;
+    let allTargetsHit = true;
+    
+    updatedSignal.targets = updatedSignal.targets.map(target => {
+      const isTargetHit = updatedSignal.direction === "BUY" || updatedSignal.type === "LONG"
+        ? price >= target.price
+        : price <= target.price;
+        
+      if (isTargetHit && !target.hit) {
+        anyTargetHit = true;
+        return { ...target, hit: true };
+      } else if (!isTargetHit) {
+        allTargetsHit = false;
+      }
+      
+      return target;
+    });
+    
+    if (anyTargetHit) {
+      if (allTargetsHit) {
+        updatedSignal.result = "win";
+        updatedSignal.status = "COMPLETED";
+        updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
+      } else {
+        updatedSignal.result = "partial";
+        
+        // If at least the first target was hit but not all
+        const firstTargetHit = updatedSignal.targets[0].hit;
+        if (firstTargetHit) {
+          updatedSignal.status = "COMPLETED";
+          updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
+        }
+      }
+      
+      updatedSignal.profit = calculateSignalProfit(updatedSignal);
+    }
+  }
+  
+  return updatedSignal;
+};
+
+/**
+ * Update all signals status based on current prices
+ */
+export const updateAllSignalsStatus = (currentPrices?: {[symbol: string]: number}) => {
+  const signals = getSignalHistory();
+  
+  const updatedSignals = signals.map(signal => {
+    // Get current price for this symbol if available
+    const currentPrice = currentPrices?.[signal.symbol || signal.pair || ""];
+    
+    // Evaluate signal based on current price
+    const updatedSignal = determineSignalResult(signal, currentPrice);
+    
+    // Calculate profit if not already calculated
+    if (updatedSignal.status === "COMPLETED" && typeof updatedSignal.profit !== 'number') {
+      updatedSignal.profit = calculateSignalProfit(updatedSignal);
+    }
+    
+    return updatedSignal;
+  });
+  
+  // Save updated signals back to storage
+  localStorage.setItem("trade_signal_history", JSON.stringify(updatedSignals));
+  
+  return updatedSignals;
+};
+
+/**
+ * Analyze signal history to generate performance metrics
  */
 export const analyzeSignalsHistory = () => {
   const signals = getSignalHistory();
@@ -178,114 +289,30 @@ export const calculateSignalProfit = (signal: TradingSignal): number => {
 };
 
 /**
- * Determines if a signal is a winner or loser based on its targets and current price
+ * Updates the signal history with the latest evaluation results
+ * @param updatedSignals The signals with updated evaluation results
  */
-export const determineSignalResult = (signal: TradingSignal, currentPrice?: number): TradingSignal => {
-  // If already has result and status completed, don't alter
-  if (signal.status === "COMPLETED" && 
-      (signal.result === 1 || signal.result === 0 || 
-       signal.result === "win" || signal.result === "loss" || 
-       signal.result === "partial") && 
-      typeof signal.profit === 'number') {
-    return signal;
-  }
-  
-  // Clone the signal to not modify the original
-  const updatedSignal = { ...signal };
-  
-  // If no current price or entry price, can't calculate
-  if (!currentPrice && !updatedSignal.currentPrice) {
-    return updatedSignal;
-  }
-  
-  const price = currentPrice || updatedSignal.currentPrice || 0;
-  const entryPrice = updatedSignal.entryPrice || updatedSignal.entryAvg || 0;
-  
-  if (!entryPrice) return updatedSignal;
-  
-  // Check if stop loss was hit
-  if (updatedSignal.stopLoss) {
-    const isStopLossHit = updatedSignal.direction === "BUY" || updatedSignal.type === "LONG"
-      ? price <= updatedSignal.stopLoss
-      : price >= updatedSignal.stopLoss;
-      
-    if (isStopLossHit) {
-      updatedSignal.result = "loss";
-      updatedSignal.status = "COMPLETED";
-      updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-      updatedSignal.profit = calculateSignalProfit(updatedSignal);
-      return updatedSignal;
-    }
-  }
-  
-  // Check if any targets were hit
-  if (updatedSignal.targets && updatedSignal.targets.length > 0) {
-    let anyTargetHit = false;
-    let allTargetsHit = true;
-    
-    updatedSignal.targets = updatedSignal.targets.map(target => {
-      const isTargetHit = updatedSignal.direction === "BUY" || updatedSignal.type === "LONG"
-        ? price >= target.price
-        : price <= target.price;
-        
-      if (isTargetHit && !target.hit) {
-        anyTargetHit = true;
-        return { ...target, hit: true };
-      } else if (!isTargetHit) {
-        allTargetsHit = false;
-      }
-      
-      return target;
-    });
-    
-    if (anyTargetHit) {
-      if (allTargetsHit) {
-        updatedSignal.result = "win";
-        updatedSignal.status = "COMPLETED";
-        updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-      } else {
-        updatedSignal.result = "partial";
-        
-        // If at least the first target was hit but not all
-        const firstTargetHit = updatedSignal.targets[0].hit;
-        if (firstTargetHit) {
-          updatedSignal.status = "COMPLETED";
-          updatedSignal.completedAt = updatedSignal.completedAt || new Date().toISOString();
-        }
-      }
-      
-      updatedSignal.profit = calculateSignalProfit(updatedSignal);
-    }
-  }
-  
-  return updatedSignal;
-};
-
-/**
- * Update all signals status based on current prices
- */
-export const updateAllSignalsStatus = (currentPrices?: {[symbol: string]: number}) => {
+export const updateSignalHistory = (updatedSignals: TradingSignal[]): TradingSignal[] => {
   const signals = getSignalHistory();
   
-  const updatedSignals = signals.map(signal => {
-    // Get current price for this symbol if available
-    const currentPrice = currentPrices?.[signal.symbol || signal.pair || ""];
-    
-    // Evaluate signal based on current price
-    const updatedSignal = determineSignalResult(signal, currentPrice);
-    
-    // Calculate profit if not already calculated
-    if (updatedSignal.status === "COMPLETED" && typeof updatedSignal.profit !== 'number') {
-      updatedSignal.profit = calculateSignalProfit(updatedSignal);
-    }
-    
-    return updatedSignal;
+  // Create a map for quick lookup of updated signals
+  const updatedSignalsMap = new Map<string, TradingSignal>();
+  updatedSignals.forEach(signal => {
+    updatedSignalsMap.set(signal.id, signal);
   });
   
-  // Save updated signals back to storage
-  localStorage.setItem("trade_signal_history", JSON.stringify(updatedSignals));
+  // Update existing signals with new results
+  const mergedSignals = signals.map(signal => {
+    if (updatedSignalsMap.has(signal.id)) {
+      return updatedSignalsMap.get(signal.id)!;
+    }
+    return signal;
+  });
   
-  return updatedSignals;
+  // Save the merged signals back to storage
+  saveSignalsToHistory(mergedSignals);
+  
+  return mergedSignals;
 };
 
 /**
@@ -384,5 +411,6 @@ export default {
   saveSignalsToHistory,
   verifyAllSignalsWithBinance,
   determineSignalResult,
-  updateSignalInHistory
+  updateSignalInHistory,
+  updateSignalHistory
 };
