@@ -24,9 +24,11 @@ import {
   CheckCircle2,
   Diff,
   Calendar,
-  PlayCircle
+  PlayCircle,
+  HelpCircle
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { canEvaluateSignal } from "@/lib/signalsApi";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
@@ -238,11 +240,39 @@ export default function SignalHistoryTable({
     }
   };
   
+  // Function to check if a signal can be evaluated
   const shouldShowVerifyButton = (signal: TradingSignal) => {
-    return onVerifySingleSignal && 
-           signal.result === undefined && 
-           signal.status !== "COMPLETED" && 
-           signal.status !== "WAITING";
+    if (!onVerifySingleSignal) return false;
+    
+    const { canEvaluate, reason } = canEvaluateSignal(signal);
+    return canEvaluate;
+  };
+  
+  // Function to get evaluation status for a signal
+  const getEvaluationStatus = (signal: TradingSignal) => {
+    const { canEvaluate, reason } = canEvaluateSignal(signal);
+    
+    if (signal.verifiedAt) {
+      return {
+        status: "evaluated",
+        message: `Avaliado em ${new Date(signal.verifiedAt).toLocaleString('pt-BR')}`,
+        icon: <CheckCircle2 className="h-4 w-4 text-green-500" />
+      };
+    }
+    
+    if (!canEvaluate) {
+      return {
+        status: "waiting",
+        message: reason,
+        icon: <Clock className="h-4 w-4 text-amber-500" />
+      };
+    }
+    
+    return {
+      status: "ready",
+      message: "Pronto para avaliação",
+      icon: <PlayCircle className="h-4 w-4 text-blue-500" />
+    };
   };
   
   if (signals.length === 0) {
@@ -253,20 +283,19 @@ export default function SignalHistoryTable({
     );
   }
   
-  // Count signals that need evaluation
-  const signalsNeedingEvaluation = signals.filter(s => 
-    !s.result || 
-    !s.verifiedAt || 
-    (s.status !== "COMPLETED" && s.createdAt)
-  ).length;
+  // Count signals that need evaluation and can be evaluated now
+  const signalsReadyForEvaluation = signals.filter(s => {
+    const { canEvaluate } = canEvaluateSignal(s);
+    return canEvaluate;
+  }).length;
   
   return (
     <div className="w-full">
-      {onEvaluateAllSignals && signalsNeedingEvaluation > 0 && (
+      {onEvaluateAllSignals && signalsReadyForEvaluation > 0 && (
         <div className="mb-4 p-3 bg-primary/5 border rounded-md flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">
-              {signalsNeedingEvaluation} sinais precisam ser avaliados
+              {signalsReadyForEvaluation} sinais prontos para avaliação
             </p>
             <p className="text-xs text-muted-foreground">
               A avaliação verifica o resultado dos sinais com base nos movimentos de preço
@@ -334,7 +363,7 @@ export default function SignalHistoryTable({
                 Data/Hora <SortIndicator field="createdAt" />
               </TableHead>
               {onVerifySingleSignal && (
-                <TableHead>Ação</TableHead>
+                <TableHead className="text-center">Status/Ação</TableHead>
               )}
             </TableRow>
           </TableHeader>
@@ -429,16 +458,43 @@ export default function SignalHistoryTable({
                 </TableCell>
                 {onVerifySingleSignal && (
                   <TableCell>
-                    {shouldShowVerifyButton(signal) ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleVerifySignal(signal.id)}
-                        disabled={verifyingSignal === signal.id}
-                      >
-                        {verifyingSignal === signal.id ? 'Avaliando...' : 'Avaliar'}
-                      </Button>
-                    ) : null}
+                    {(() => {
+                      const evalStatus = getEvaluationStatus(signal);
+                      
+                      if (evalStatus.status === "ready") {
+                        return (
+                          <Button
+                            size="sm"
+                            onClick={() => handleVerifySignal(signal.id)}
+                            disabled={verifyingSignal === signal.id}
+                            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                          >
+                            {verifyingSignal === signal.id ? (
+                              <span className="animate-spin mr-1">⏳</span>
+                            ) : (
+                              <PlayCircle className="mr-1 h-4 w-4" />
+                            )}
+                            {verifyingSignal === signal.id ? 'Avaliando...' : 'Avaliar Sinal'}
+                          </Button>
+                        );
+                      } else {
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="flex items-center gap-2 px-2 py-1 border rounded-md bg-muted/30 text-xs">
+                                  {evalStatus.icon}
+                                  <span>{evalStatus.status === "evaluated" ? "Avaliado" : "Aguardando"}</span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{evalStatus.message}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      }
+                    })()}
                   </TableCell>
                 )}
               </TableRow>

@@ -1,19 +1,19 @@
-
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals } from "@/lib/signalsApi";
+import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals, canEvaluateSignal } from "@/lib/signalsApi";
 import { TradingSignal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Filter, Download, Check, Search } from "lucide-react";
+import { RefreshCw, Filter, Download, Check, Search, Info, Clock } from "lucide-react";
 import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
 import PageHeader from "@/components/signals/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { getSignalHistory } from "@/lib/signal-storage";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const HistoryPage = () => {
   const { toast } = useToast();
@@ -100,11 +100,39 @@ const HistoryPage = () => {
   const handleVerifySingleSignal = async (signalId: string) => {
     setVerifyingSignal(signalId);
     try {
+      // Find the signal in our data
+      const signal = signals?.find(s => s.id === signalId);
+      
+      if (!signal) {
+        toast({
+          title: "Sinal não encontrado",
+          description: "Não foi possível encontrar o sinal para avaliação.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Check if the signal can be evaluated
+      const { canEvaluate, reason } = canEvaluateSignal(signal);
+      
+      if (!canEvaluate) {
+        toast({
+          title: "Não é possível avaliar este sinal",
+          description: reason,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Proceed with evaluation
       const result = await evaluateSingleSignal(signalId);
       if (result) {
         toast({
           title: "Sinal avaliado com sucesso",
-          description: `Resultado: ${result.result}`,
+          description: `Resultado: ${result.result === 'win' ? 'Vencedor' : 
+                                    result.result === 'loss' ? 'Perdedor' : 
+                                    result.result === 'partial' ? 'Parcial' : 
+                                    'Falso'}`,
         });
         refetch(); // Refetch signals after evaluation
       } else {
@@ -139,17 +167,16 @@ const HistoryPage = () => {
 
     setIsEvaluatingAll(true);
     try {
-      // Get signals that need evaluation
-      const signalsToEvaluate = signals.filter(s => 
-        !s.verifiedAt || 
-        !s.result || 
-        s.status !== 'COMPLETED'
-      );
+      // Get signals that can be evaluated
+      const signalsToEvaluate = signals.filter(s => {
+        const { canEvaluate } = canEvaluateSignal(s);
+        return canEvaluate;
+      });
 
       if (signalsToEvaluate.length === 0) {
         toast({
-          title: "Sinais já avaliados",
-          description: "Todos os sinais já foram avaliados.",
+          title: "Nenhum sinal disponível para avaliação",
+          description: "Não há sinais que possam ser avaliados neste momento.",
           variant: "default"
         });
         setIsEvaluatingAll(false);
@@ -268,12 +295,48 @@ const HistoryPage = () => {
     return Array.from(symbolsSet).sort();
   }, [signals]);
 
+  // Count signals that are eligible for evaluation
+  const signalsReadyForEvaluation = React.useMemo(() => {
+    if (!signals) return 0;
+    return signals.filter(s => {
+      const { canEvaluate } = canEvaluateSignal(s);
+      return canEvaluate;
+    }).length;
+  }, [signals]);
+
+  // Count signals waiting for the 15-minute cooldown
+  const signalsWaiting = React.useMemo(() => {
+    if (!signals) return 0;
+    
+    return signals.filter(s => {
+      if (s.verifiedAt || s.result) return false;
+      
+      // Check if signal is newer than 15 minutes
+      if (s.createdAt) {
+        const createdAt = new Date(s.createdAt);
+        const now = new Date();
+        const fifteenMinutesInMs = 15 * 60 * 1000;
+        return now.getTime() - createdAt.getTime() < fifteenMinutesInMs;
+      }
+      
+      return false;
+    }).length;
+  }, [signals]);
+
   return (
     <div className="container py-8">
       <PageHeader 
         title="Histórico de Sinais" 
         description="Visualize e analise o histórico completo de sinais de trading"
       />
+      
+      <Alert className="mb-4">
+        <Info className="h-4 w-4" />
+        <AlertTitle>Regras de Avaliação de Sinais</AlertTitle>
+        <AlertDescription>
+          Os sinais só podem ser avaliados uma vez. Sinais novos precisam aguardar 15 minutos antes de poderem ser avaliados.
+        </AlertDescription>
+      </Alert>
 
       <Card className="mb-6">
         <CardContent className="py-4">
@@ -336,30 +399,41 @@ const HistoryPage = () => {
           {isLoading ? "Carregando sinais..." : `${signals?.length || 0} sinais encontrados`}
         </h2>
         <div className="flex space-x-2">
-          <Button 
-            variant="outline"
-            onClick={() => handleEvaluateAllSignals()}
-            disabled={isEvaluatingAll || isLoading}
-            className="gap-2"
-          >
-            {isEvaluatingAll ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Avaliando...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Avaliar Todos
-              </>
-            )}
-          </Button>
+          {signalsReadyForEvaluation > 0 && (
+            <Button 
+              variant="outline"
+              onClick={() => handleEvaluateAllSignals()}
+              disabled={isEvaluatingAll || isLoading}
+              className="gap-2"
+            >
+              {isEvaluatingAll ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Avaliando...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Avaliar Todos ({signalsReadyForEvaluation})
+                </>
+              )}
+            </Button>
+          )}
           <Button onClick={handleExportToCSV} variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
             Exportar CSV
           </Button>
         </div>
       </div>
+      
+      {signalsWaiting > 0 && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+          <p className="text-sm text-yellow-800">
+            <Clock className="h-4 w-4 inline mr-1" />
+            {signalsWaiting} sinais novos estão aguardando o período de 15 minutos antes de poderem ser avaliados.
+          </p>
+        </div>
+      )}
 
       <Tabs defaultValue="table">
         <TabsList className="mb-4">

@@ -181,53 +181,93 @@ const normalizeSignalResult = (result: any): SignalResult => {
 };
 
 /**
+ * Check if a signal can be evaluated
+ * @param signal Signal to check
+ * @returns Object with canEvaluate flag and reason message
+ */
+export const canEvaluateSignal = (signal: TradingSignal): {canEvaluate: boolean, reason: string} => {
+  // Check if signal has already been evaluated
+  if (signal.verifiedAt) {
+    return {canEvaluate: false, reason: "Sinal já foi avaliado anteriormente"};
+  }
+  
+  // Check if signal has result set
+  if (signal.result && signal.result !== 'pending') {
+    return {canEvaluate: false, reason: "Sinal já possui um resultado definido"};
+  }
+  
+  // Check if signal is older than 15 minutes
+  if (signal.createdAt) {
+    const createdAt = new Date(signal.createdAt);
+    const now = new Date();
+    const fifteenMinutesInMs = 15 * 60 * 1000;
+    
+    if (now.getTime() - createdAt.getTime() < fifteenMinutesInMs) {
+      const minutesRemaining = Math.ceil((fifteenMinutesInMs - (now.getTime() - createdAt.getTime())) / 60000);
+      return {
+        canEvaluate: false, 
+        reason: `Aguarde ${minutesRemaining} minutos antes de avaliar este sinal`
+      };
+    }
+  }
+  
+  return {canEvaluate: true, reason: ""};
+};
+
+/**
  * Evaluate a single signal
  */
 export const evaluateSingleSignal = async (signalId: string): Promise<TradingSignal | null> => {
   try {
+    // Get signal from storage first
+    const signals = getSignalHistory();
+    const signalIndex = signals.findIndex(s => s.id === signalId);
+    
+    if (signalIndex === -1) {
+      console.error('Signal not found in storage:', signalId);
+      return null;
+    }
+    
+    const signal = signals[signalIndex];
+    
+    // Check if signal can be evaluated
+    const { canEvaluate, reason } = canEvaluateSignal(signal);
+    if (!canEvaluate) {
+      console.error('Cannot evaluate signal:', reason);
+      return {...signal, error: reason};
+    }
+    
     // Try API evaluation first
     try {
       const response = await api.post(`/signals/evaluate/${signalId}`);
       
       if (response.status === 200 && response.data) {
-        // Update signal in local storage
-        const signals = getSignalHistory();
-        const updatedSignals = signals.map(s => 
-          s.id === signalId ? { ...s, ...response.data, verifiedAt: new Date().toISOString() } : s
-        );
+        // Add verification timestamp
+        const updatedSignal = {
+          ...response.data,
+          verifiedAt: new Date().toISOString()
+        };
         
-        saveSignalsToHistory(updatedSignals);
-        return response.data;
+        // Update signal in local storage
+        signals[signalIndex] = updatedSignal;
+        saveSignalsToHistory(signals);
+        return updatedSignal;
       }
     } catch (apiError) {
       console.error('API evaluation failed, falling back to local evaluation:', apiError);
     }
     
     // Fall back to local evaluation
-    const signals = getSignalHistory();
-    const signalIndex = signals.findIndex(s => s.id === signalId);
-    
-    if (signalIndex === -1) {
-      return null;
-    }
-    
-    const signal = signals[signalIndex];
-    
-    // Evaluate the signal
     const evaluatedSignal = determineSignalResult(signal);
     
-    if (evaluatedSignal.result !== signal.result) {
-      // Update signal with new result
-      evaluatedSignal.verifiedAt = new Date().toISOString();
-      
-      // Save back to storage
-      signals[signalIndex] = evaluatedSignal;
-      saveSignalsToHistory(signals);
-      
-      return evaluatedSignal;
-    }
+    // Add verification timestamp
+    evaluatedSignal.verifiedAt = new Date().toISOString();
     
-    return signal;
+    // Save back to storage
+    signals[signalIndex] = evaluatedSignal;
+    saveSignalsToHistory(signals);
+    
+    return evaluatedSignal;
   } catch (error) {
     console.error('Error evaluating signal:', error);
     return null;
@@ -239,29 +279,55 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
  */
 export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
   try {
+    // Filter signals that can be evaluated
+    const signalsToEvaluate = signals.filter(signal => {
+      const { canEvaluate } = canEvaluateSignal(signal);
+      return canEvaluate;
+    });
+    
+    if (signalsToEvaluate.length === 0) {
+      console.log('No signals can be evaluated');
+      return signals;
+    }
+    
     // Try API evaluation first
     try {
-      const response = await api.post('/signals/evaluate/batch', { signals });
+      const response = await api.post('/signals/evaluate/batch', { signals: signalsToEvaluate });
       
       if (response.status === 200 && Array.isArray(response.data)) {
-        // Update signals in local storage
-        saveSignalsToHistory(response.data);
-        return response.data;
+        // Add verification timestamp to evaluated signals
+        const evaluatedSignals = response.data.map(s => ({
+          ...s,
+          verifiedAt: new Date().toISOString()
+        }));
+        
+        // Update signals in local storage with evaluated ones
+        const allSignals = getSignalHistory();
+        const updatedSignals = allSignals.map(signal => {
+          const evaluatedSignal = evaluatedSignals.find(s => s.id === signal.id);
+          return evaluatedSignal || signal;
+        });
+        
+        saveSignalsToHistory(updatedSignals);
+        return updatedSignals;
       }
     } catch (apiError) {
       console.error('API batch evaluation failed, falling back to local evaluation:', apiError);
     }
     
     // Fall back to local evaluation
-    const updatedSignals = signals.map(signal => {
-      const evaluatedSignal = determineSignalResult(signal);
+    const allSignals = getSignalHistory();
+    const updatedSignals = allSignals.map(signal => {
+      // Only evaluate signals that can be evaluated
+      const { canEvaluate } = canEvaluateSignal(signal);
       
-      if (evaluatedSignal.result !== signal.result) {
-        // Update verification timestamp
+      if (canEvaluate) {
+        const evaluatedSignal = determineSignalResult(signal);
         evaluatedSignal.verifiedAt = new Date().toISOString();
+        return evaluatedSignal;
       }
       
-      return evaluatedSignal;
+      return signal;
     });
     
     // Save updated signals to storage
@@ -284,5 +350,6 @@ export default {
   fetchPerformanceMetrics,
   setAuthToken,
   clearAuthToken,
-  prefetchCommonData
+  prefetchCommonData,
+  canEvaluateSignal
 };
