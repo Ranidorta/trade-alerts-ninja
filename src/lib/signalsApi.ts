@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TradingSignal, PerformanceData, SignalDirection, SignalResult } from '@/lib/types';
 import { config } from '@/config/env';
@@ -88,13 +89,26 @@ export const fetchHybridSignals = async () => {
   }
 };
 
+// Improved function to fetch signals history with more error handling and debug logging
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
     console.log(`Fetching signals history with filters:`, filters);
-    console.log(`API URL: ${api.defaults.baseURL}/api/signals/history`);
     
-    // Use the updated endpoint that fetches from the database
-    const response = await api.get('/api/signals/history', { params: filters });
+    // Log the complete URL for debugging
+    const completeUrl = `${api.defaults.baseURL}/api/signals/history`;
+    console.log(`Complete API URL: ${completeUrl}`);
+    
+    // Make sure baseURL is not overridden
+    const currentBaseUrl = api.defaults.baseURL;
+    
+    // Use the updated endpoint that fetches from the database with explicit baseURL to prevent overrides
+    const response = await axios({
+      method: 'get',
+      url: '/api/signals/history',
+      baseURL: currentBaseUrl,
+      params: filters,
+      timeout: 15000, // Longer timeout for history data
+    });
     
     if (Array.isArray(response.data)) {
       console.log(`Fetched ${response.data.length} signals from database`);
@@ -107,19 +121,21 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
           id: signal.id || `${signal.symbol}-${signal.timestamp}`,
           pair: signal.pair || signal.symbol,
           type: signal.type || (signal.direction === 'BUY' ? 'LONG' : 'SHORT'),
+          direction: signal.direction || (signal.type === 'LONG' ? 'BUY' : 'SELL'),
           entryPrice: signal.entryPrice || signal.entry,
           createdAt: signal.createdAt || signal.timestamp,
           status: signal.status || (signal.result ? 'COMPLETED' : 'ACTIVE'),
           stopLoss: signal.stopLoss || signal.stop_loss || signal.sl,
           targets: signal.targets || [
-            { level: 1, price: signal.tp1, hit: signal.result === 'win' || signal.result === 'partial' },
-            { level: 2, price: signal.tp2, hit: signal.result === 'win' },
-            { level: 3, price: signal.tp3, hit: signal.result === 'win' }
+            { level: 1, price: signal.tp1, hit: signal.result === 'win' || signal.result === 'partial' || signal.result === 'WINNER' || signal.result === 'PARTIAL' },
+            { level: 2, price: signal.tp2, hit: signal.result === 'win' || signal.result === 'WINNER' },
+            { level: 3, price: signal.tp3, hit: signal.result === 'win' || signal.result === 'WINNER' }
           ],
           strategy: signal.strategy || 'CLASSIC'
         };
       });
       
+      console.log('Transformed signals for UI:', transformedSignals.length);
       return transformedSignals as TradingSignal[];
     } else {
       console.log('API returned non-array response:', response.data);
@@ -127,12 +143,52 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     }
   } catch (error) {
     console.error('Error fetching signals history:', error);
-    // If a 404 error occurs, return an empty array instead of throwing the error
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      console.log('No signals found in database (404 response)');
+    
+    // Enhanced error logging
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        console.log(`API responded with status: ${error.response.status}`);
+        console.log(`Error data:`, error.response.data);
+      } else if (error.request) {
+        console.log('No response received from API', error.request);
+      } else {
+        console.log('Error setting up request', error.message);
+      }
+      console.log('API config:', error.config);
+      
+      // If a 404 error occurs, return an empty array instead of throwing the error
+      if (error.response?.status === 404) {
+        console.log('No signals found in database (404 response)');
+        toast({
+          title: "Dados históricos não encontrados",
+          description: "Tentando usar dados locais como alternativa.",
+        });
+        
+        // Try to fetch from local storage as fallback
+        const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
+        console.log(`Using ${localHistory.length} signals from local storage`);
+        return localHistory as TradingSignal[];
+      }
+    }
+    
+    // Try local history as fallback
+    try {
+      const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
+      toast({
+        title: "Erro ao conectar com API",
+        description: "Usando dados locais armazenados anteriormente.",
+      });
+      console.log(`Using ${localHistory.length} signals from local storage due to API error`);
+      return localHistory as TradingSignal[];
+    } catch (localError) {
+      console.error('Error reading local history:', localError);
+      toast({
+        title: "Falha completa ao buscar histórico",
+        description: "Não foi possível acessar API nem dados locais.",
+        variant: "destructive"
+      });
       return [] as TradingSignal[];
     }
-    throw error;
   }
 };
 
@@ -205,7 +261,7 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   }
 };
 
-// Updated function to evaluate a specific signal with improved ID handling
+// Corrected and improved evaluate signal function with better ID handling and logging
 export const evaluateSingleSignal = async (signalId: string): Promise<TradingSignal | null> => {
   try {
     console.log(`Evaluating signal with ID: ${signalId}`);
@@ -216,13 +272,23 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
     let payload;
     let response;
     
+    // Start with the current baseURL
+    const currentBaseUrl = api.defaults.baseURL;
+    console.log(`Current API base URL: ${currentBaseUrl}`);
+    
     if (isNumericId) {
       // If numeric ID, use the ID endpoint
       url = `/api/signals/evaluate/${signalId}`;
-      console.log(`Using numeric ID endpoint: ${api.defaults.baseURL}${url}`);
+      console.log(`Using numeric ID endpoint: ${currentBaseUrl}${url}`);
       
       try {
-        response = await api.get(url);
+        // Use full axios configuration to ensure proper baseURL
+        response = await axios({
+          method: 'get',
+          url: url,
+          baseURL: currentBaseUrl,
+          timeout: 10000
+        });
       } catch (error) {
         // If numeric ID endpoint fails, try the data-based endpoint as fallback
         console.log(`Numeric ID endpoint failed, trying data-based endpoint as fallback`);
@@ -250,10 +316,17 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
         stop_loss: signalData.stopLoss || signalData.sl
       };
       
-      console.log(`Using data-based endpoint: ${api.defaults.baseURL}${url}`);
+      console.log(`Using data-based endpoint: ${currentBaseUrl}${url}`);
       console.log(`Payload:`, payload);
       
-      response = await api.post(url, payload);
+      // Use full axios configuration to ensure proper baseURL
+      response = await axios({
+        method: 'post',
+        url: url,
+        baseURL: currentBaseUrl,
+        data: payload,
+        timeout: 10000
+      });
     }
     
     if (response.status === 200) {
@@ -302,6 +375,22 @@ export const evaluateSingleSignal = async (signalId: string): Promise<TradingSig
         title: "Sinal avaliado",
         description: `Resultado: ${result}`,
       });
+      
+      // Update the signal in local storage
+      try {
+        const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
+        const signalIndex = localHistory.findIndex((s: TradingSignal) => s.id === signalId);
+        if (signalIndex >= 0) {
+          localHistory[signalIndex] = { 
+            ...localHistory[signalIndex],
+            ...updatedSignal
+          };
+          localStorage.setItem('trade_signal_history', JSON.stringify(localHistory));
+          console.log('Updated signal in local storage');
+        }
+      } catch (e) {
+        console.error('Error updating signal in local storage:', e);
+      }
       
       return updatedSignal;
     }
@@ -377,6 +466,10 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
     // Create a copy to avoid mutation
     const updatedSignals = [...signals]; 
     
+    // Store original baseURL
+    const originalBaseUrl = api.defaults.baseURL;
+    console.log(`Original API base URL for batch evaluation: ${originalBaseUrl}`);
+    
     // Process signals one by one to avoid overwhelming the API
     for (const signal of signalsToEvaluate) {
       try {
@@ -397,7 +490,13 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
         console.log(`Evaluation payload for signal ${signal.id}:`, payload);
         
         // Ensure we're using the correct base URL for this request
-        const response = await api.post('/api/signals/evaluate', payload);
+        const response = await axios({
+          method: 'post',
+          url: '/api/signals/evaluate',
+          baseURL: originalBaseUrl,
+          data: payload,
+          timeout: 10000
+        });
         
         if (response.status === 200) {
           const evaluatedData = response.data;
@@ -450,6 +549,29 @@ export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise
           console.log('Data:', error.response?.data);
         }
       }
+    }
+    
+    // Update local storage with evaluated signals
+    try {
+      const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
+      
+      // Update matching signals in local storage
+      for (const signal of updatedSignals) {
+        if (signal.verifiedAt) { // Only update evaluated signals
+          const index = localHistory.findIndex((s: TradingSignal) => s.id === signal.id);
+          if (index >= 0) {
+            localHistory[index] = {
+              ...localHistory[index],
+              ...signal
+            };
+          }
+        }
+      }
+      
+      localStorage.setItem('trade_signal_history', JSON.stringify(localHistory));
+      console.log('Updated evaluated signals in local storage');
+    } catch (e) {
+      console.error('Error updating signals in local storage:', e);
     }
     
     toast({
