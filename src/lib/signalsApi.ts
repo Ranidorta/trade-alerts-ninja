@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -203,5 +202,133 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   } catch (error) {
     console.error('Error fetching performance metrics:', error);
     throw error;
+  }
+};
+
+// New function to evaluate a specific signal
+export const evaluateSingleSignal = async (signalId: string): Promise<TradingSignal | null> => {
+  try {
+    console.log(`Evaluating signal ${signalId}`);
+    const response = await api.get(`/api/signals/evaluate/${signalId}`);
+    
+    if (response.status === 200) {
+      const evaluatedSignal = response.data;
+      console.log(`Signal ${signalId} evaluation result: ${evaluatedSignal.resultado}`);
+      
+      // Map API result to frontend result format
+      let result: string;
+      switch (evaluatedSignal.resultado) {
+        case 'win': result = 'WINNER'; break;
+        case 'loss': result = 'LOSER'; break;
+        case 'partial': result = 'PARTIAL'; break;
+        case 'false': result = 'FALSE'; break;
+        default: result = evaluatedSignal.resultado;
+      }
+      
+      // Create a proper TradingSignal object
+      const updatedSignal: TradingSignal = {
+        id: signalId,
+        symbol: evaluatedSignal.symbol,
+        direction: evaluatedSignal.direction as SignalDirection,
+        entryPrice: evaluatedSignal.entry,
+        entry: evaluatedSignal.entry,
+        stopLoss: evaluatedSignal.stop_loss,
+        tp1: evaluatedSignal.tp1,
+        tp2: evaluatedSignal.tp2,
+        tp3: evaluatedSignal.tp3,
+        result: result as SignalResult,
+        status: 'COMPLETED',
+        createdAt: new Date().toISOString(),
+        verifiedAt: new Date().toISOString()
+      };
+      
+      toast({
+        title: "Sinal avaliado",
+        description: `Resultado: ${result}`,
+      });
+      
+      return updatedSignal;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error evaluating signal:', error);
+    
+    toast({
+      title: "Erro ao avaliar sinal",
+      description: axios.isAxiosError(error) 
+        ? error.response?.data?.error || "Erro de conexão com a API" 
+        : "Erro desconhecido",
+      variant: "destructive"
+    });
+    
+    return null;
+  }
+};
+
+// New function to evaluate multiple signals
+export const evaluateMultipleSignals = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
+  try {
+    console.log(`Evaluating ${signals.length} signals`);
+    
+    const signalsToEvaluate = signals.filter(s => !s.result || !s.verifiedAt);
+    
+    if (signalsToEvaluate.length === 0) {
+      console.log('No signals need evaluation - all already have results');
+      return signals;
+    }
+    
+    console.log(`Found ${signalsToEvaluate.length} signals that need evaluation`);
+    
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 5;
+    const updatedSignals = [...signals]; // Create a copy to avoid mutation
+    
+    for (let i = 0; i < signalsToEvaluate.length; i += batchSize) {
+      const batch = signalsToEvaluate.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(signalsToEvaluate.length/batchSize)}`);
+      
+      // Evaluate each signal in the batch
+      const results = await Promise.all(
+        batch.map(signal => evaluateSingleSignal(signal.id))
+      );
+      
+      // Update the signals with the evaluation results
+      results.forEach(result => {
+        if (result) {
+          const index = updatedSignals.findIndex(s => s.id === result.id);
+          if (index !== -1) {
+            updatedSignals[index] = {
+              ...updatedSignals[index],
+              result: result.result,
+              status: 'COMPLETED',
+              verifiedAt: new Date().toISOString()
+            };
+          }
+        }
+      });
+      
+      // Add a small delay between batches
+      if (i + batchSize < signalsToEvaluate.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    toast({
+      title: "Avaliação concluída",
+      description: `${signalsToEvaluate.length} sinais foram avaliados.`,
+    });
+    
+    return updatedSignals;
+  } catch (error) {
+    console.error('Error evaluating multiple signals:', error);
+    
+    toast({
+      title: "Erro na avaliação em lote",
+      description: "Não foi possível avaliar todos os sinais",
+      variant: "destructive"
+    });
+    
+    return signals;
   }
 };
