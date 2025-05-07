@@ -1,7 +1,7 @@
 
 """
 Signal evaluator loop for monitoring active signals and updating their status.
-This script is designed to run as a background process, evaluating signals every minute.
+This script is designed to run as a background process, evaluating signals based on historical candle data.
 """
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -26,60 +26,47 @@ logger = logging.getLogger("signal_evaluator_loop")
 load_dotenv()
 
 # API Configuration
-BYBIT_API_URL = "https://api.bybit.com/v5/market/tickers"
+BYBIT_KLINE_URL = "https://api.bybit.com/v5/market/kline"
 
 # Initialize scheduler
 scheduler = BackgroundScheduler()
 
-def fetch_price(symbol: str) -> float:
+def get_candles(symbol, start_ms, end_ms, interval="1"):
     """
-    Fetch the current price for a symbol from Bybit API.
+    Fetch candle data from Bybit API.
     
     Args:
-        symbol: Trading pair symbol (e.g., "BTCUSDT" or "BTC/USDT")
+        symbol (str): Trading pair symbol (e.g., "BTCUSDT")
+        start_ms (int): Start timestamp in milliseconds
+        end_ms (int): End timestamp in milliseconds
+        interval (str): Candle interval (default: "1" for 1-minute candles)
         
     Returns:
-        Current price as float, or None if error
+        list: List of candles
     """
+    params = {
+        "category": "spot",
+        "symbol": symbol.replace("/", "").replace("-", "").upper(),
+        "interval": interval,
+        "start": start_ms,
+        "end": end_ms,
+        "limit": 200
+    }
     try:
-        # Normalize symbol format - ensure uppercase and USDT format
-        normalized_symbol = symbol.replace("/", "").replace("-", "").upper()
-        
-        # Add USDT suffix if not present and not a USDT pair already
-        formatted_symbol = normalized_symbol if normalized_symbol.endswith("USDT") else f"{normalized_symbol}USDT"
-        
-        # Make API request
-        response = requests.get(
-            BYBIT_API_URL,
-            params={"category": "spot", "symbol": formatted_symbol}
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"API error: {response.status_code} - {response.text}")
-            return None
+        resp = requests.get(BYBIT_KLINE_URL, params=params)
+        if resp.status_code != 200:
+            logger.error(f"API error: {resp.status_code} - {resp.text}")
+            return []
             
-        data = response.json()
-        
-        if data.get("ret_code") != 0 or "result" not in data:
-            logger.error(f"API returned error: {data}")
-            return None
-            
-        result_list = data["result"]["list"]
-        if not result_list:
-            logger.error(f"No price data found for {formatted_symbol}")
-            return None
-            
-        price = float(result_list[0]["lastPrice"])
-        logger.info(f"Fetched {formatted_symbol} price: {price}")
-        return price
-        
+        data = resp.json()
+        return data.get("result", {}).get("list", [])
     except Exception as e:
-        logger.error(f"Error fetching price for {symbol}: {e}")
-        return None
+        logger.error(f"Error fetching candles: {e}")
+        return []
 
-def evaluate_signal(signal: Signal, session):
+def evaluate_signal_with_candles(signal, session):
     """
-    Evaluate a signal based on current price and update its status.
+    Evaluate a signal based on historical candle data.
     
     Args:
         signal: Signal object from database
@@ -99,72 +86,74 @@ def evaluate_signal(signal: Signal, session):
         if signal.resultado:
             logger.info(f"Signal {signal.id} already evaluated as {signal.resultado}")
             return
-            
-        # Calculate signal lifetime
-        now = datetime.utcnow()
-        lifetime = now - created_at if created_at else timedelta(hours=24)  # Default to 24h if no timestamp
         
-        # Skip signals less than 15 minutes old
-        if lifetime < timedelta(minutes=15):
-            logger.info(f"Signal {signal.id} is too recent (less than 15 minutes old)")
+        if not created_at:
+            logger.error(f"Signal {signal.id} has no timestamp")
             return
             
-        # Get current price
-        current_price = fetch_price(symbol)
-        if current_price is None:
-            logger.error(f"Could not fetch price for {symbol}, skipping evaluation")
+        # Calculate time range for candles
+        start_ms = int(created_at.timestamp() * 1000)
+        end_ms = int((created_at + timedelta(hours=24)).timestamp() * 1000)
+        
+        # Get candles from Bybit API
+        candles = get_candles(symbol, start_ms, end_ms, interval="1")
+        
+        if not candles:
+            logger.warning(f"No candles found for {symbol} from {created_at} to {created_at + timedelta(hours=24)}")
             return
             
-        # Store evaluation time
-        signal.verified_at = now
-        
-        # Evaluate signal based on direction and price
         result = None
         
-        if direction in ["BUY", "LONG"]:
-            if current_price <= stop_loss:
-                result = "loss"
-            elif tp3 and current_price >= tp3:
-                result = "win"
-            elif tp2 and current_price >= tp2:
-                result = "partial"
-            elif tp1 and current_price >= tp1:
-                result = "partial"
-            elif lifetime >= timedelta(minutes=15):
-                # Signal is old enough and no targets hit, mark as false
-                result = "false"
-        elif direction in ["SELL", "SHORT"]:
-            if current_price >= stop_loss:
-                result = "loss"
-            elif tp3 and current_price <= tp3:
-                result = "win"
-            elif tp2 and current_price <= tp2:
-                result = "partial"
-            elif tp1 and current_price <= tp1:
-                result = "partial"
-            elif lifetime >= timedelta(minutes=15):
-                # Signal is old enough and no targets hit, mark as false
-                result = "false"
-                
+        # Evaluate signal based on candles
+        for candle in candles:
+            high = float(candle[2])  # High price
+            low = float(candle[3])   # Low price
+            
+            if direction in ["BUY", "LONG"]:
+                if low <= stop_loss:
+                    result = "loss"
+                    break
+                if high >= tp3:
+                    result = "win"
+                    break
+                if high >= tp2 or high >= tp1:
+                    result = "partial"
+                    # Continue checking other candles for possible win or loss
+            elif direction in ["SELL", "SHORT"]:
+                if high >= stop_loss:
+                    result = "loss"
+                    break
+                if low <= tp3:
+                    result = "win"
+                    break
+                if low <= tp2 or low <= tp1:
+                    result = "partial"
+                    # Continue checking other candles for possible win or loss
+        
+        # If no result yet but we processed candles, mark as FALSE
+        if not result and candles:
+            result = "false"
+            
         # Update signal in database
         if result:
             signal.resultado = result
+            signal.verified_at = datetime.utcnow()
             session.commit()
-            logger.info(f"✅ Signal {signal.id} evaluated as {result}")
+            logger.info(f"✅ Signal {signal.id} evaluated as {result} using candle data")
         else:
-            logger.info(f"Signal {signal.id} still active, no result yet")
+            logger.info(f"Signal {signal.id} could not be evaluated, no conclusive data")
             
     except Exception as e:
-        logger.error(f"Error evaluating signal {signal.id}: {e}")
+        logger.error(f"Error evaluating signal {signal.id} with candles: {e}")
         session.rollback()
 
-@scheduler.scheduled_job('interval', minutes=1)
+@scheduler.scheduled_job('interval', minutes=15)
 def run_monitor():
     """
-    Main monitoring function that runs every minute.
-    Fetches all active signals and evaluates them.
+    Main monitoring function that runs every 15 minutes.
+    Fetches all active signals and evaluates them using historical candle data.
     """
-    logger.info("🔍 Running signal evaluation...")
+    logger.info("🔍 Running signal evaluation with candle data...")
     
     session = Session()
     try:
@@ -179,7 +168,9 @@ def run_monitor():
         
         # Evaluate each signal
         for signal in signals:
-            evaluate_signal(signal, session)
+            evaluate_signal_with_candles(signal, session)
+            # Add a small delay between API calls to avoid rate limits
+            time.sleep(0.5)
             
     except Exception as e:
         logger.error(f"Error in evaluation run: {e}")
@@ -196,7 +187,7 @@ def main():
     # Start the scheduler
     scheduler.start()
     
-    logger.info("⏱️ Signal monitoring service started")
+    logger.info("⏱️ Signal monitoring service started with candle-based evaluation")
     
     # Keep the process running
     try:
