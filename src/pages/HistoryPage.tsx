@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSignalsHistory } from "@/lib/signalsApi";
@@ -93,75 +92,61 @@ const HistoryPage = () => {
     setFilters({});
   };
 
-  // Export signals to CSV
-  const handleExportToCSV = () => {
+  // Export signals to XML
+  const handleExportToXML = () => {
     if (!signals || signals.length === 0) {
       toast({
         title: "Nenhum dado para exportar",
-        description: "Não há sinais para exportar para CSV.",
+        description: "Não há sinais para exportar para XML.",
         variant: "default"
       });
       return;
     }
 
     try {
-      // Create CSV headers
-      const headers = [
-        "ID",
-        "Symbol",
-        "Direction",
-        "Entry Price",
-        "Stop Loss",
-        "TP1",
-        "TP2", 
-        "TP3",
-        "Result",
-        "Status",
-        "Created At",
-        "Verified At"
-      ];
-
-      // Convert signals to CSV rows
-      const rows = signals.map(signal => [
-        signal.id,
-        signal.symbol,
-        signal.direction,
-        signal.entryPrice || signal.entry,
-        signal.stopLoss || signal.sl,
-        signal.tp1 || (signal.targets && signal.targets[0]?.price),
-        signal.tp2 || (signal.targets && signal.targets[1]?.price),
-        signal.tp3 || (signal.targets && signal.targets[2]?.price),
-        signal.result,
-        signal.status,
-        signal.createdAt,
-        signal.verifiedAt
-      ]);
-
-      // Create CSV content
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.join(','))
-      ].join('\n');
+      // Create XML structure
+      let xmlContent = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      xmlContent += '<signals>\n';
+      
+      // Add each signal as an XML element
+      signals.forEach(signal => {
+        xmlContent += '  <signal>\n';
+        xmlContent += `    <id>${signal.id}</id>\n`;
+        xmlContent += `    <symbol>${signal.symbol}</symbol>\n`;
+        xmlContent += `    <direction>${signal.direction || ''}</direction>\n`;
+        xmlContent += `    <entryPrice>${signal.entryPrice || signal.entry || ''}</entryPrice>\n`;
+        xmlContent += `    <stopLoss>${signal.stopLoss || signal.sl || ''}</stopLoss>\n`;
+        xmlContent += `    <tp1>${signal.tp1 || (signal.targets && signal.targets[0]?.price) || ''}</tp1>\n`;
+        xmlContent += `    <tp2>${signal.tp2 || (signal.targets && signal.targets[1]?.price) || ''}</tp2>\n`;
+        xmlContent += `    <tp3>${signal.tp3 || (signal.targets && signal.targets[2]?.price) || ''}</tp3>\n`;
+        xmlContent += `    <result>${signal.result || ''}</result>\n`;
+        xmlContent += `    <status>${signal.status || ''}</status>\n`;
+        xmlContent += `    <createdAt>${signal.createdAt || ''}</createdAt>\n`;
+        xmlContent += `    <verifiedAt>${signal.verifiedAt || ''}</verifiedAt>\n`;
+        xmlContent += '  </signal>\n';
+      });
+      
+      xmlContent += '</signals>';
 
       // Create download link
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([xmlContent], { type: 'application/xml;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `signals_history_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.setAttribute('download', `signals_history_${new Date().toISOString().slice(0, 10)}.xml`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
       toast({
         title: "Exportação concluída",
-        description: `${signals.length} sinais exportados para CSV.`,
+        description: `${signals.length} sinais exportados para XML.`,
       });
     } catch (error) {
-      console.error("Error exporting to CSV:", error);
+      console.error("Error exporting to XML:", error);
       toast({
         title: "Erro na exportação",
-        description: "Não foi possível exportar os sinais para CSV.",
+        description: "Não foi possível exportar os sinais para XML.",
         variant: "destructive"
       });
     }
@@ -265,9 +250,9 @@ const HistoryPage = () => {
           {isLoading ? "Carregando sinais..." : `${signals?.length || 0} sinais encontrados`}
         </h2>
         <div className="flex space-x-2">
-          <Button onClick={handleExportToCSV} variant="outline" className="gap-2">
+          <Button onClick={handleExportToXML} variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
-            Exportar CSV
+            Exportar XML
           </Button>
         </div>
       </div>
