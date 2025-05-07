@@ -1,7 +1,7 @@
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
-export type SignalResult = "WINNER" | "LOSER" | "PARTIAL" | "FALSE" | "win" | "loss" | "partial" | "missed" | "false" | "pending" | 0 | 1;
+export type SignalResult = "WINNER" | "LOSER" | "PARTIAL" | "FALSE" | "win" | "loss" | "partial" | "missed" | "false" | 0 | 1;
 
 export interface PriceTarget {
   level: number;

@@ -1,42 +1,125 @@
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from '@/components/ThemeProvider'
-import { Toaster } from '@/components/ui/toaster'
-import Index from '@/pages/Index'
-import Login from '@/pages/Login'
-import ForgotPassword from '@/pages/ForgotPassword'
-import NotFound from '@/pages/NotFound'
-import SignalsDashboard from '@/pages/SignalsDashboard'
-import PerformanceDashboard from '@/pages/PerformanceDashboard'
-import UserProfile from '@/pages/UserProfile'
-import CryptoMarket from '@/pages/CryptoMarket'
-import HistoryPage from '@/pages/HistoryPage'
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import Index from "./pages/Index";
+import SignalsDashboard from "./pages/SignalsDashboard";
+import SignalsHistory from "./pages/SignalsHistory";
+import CryptoMarket from "./pages/CryptoMarket";
+import Admin from "./pages/Admin";
+import NotFound from "./pages/NotFound";
+import PerformanceDashboard from "./pages/PerformanceDashboard";
+import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import UserProfile from "./pages/UserProfile";
+import Checkout from "./pages/Checkout";
+import { ThemeProvider } from "./components/ThemeProvider";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
+import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
+import "./App.css";
 
-// Create a client
-const queryClient = new QueryClient()
+// Import gamer theme styles
+import "./styles/gamer-theme.css";
+import { useState } from "react";
 
-function App() {
+// Protected route component for basic authentication
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isLoading } = useAuth();
+  
+  // If authentication is still loading, return null or a loading indicator
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+  }
+  
+  // If user is not authenticated, redirect to login
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // If user is authenticated, render the children
+  return <>{children}</>;
+};
+
+const AppRoutes = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<Index />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      
+      {/* Protected routes - require authentication only */}
+      <Route path="/signals" element={
+        <ProtectedRoute>
+          <SignalsDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/history" element={
+        <ProtectedRoute>
+          <SignalsHistory />
+        </ProtectedRoute>
+      } />
+      <Route path="/market" element={
+        <ProtectedRoute>
+          <CryptoMarket />
+        </ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <UserProfile />
+        </ProtectedRoute>
+      } />
+      <Route path="/checkout" element={
+        <ProtectedRoute>
+          <Checkout />
+        </ProtectedRoute>
+      } />
+      
+      {/* Premium routes - require active subscription */}
+      <Route path="/performance" element={
+        <ProtectedPremiumRoute>
+          <PerformanceDashboard />
+        </ProtectedPremiumRoute>
+      } />
+      
+      {/* Admin routes - require admin role */}
+      <Route path="/admin" element={
+        <ProtectedPremiumRoute requireAdmin={true}>
+          <Admin />
+        </ProtectedPremiumRoute>
+      } />
+      
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+const App = () => {
+  // Move the QueryClient initialization inside the component
+  const [queryClient] = useState(() => new QueryClient());
+
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-        <Router>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/signals" element={<SignalsDashboard />} />
-            <Route path="/performance" element={<PerformanceDashboard />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/profile" element={<UserProfile />} />
-            <Route path="/market" element={<CryptoMarket />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Router>
-        <Toaster />
+      <ThemeProvider defaultTheme="dark">
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <div className="gamer-theme font-rajdhani">
+                <Navbar />
+                <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
+                  <AppRoutes />
+                </div>
+              </div>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
-  )
-}
+  );
+};
 
-export default App
+export default App;
