@@ -1,26 +1,28 @@
 
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals } from "@/lib/signalsApi";
+import { fetchSignalsHistory } from "@/lib/signalsApi";
 import { TradingSignal } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Filter, Download, Check, ChevronDown } from "lucide-react";
-import SignalHistoryTable from "@/components/signals/SignalHistoryTable";
+import { RefreshCw, Filter, Download, Check, AlertCircle } from "lucide-react";
+import RealTimeSignalTable from "@/components/signals/RealTimeSignalTable";
 import PageHeader from "@/components/signals/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useSignalEvaluation } from "@/hooks/useSignalEvaluation";
 
 const HistoryPage = () => {
   const { toast } = useToast();
   const [filterSymbol, setFilterSymbol] = useState<string>("");
   const [filterResult, setFilterResult] = useState<string>("");
-  const [isEvaluatingAll, setIsEvaluatingAll] = useState(false);
-  const [verifyingSignal, setVerifyingSignal] = useState<string | null>(null);
   const [filters, setFilters] = useState<{ symbol?: string; result?: string }>({});
+  const [pendingSignalsCount, setPendingSignalsCount] = useState(0);
+  const [evaluableSignalsCount, setEvaluableSignalsCount] = useState(0);
 
   // Fetch signals history with filters
   const {
@@ -35,6 +37,34 @@ const HistoryPage = () => {
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false
   });
+
+  const {
+    evaluatingSignalId,
+    isEvaluatingAll,
+    handleEvaluateSignal,
+    handleEvaluateAllSignals
+  } = useSignalEvaluation(refetch);
+
+  // Calculate pending and evaluable signals counts
+  useEffect(() => {
+    if (signals && signals.length > 0) {
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+      
+      // Pending: signals without a verified result
+      const pending = signals.filter(s => !s.verifiedAt || !s.result).length;
+      setPendingSignalsCount(pending);
+      
+      // Evaluable: signals without a verified result that are older than 15 minutes
+      const evaluable = signals.filter(s => 
+        (!s.verifiedAt || !s.result) && 
+        new Date(s.createdAt || Date.now()) <= fifteenMinutesAgo
+      ).length;
+      setEvaluableSignalsCount(evaluable);
+    } else {
+      setPendingSignalsCount(0);
+      setEvaluableSignalsCount(0);
+    }
+  }, [signals]);
 
   // Handle API connection errors
   useEffect(() => {
@@ -61,95 +91,6 @@ const HistoryPage = () => {
     setFilterSymbol("");
     setFilterResult("");
     setFilters({});
-  };
-
-  // Handler for manual refetch
-  const handleRefetch = () => {
-    refetch();
-  };
-
-  // Verify a single signal
-  const handleVerifySingleSignal = async (signalId: string) => {
-    setVerifyingSignal(signalId);
-    try {
-      const result = await evaluateSingleSignal(signalId);
-      if (result) {
-        toast({
-          title: "Sinal avaliado com sucesso",
-          description: `Resultado: ${result.result}`,
-        });
-        refetch(); // Refetch signals after evaluation
-      } else {
-        toast({
-          title: "Avaliação inconclusiva",
-          description: "Não foi possível determinar o resultado do sinal.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error("Error verifying signal:", error);
-      toast({
-        title: "Erro na avaliação",
-        description: "Não foi possível avaliar o sinal. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    } finally {
-      setVerifyingSignal(null);
-    }
-  };
-
-  // Evaluate all signals that need evaluation
-  const handleEvaluateAllSignals = async () => {
-    if (!signals || signals.length === 0) {
-      toast({
-        title: "Nenhum sinal disponível",
-        description: "Não há sinais para avaliar.",
-        variant: "default"
-      });
-      return;
-    }
-
-    setIsEvaluatingAll(true);
-    try {
-      // Get signals that need evaluation
-      const signalsToEvaluate = signals.filter(s => 
-        !s.verifiedAt || 
-        !s.result || 
-        s.status !== 'COMPLETED'
-      );
-
-      if (signalsToEvaluate.length === 0) {
-        toast({
-          title: "Sinais já avaliados",
-          description: "Todos os sinais já foram avaliados.",
-          variant: "default"
-        });
-        setIsEvaluatingAll(false);
-        return;
-      }
-
-      toast({
-        title: "Avaliando sinais",
-        description: `Avaliando ${signalsToEvaluate.length} sinais...`,
-      });
-
-      const updatedSignals = await evaluateMultipleSignals(signals);
-      refetch(); // Refetch all signals after evaluation
-      
-      toast({
-        title: "Avaliação concluída",
-        description: `${signalsToEvaluate.length} sinais foram avaliados.`,
-      });
-    } catch (error) {
-      console.error("Error evaluating all signals:", error);
-      toast({
-        title: "Erro na avaliação em lote",
-        description: "Ocorreu um erro ao avaliar os sinais. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsEvaluatingAll(false);
-    }
   };
 
   // Export signals to CSV
@@ -185,8 +126,8 @@ const HistoryPage = () => {
         signal.id,
         signal.symbol,
         signal.direction,
-        signal.entryPrice,
-        signal.stopLoss,
+        signal.entryPrice || signal.entry,
+        signal.stopLoss || signal.sl,
         signal.tp1 || (signal.targets && signal.targets[0]?.price),
         signal.tp2 || (signal.targets && signal.targets[1]?.price),
         signal.tp3 || (signal.targets && signal.targets[2]?.price),
@@ -230,7 +171,7 @@ const HistoryPage = () => {
     <div className="container py-8">
       <PageHeader 
         title="Histórico de Sinais" 
-        description="Visualize e analise o histórico completo de sinais de trading"
+        description="Visualize e analise o histórico completo de sinais de trading com avaliação em tempo real"
       />
 
       <Card className="mb-6">
@@ -279,7 +220,7 @@ const HistoryPage = () => {
               <Button variant="secondary" onClick={handleClearFilters}>
                 Limpar
               </Button>
-              <Button variant="ghost" onClick={handleRefetch}>
+              <Button variant="ghost" onClick={() => refetch()}>
                 <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
@@ -287,29 +228,43 @@ const HistoryPage = () => {
         </CardContent>
       </Card>
 
+      {evaluableSignalsCount > 0 && (
+        <Alert className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Sinais aguardando avaliação</AlertTitle>
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Há {evaluableSignalsCount} {evaluableSignalsCount === 1 ? 'sinal elegível' : 'sinais elegíveis'} para avaliação.
+              Clique em "Avaliar Todos" para processar em tempo real.
+            </span>
+            <Button 
+              onClick={() => signals && handleEvaluateAllSignals(signals)}
+              disabled={isEvaluatingAll || evaluableSignalsCount === 0}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              {isEvaluatingAll ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Avaliando...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Avaliar Todos
+                </>
+              )}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">
           {isLoading ? "Carregando sinais..." : `${signals?.length || 0} sinais encontrados`}
         </h2>
         <div className="flex space-x-2">
-          <Button 
-            variant="outline"
-            onClick={handleEvaluateAllSignals}
-            disabled={isEvaluatingAll || isLoading}
-            className="gap-2"
-          >
-            {isEvaluatingAll ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Avaliando...
-              </>
-            ) : (
-              <>
-                <Check className="h-4 w-4" />
-                Avaliar Todos
-              </>
-            )}
-          </Button>
           <Button onClick={handleExportToCSV} variant="outline" className="gap-2">
             <Download className="h-4 w-4" />
             Exportar CSV
@@ -329,10 +284,10 @@ const HistoryPage = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
           ) : signals && signals.length > 0 ? (
-            <SignalHistoryTable 
+            <RealTimeSignalTable 
               signals={signals} 
-              onVerifySingleSignal={handleVerifySingleSignal}
-              onEvaluateAllSignals={handleEvaluateAllSignals}
+              onEvaluateSignal={(id) => signals && handleEvaluateSignal(id, signals)}
+              evaluatingSignalId={evaluatingSignalId}
             />
           ) : (
             <div className="text-center py-12 border rounded-md">
@@ -340,7 +295,7 @@ const HistoryPage = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 Tente remover os filtros ou atualize a página
               </p>
-              <Button variant="outline" onClick={handleRefetch}>
+              <Button variant="outline" onClick={() => refetch()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Atualizar
               </Button>
@@ -391,7 +346,7 @@ const HistoryPage = () => {
                     <div className="flex justify-between">
                       <span>Sinais pendentes:</span>
                       <span className="font-medium">
-                        {signals.filter(s => !s.result || s.result === 'FALSE' || s.result === 'false').length}
+                        {pendingSignalsCount}
                       </span>
                     </div>
                   </div>
