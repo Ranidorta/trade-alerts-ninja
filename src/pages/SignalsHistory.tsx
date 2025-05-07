@@ -94,25 +94,18 @@ const SignalsHistory = () => {
         
         if (Array.isArray(response) && response.length > 0) {
           console.log(`Received ${response.length} signals from API`);
-          
-          // Sort signals by createdAt date, most recent first
-          const sortedSignals = [...response].sort((a, b) => {
-            return new Date(b.createdAt || b.timestamp || 0).getTime() - 
-                   new Date(a.createdAt || a.timestamp || 0).getTime();
-          });
-          
-          setSignals(sortedSignals);
+          setSignals(response);
           
           if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase().trim();
-            const filtered = sortedSignals.filter(signal => 
+            const filtered = response.filter(signal => 
               signal.symbol?.toLowerCase().includes(query) ||
               (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
               (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
             );
             setFilteredSignals(filtered);
           } else {
-            setFilteredSignals(sortedSignals);
+            setFilteredSignals(response);
           }
           
           if (isRefreshRequest) {
