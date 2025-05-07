@@ -2,8 +2,9 @@
 import { useState, useCallback } from 'react';
 import { TradingSignal } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
-import { evaluateSignalRealtime } from '@/lib/signalEvaluator';
+import { evaluateSignalRealtime, getHitTargets } from '@/lib/signalEvaluator';
 import { evaluateSingleSignal, evaluateMultipleSignals } from '@/lib/signalsApi';
+import { toast as sonnerToast } from 'sonner';
 
 export function useSignalEvaluation(refetch: () => void) {
   const { toast } = useToast();
@@ -38,6 +39,15 @@ export function useSignalEvaluation(refetch: () => void) {
           verifiedAt: new Date().toISOString(),
           status: "COMPLETED"
         };
+        
+        // If we have targets information, update hit status
+        if (signal.targets) {
+          const hitTargets = await getHitTargets(signal);
+          updatedSignal.targets = signal.targets.map((target, index) => ({
+            ...target,
+            hit: hitTargets[index]
+          }));
+        }
         
         // Save the result to the backend
         await evaluateSingleSignal(signal.id);
@@ -121,9 +131,8 @@ export function useSignalEvaluation(refetch: () => void) {
         return;
       }
 
-      toast({
-        title: "Avaliando sinais",
-        description: `Avaliando ${signalsToEvaluate.length} sinais em tempo real...`,
+      sonnerToast.info(`Avaliando ${signalsToEvaluate.length} sinais em tempo real...`, {
+        duration: 3000
       });
 
       // First try real-time evaluation for each signal
@@ -136,16 +145,13 @@ export function useSignalEvaluation(refetch: () => void) {
       // Refresh the signal list
       refetch();
       
-      toast({
-        title: "Avaliação concluída",
-        description: `${signalsToEvaluate.length} sinais foram avaliados.`,
+      sonnerToast.success(`${signalsToEvaluate.length} sinais foram avaliados.`, {
+        duration: 3000
       });
     } catch (error) {
       console.error("Erro ao avaliar todos os sinais:", error);
-      toast({
-        title: "Erro na avaliação em lote",
-        description: "Ocorreu um erro ao avaliar os sinais. Tente novamente mais tarde.",
-        variant: "destructive"
+      sonnerToast.error("Ocorreu um erro ao avaliar os sinais. Tente novamente mais tarde.", {
+        duration: 5000
       });
     } finally {
       setIsEvaluatingAll(false);

@@ -67,6 +67,11 @@ export const evaluateSignalRealtime = async (signal: TradingSignal): Promise<Sig
     }
   }
 
+  // If signal is more than 15 minutes old and no targets hit, mark as FALSE
+  if (createdAt <= fifteenMinutesAgo) {
+    return 'FALSE';
+  }
+
   // No conditions met, signal is still active
   return null;
 };
