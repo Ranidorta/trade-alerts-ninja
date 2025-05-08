@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchSignalsHistory, evaluateSingleSignal, evaluateMultipleSignals } from '@/lib/signalsApi';
+import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -33,14 +34,13 @@ import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
 import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
-import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
+import { getSignalHistory } from '@/lib/signal-storage';
 
 const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
   const [apiError, setApiError] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
@@ -61,16 +61,7 @@ const SignalsHistory = () => {
     signal.result === "loss" || 
     signal.result === 0
   ).length;
-  const partialTrades = filteredSignals.filter(signal => 
-    signal.result === "PARTIAL" || 
-    signal.result === "partial"
-  ).length;
-  const falseTrades = filteredSignals.filter(signal => 
-    signal.result === "FALSE" || 
-    signal.result === "false" ||
-    signal.result === "missed"
-  ).length;
-  const winRate = totalSignals > 0 ? (winningTrades / (winningTrades + losingTrades + partialTrades)) * 100 : 0;
+  const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
@@ -155,7 +146,7 @@ const SignalsHistory = () => {
         toast({
           title: "Usando dados locais",
           description: "Não foi possível conectar à API, usando dados locais.",
-          variant: "default"
+          variant: "warning"
         });
         
         return;
@@ -212,82 +203,6 @@ const SignalsHistory = () => {
   
   const handleRefresh = () => {
     loadSignals(true);
-  };
-  
-  // New handler for evaluating a single signal
-  const handleEvaluateSignal = async (signalId: string) => {
-    try {
-      const evaluatedSignal = await evaluateSingleSignal(signalId);
-      
-      if (evaluatedSignal) {
-        // Update signals in state
-        setSignals(prevSignals => {
-          const updatedSignals = prevSignals.map(signal => 
-            signal.id === signalId ? { ...signal, ...evaluatedSignal } : signal
-          );
-          
-          // Also update in local storage
-          saveSignalsToHistory(updatedSignals);
-          
-          return updatedSignals;
-        });
-      }
-    } catch (error) {
-      console.error("Error evaluating signal:", error);
-      toast({
-        title: "Erro ao avaliar sinal",
-        description: "Não foi possível avaliar o sinal. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    }
-  };
-  
-  // New handler for evaluating all signals
-  const handleEvaluateAllSignals = async () => {
-    try {
-      setIsEvaluating(true);
-      
-      // Get signals that need evaluation
-      const signalsToEvaluate = signals.filter(s => 
-        !s.result || 
-        !s.verifiedAt || 
-        (s.status !== "COMPLETED" && s.createdAt)
-      );
-      
-      if (signalsToEvaluate.length === 0) {
-        toast({
-          title: "Avaliação não necessária",
-          description: "Todos os sinais já foram avaliados.",
-        });
-        return;
-      }
-      
-      const updatedSignals = await evaluateMultipleSignals(signals);
-      
-      // Update signals in state and local storage
-      setSignals(updatedSignals);
-      saveSignalsToHistory(updatedSignals);
-      
-      // Also update filtered signals
-      if (searchQuery || symbolFilter || resultFilter) {
-        setFilteredSignals(prev => {
-          const filteredIds = new Set(prev.map(s => s.id));
-          return updatedSignals.filter(s => filteredIds.has(s.id));
-        });
-      } else {
-        setFilteredSignals(updatedSignals);
-      }
-      
-    } catch (error) {
-      console.error("Error evaluating all signals:", error);
-      toast({
-        title: "Erro ao avaliar sinais",
-        description: "Não foi possível avaliar todos os sinais. Tente novamente mais tarde.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsEvaluating(false);
-    }
   };
   
   const handleLocalModeClick = async () => {
@@ -424,9 +339,7 @@ const SignalsHistory = () => {
                         ? 'bg-green-500/20 text-green-600 border-green-300/30' 
                         : resultFilter === 'LOSER' || resultFilter === 'loss'
                           ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                          : resultFilter === 'PARTIAL' || resultFilter === 'partial'
-                            ? 'bg-orange-500/20 text-orange-600 border-orange-300/30'
-                            : 'bg-gray-500/20 text-gray-600 border-gray-300/30'
+                          : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
                     }`}
                   >
                     {resultFilter}
@@ -465,13 +378,6 @@ const SignalsHistory = () => {
               >
                 <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">Parcial</Badge>
                 {(resultFilter === 'partial' || resultFilter === 'PARTIAL') && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setResultFilter('false')}
-                className={resultFilter === 'false' || resultFilter === 'FALSE' ? "bg-primary/10" : ""}
-              >
-                <Badge className="mr-2 bg-gray-500/20 text-gray-600 border-gray-300/30">Falso</Badge>
-                {(resultFilter === 'false' || resultFilter === 'FALSE') && <Check className="ml-auto h-4 w-4" />}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -532,26 +438,22 @@ const SignalsHistory = () => {
       
       <Card className="mb-6">
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Total de Sinais</span>
               <span className="text-2xl font-bold">{totalSignals}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Vencedores</span>
+              <span className="text-sm text-muted-foreground">Sinais Vencedores</span>
               <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Perdedores</span>
+              <span className="text-sm text-muted-foreground">Sinais Perdedores</span>
               <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Parciais</span>
-              <span className="text-2xl font-bold text-amber-500">{partialTrades}</span>
-            </div>
-            <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
-              <span className="text-2xl font-bold text-blue-500">{winRate.toFixed(1)}%</span>
+              <span className="text-2xl font-bold text-amber-500">{winRate.toFixed(1)}%</span>
             </div>
           </div>
         </CardContent>
@@ -606,11 +508,7 @@ const SignalsHistory = () => {
           ) : (
             <>
               {viewMode === 'table' && (
-                <SignalHistoryTable 
-                  signals={filteredSignals} 
-                  onVerifySingleSignal={handleEvaluateSignal}
-                  onEvaluateAllSignals={handleEvaluateAllSignals}
-                />
+                <SignalHistoryTable signals={filteredSignals} />
               )}
               
               {viewMode === 'cards' && (

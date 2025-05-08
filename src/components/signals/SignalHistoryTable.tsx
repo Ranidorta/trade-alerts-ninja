@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import {
@@ -23,27 +24,20 @@ import {
   AlertCircle,
   CheckCircle2,
   Diff,
-  Calendar,
-  PlayCircle
+  Calendar
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SignalHistoryTableProps {
   signals: TradingSignal[];
   onVerifySingleSignal?: (signalId: string) => Promise<void>;
-  onEvaluateAllSignals?: () => Promise<void>;
 }
 
-export default function SignalHistoryTable({ 
-  signals, 
-  onVerifySingleSignal,
-  onEvaluateAllSignals
-}: SignalHistoryTableProps) {
+export default function SignalHistoryTable({ signals, onVerifySingleSignal }: SignalHistoryTableProps) {
   const [sortField, setSortField] = useState<keyof TradingSignal>("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [verifyingSignal, setVerifyingSignal] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState<number>(50); // Initial number of rows to show
-  const [isEvaluatingAll, setIsEvaluatingAll] = useState(false);
   
   const handleSort = (field: keyof TradingSignal) => {
     if (sortField === field) {
@@ -65,17 +59,6 @@ export default function SignalHistoryTable({
     }
   };
   
-  const handleEvaluateAllSignals = async () => {
-    if (!onEvaluateAllSignals) return;
-    
-    setIsEvaluatingAll(true);
-    try {
-      await onEvaluateAllSignals();
-    } finally {
-      setIsEvaluatingAll(false);
-    }
-  };
-  
   const sortedSignals = [...signals].sort((a, b) => {
     let aValue = a[sortField];
     let bValue = b[sortField];
@@ -92,7 +75,7 @@ export default function SignalHistoryTable({
         if (result === 1 || result === "win" || result === "WINNER") return 3;
         if (result === "partial" || result === "PARTIAL") return 2;
         if (result === 0 || result === "loss" || result === "LOSER") return 1;
-        if (result === "missed" || result === "FALSE" || result === "false") return 0;
+        if (result === "missed" || result === "FALSE") return 0;
         return -1;
       };
       aValue = resultToNumber(a.result);
@@ -174,7 +157,7 @@ export default function SignalHistoryTable({
       return "text-green-600 dark:text-green-400";
     } else if (result === 0 || result === "loss" || result === "LOSER") {
       return "text-red-600 dark:text-red-400";
-    } else if (result === "missed" || result === "FALSE" || result === "false") {
+    } else if (result === "missed" || result === "FALSE") {
       return "text-gray-500";
     } else if (result === "partial" || result === "PARTIAL") {
       return "text-amber-500";
@@ -186,7 +169,7 @@ export default function SignalHistoryTable({
     if (result === 1 || result === "win" || result === "WINNER") return "Vencedor";
     if (result === 0 || result === "loss" || result === "LOSER") return "Perdedor";
     if (result === "partial" || result === "PARTIAL") return "Parcial";
-    if (result === "missed" || result === "FALSE" || result === "false") return "Falso";
+    if (result === "missed" || result === "FALSE") return "Falso";
     return result ? String(result) : "—";
   };
   
@@ -213,7 +196,7 @@ export default function SignalHistoryTable({
             Parcial
           </Badge>
         );
-      } else if (signal.result === "missed" || signal.result === "FALSE" || signal.result === "false") {
+      } else if (signal.result === "missed" || signal.result === "FALSE") {
         return (
           <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-300 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" />
@@ -239,8 +222,7 @@ export default function SignalHistoryTable({
   };
   
   const shouldShowVerifyButton = (signal: TradingSignal) => {
-    return onVerifySingleSignal && 
-           signal.result === undefined && 
+    return signal.result === undefined && 
            signal.status !== "COMPLETED" && 
            signal.status !== "WAITING";
   };
@@ -253,46 +235,8 @@ export default function SignalHistoryTable({
     );
   }
   
-  // Count signals that need evaluation
-  const signalsNeedingEvaluation = signals.filter(s => 
-    !s.result || 
-    !s.verifiedAt || 
-    (s.status !== "COMPLETED" && s.createdAt)
-  ).length;
-  
   return (
     <div className="w-full">
-      {onEvaluateAllSignals && signalsNeedingEvaluation > 0 && (
-        <div className="mb-4 p-3 bg-primary/5 border rounded-md flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">
-              {signalsNeedingEvaluation} sinais precisam ser avaliados
-            </p>
-            <p className="text-xs text-muted-foreground">
-              A avaliação verifica o resultado dos sinais com base nos movimentos de preço
-            </p>
-          </div>
-          <Button 
-            onClick={handleEvaluateAllSignals}
-            disabled={isEvaluatingAll}
-            size="sm"
-            className="gap-2"
-          >
-            {isEvaluatingAll ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Avaliando...
-              </>
-            ) : (
-              <>
-                <PlayCircle className="h-4 w-4" />
-                Avaliar Todos
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-      
       <div className="overflow-auto rounded-md border">
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
@@ -341,14 +285,10 @@ export default function SignalHistoryTable({
           <TableBody>
             {displayedSignals.map((signal) => (
               <TableRow key={signal.id || `${signal.symbol}-${signal.createdAt}`} className={
-                signal.result === 1 || signal.result === "win" || signal.result === "WINNER" 
-                  ? "bg-green-50 dark:bg-green-950/20" : 
-                signal.result === 0 || signal.result === "loss" || signal.result === "LOSER" 
-                  ? "bg-red-50 dark:bg-red-950/20" :
-                signal.result === "missed" || signal.result === "FALSE" || signal.result === "false" 
-                  ? "bg-gray-50 dark:bg-gray-900/20" :
-                signal.result === "partial" || signal.result === "PARTIAL" 
-                  ? "bg-amber-50 dark:bg-amber-900/20" : ""
+                signal.result === 1 || signal.result === "win" || signal.result === "WINNER" ? "bg-green-50 dark:bg-green-950/20" : 
+                signal.result === 0 || signal.result === "loss" || signal.result === "LOSER" ? "bg-red-50 dark:bg-red-950/20" :
+                signal.result === "missed" || signal.result === "FALSE" ? "bg-gray-50 dark:bg-gray-900/20" :
+                signal.result === "partial" || signal.result === "PARTIAL" ? "bg-amber-50 dark:bg-amber-900/20" : ""
               }>
                 <TableCell className="font-medium">
                   {signal.error ? (
@@ -389,7 +329,7 @@ export default function SignalHistoryTable({
                     {signal.direction}
                   </Badge>
                 </TableCell>
-                <TableCell>${formatPrice(signal.entryPrice || signal.entry)}</TableCell>
+                <TableCell>${formatPrice(signal.entryPrice)}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 text-xs">
@@ -436,7 +376,7 @@ export default function SignalHistoryTable({
                         onClick={() => handleVerifySignal(signal.id)}
                         disabled={verifyingSignal === signal.id}
                       >
-                        {verifyingSignal === signal.id ? 'Avaliando...' : 'Avaliar'}
+                        {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
                       </Button>
                     ) : null}
                   </TableCell>

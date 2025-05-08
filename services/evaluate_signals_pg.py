@@ -1,3 +1,4 @@
+
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime, timedelta
@@ -38,9 +39,8 @@ class Signal(Base):
 Base.metadata.create_all(engine)
 
 BYBIT_ENDPOINT = "https://api.bybit.com/v5/market/kline"
-INTERVAL = "15"  # 15-minute candles
+INTERVAL = "15"
 LOOKAHEAD_HOURS = 24
-SIGNAL_VALIDITY_MINUTES = 15  # Validade de tempo para um sinal
 
 def get_candles(symbol, start_ms, end_ms):
     """
@@ -72,12 +72,7 @@ def get_candles(symbol, start_ms, end_ms):
 def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
     """
     Avalia um sinal baseado em dados históricos de candles.
-    Implementa as regras de avaliação da Trade Alerts Ninja:
-    
-    ✅ WINNER: O preço atingiu TP3 (ou o último alvo definido) antes de tocar o Stop Loss.
-    ⚠️ PARTIAL: O preço atingiu TP1 ou TP2, mas não chegou até TP3 e depois tocou no SL.
-    ❌ LOSER: O preço foi direto para o SL sem atingir nenhum TP.
-    🟡 FALSE: O sinal não atingiu nenhum TP nem o SL dentro da validade.
+    Esta função continua sendo usada para avaliações retrospectivas.
     
     Args:
         entry (float): Preço de entrada
@@ -85,73 +80,37 @@ def evaluate_signal(entry, tp1, tp2, tp3, sl, direction, candles):
         tp2 (float): Take profit 2
         tp3 (float): Take profit 3
         sl (float): Stop loss
-        direction (str): Direção do trade (long/short/buy/sell)
+        direction (str): Direção do trade (long/short)
         candles (list): Lista de candles
         
     Returns:
-        str: Resultado da avaliação (win, partial, loss, false)
+        str: Resultado da avaliação (win, loss, partial, missed)
     """
     hit_tp1 = hit_tp2 = hit_tp3 = hit_sl = False
-    
-    # Número de candles a verificar para a validade do sinal (15min)
-    # Se o intervalo for 15min, precisamos de 1 candle
-    # Se o intervalo for 5min, precisamos de 3 candles
-    validity_candles = max(1, SIGNAL_VALIDITY_MINUTES // int(INTERVAL))
-    
-    # Verifica apenas os primeiros candles para validade
-    valid_candles = candles[:validity_candles] if len(candles) >= validity_candles else candles
-    all_candles = candles  # Todos os candles para avaliação completa
-    
-    # Primeiro, verifica se o sinal é válido (dentro do período de validade)
-    is_valid = False
-    for candle in valid_candles:
-        high = float(candle[2])
-        low = float(candle[3])
-        
-        # Verifica se algum TP ou SL foi atingido na validade
-        if direction.lower() in ["long", "buy"]:
-            if high >= tp1 or low <= sl:
-                is_valid = True
-                break
-        elif direction.lower() in ["short", "sell"]:
-            if low <= tp1 or high >= sl:
-                is_valid = True
-                break
-    
-    # Se não for válido, retorna FALSE
-    if not is_valid and len(valid_candles) > 0:
-        return "false"
-    
-    # Agora avalia o resultado usando todos os candles
-    for candle in all_candles:
+
+    for candle in candles:
         high = float(candle[2])
         low = float(candle[3])
 
-        if direction.lower() in ["long", "buy"]:
-            # Para compra: se o preço subir até o TP ou cair até o SL
+        if direction.lower() == "long" or direction.lower() == "buy":
             if not hit_tp1 and high >= tp1: hit_tp1 = True
             if not hit_tp2 and high >= tp2: hit_tp2 = True
             if not hit_tp3 and high >= tp3: hit_tp3 = True
             if low <= sl: hit_sl = True; break
-        elif direction.lower() in ["short", "sell"]:
-            # Para venda: se o preço cair até o TP ou subir até o SL
+        elif direction.lower() == "short" or direction.lower() == "sell":
             if not hit_tp1 and low <= tp1: hit_tp1 = True
             if not hit_tp2 and low <= tp2: hit_tp2 = True
             if not hit_tp3 and low <= tp3: hit_tp3 = True
             if high >= sl: hit_sl = True; break
 
-    # Avalia o resultado
-    if hit_tp3:
-        return "win"  # WINNER: TP3 foi atingido
-    elif hit_sl:
-        if hit_tp1 or hit_tp2:
-            return "partial"  # PARTIAL: TP1 ou TP2 foi atingido e depois tocou SL
-        else:
-            return "loss"  # LOSER: Foi direto para o SL sem atingir TP
-    elif hit_tp1 or hit_tp2:
-        return "partial"  # PARTIAL: Atingiu TP1 ou TP2 mas não o TP3
+    if hit_sl:
+        return "loss"
+    elif hit_tp3:
+        return "win"
+    elif hit_tp1:
+        return "partial"
     else:
-        return "false"  # FALSE: Não atingiu nem TP nem SL no período de validade
+        return "missed"
 
 def evaluate_signal_with_candles(*args, **kwargs):
     """Alias for evaluate_signal for backward compatibility"""
