@@ -207,5 +207,4 @@ export interface MLSignal {
   tp3: number;
   stop_loss: number;
   resultado?: string | null;
-  id: number;  // Adicionado para compatibilidade com o banco de dados
 }

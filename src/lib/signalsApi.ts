@@ -2,7 +2,6 @@
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
-import { toast } from '@/components/ui/use-toast';
 
 // Create an axios instance with the base URL
 const api = axios.create({
@@ -91,103 +90,12 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    console.log(`Fetching signals history with filters:`, filters);
-    console.log(`API URL: ${api.defaults.baseURL}/api/signals/history`);
-    
-    // Use the updated endpoint that fetches from the database
+    // Fix: Use correct API endpoint with properly formed URL
     const response = await api.get('/api/signals/history', { params: filters });
-    
-    if (Array.isArray(response.data)) {
-      console.log(`Fetched ${response.data.length} signals from database`);
-      
-      // Transform data for frontend compatibility if needed
-      const transformedSignals = response.data.map((signal: any) => {
-        // Ensure these properties are present for frontend components
-        return {
-          ...signal,
-          id: signal.id || `${signal.symbol}-${signal.timestamp}`,
-          pair: signal.pair || signal.symbol,
-          type: signal.type || (signal.direction === 'BUY' ? 'LONG' : 'SHORT'),
-          entryPrice: signal.entryPrice || signal.entry,
-          createdAt: signal.createdAt || signal.timestamp,
-          status: signal.status || (signal.result ? 'COMPLETED' : 'ACTIVE'),
-          stopLoss: signal.stopLoss || signal.stop_loss || signal.sl,
-          targets: signal.targets || [
-            { level: 1, price: signal.tp1, hit: signal.result === 'win' || signal.result === 'partial' },
-            { level: 2, price: signal.tp2, hit: signal.result === 'win' },
-            { level: 3, price: signal.tp3, hit: signal.result === 'win' }
-          ],
-          strategy: signal.strategy || 'CLASSIC'
-        };
-      });
-      
-      return transformedSignals as TradingSignal[];
-    } else {
-      console.log('API returned non-array response:', response.data);
-      return [] as TradingSignal[];
-    }
+    return response.data as TradingSignal[];
   } catch (error) {
     console.error('Error fetching signals history:', error);
-    // If a 404 error occurs, return an empty array instead of throwing the error
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      console.log('No signals found in database (404 response)');
-      return [] as TradingSignal[];
-    }
     throw error;
-  }
-};
-
-// New function to save a signal to history
-export const saveSignalToHistory = async (signal: TradingSignal) => {
-  try {
-    console.log(`Saving signal to history:`, signal);
-    
-    const response = await api.post('/api/signals/save', signal);
-    
-    if (response.status === 200) {
-      console.log('Signal saved to history successfully');
-      toast({
-        title: "Sinal salvo",
-        description: "O sinal foi salvo com sucesso no histórico.",
-      });
-      return true;
-    } else {
-      console.error('Error saving signal to history:', response.data);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error saving signal to history:', error);
-    
-    // Try to save locally if API fails
-    try {
-      const localHistory = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
-      
-      // Add or update signal in local history
-      const existingIndex = localHistory.findIndex((s: TradingSignal) => s.id === signal.id);
-      if (existingIndex >= 0) {
-        localHistory[existingIndex] = signal;
-      } else {
-        localHistory.unshift(signal);
-      }
-      
-      localStorage.setItem('trade_signal_history', JSON.stringify(localHistory.slice(0, 100)));
-      console.log('Signal saved to local history');
-      
-      toast({
-        title: "Sinal salvo localmente",
-        description: "O sinal foi salvo localmente pois não foi possível conectar ao servidor.",
-        variant: "warning"
-      });
-      return true;
-    } catch (e) {
-      console.error('Error saving signal to local history:', e);
-      toast({
-        title: "Erro ao salvar",
-        description: "Não foi possível salvar o sinal no histórico.",
-        variant: "destructive"
-      });
-      return false;
-    }
   }
 };
 

@@ -26,7 +26,6 @@ from backtesting.performance import generate_performance_report
 from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
 from routes import signal_evaluation_bp, performance_api_bp
 from api.hybrid_signals_api import hybrid_signals_api
-from api.signals_api import signals_api  # Make sure signals_api is imported
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -36,7 +35,6 @@ CORS(app)  # Enable CORS for all routes
 app.register_blueprint(signal_evaluation_bp)
 app.register_blueprint(performance_api_bp)
 app.register_blueprint(hybrid_signals_api)
-app.register_blueprint(signals_api)  # Register signals_api blueprint
 
 # Database configuration
 DB_PATH = "signals.db"
