@@ -1,0 +1,22 @@
+
+{
+  "api_key": "",
+  "api_secret": "",
+  "testnet": false,
+  "symbol": "BTCUSDT",
+  "category": "linear",
+  "interval": 60,
+  "moving_avg_short": 10,
+  "moving_avg_long": 50,
+  "rsi_period": 14,
+  "account_balance": 1000,
+  "risk_per_trade": 0.02,
+  "leverage_range": {
+    "conservador": 3,
+    "moderado": 5,
+    "agressivo": 10
+  },
+  "db_path": "signals.db",
+  "model_path": "models/model.pkl",
+  "log_file": "logs/agent.log"
+}
