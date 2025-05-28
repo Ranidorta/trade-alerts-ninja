@@ -15,6 +15,36 @@ else:
 
 db_path = config.get("db_path", "signals.db")
 
+def upgrade_db():
+    """
+    Upgrade database schema to include new fields.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # Check existing columns
+    cursor.execute("PRAGMA table_info(signals);")
+    columns = [c[1] for c in cursor.fetchall()]
+    
+    # Add result column if it doesn't exist
+    if 'result' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN result TEXT DEFAULT NULL;")
+    
+    # Add additional fields for better signal tracking
+    if 'sl' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN sl REAL;")
+    if 'tp1' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN tp1 REAL;")
+    if 'tp2' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN tp2 REAL;")
+    if 'tp3' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN tp3 REAL;")
+    if 'leverage' not in columns:
+        cursor.execute("ALTER TABLE signals ADD COLUMN leverage INTEGER;")
+    
+    conn.commit()
+    conn.close()
+
 def init_db():
     """
     Initialize the SQLite database with the necessary tables.
@@ -42,6 +72,7 @@ def init_db():
     """)
     conn.commit()
     conn.close()
+    upgrade_db()
 
 def insert_signal(signal):
     """
@@ -68,8 +99,22 @@ def insert_signal(signal):
         signal.get("rsi", 0),
         signal.get("atr", 0),
         signal.get("leverage", 1),
-        None
+        signal.get("result", None)
     ))
+    conn.commit()
+    conn.close()
+
+def update_signal_result(signal_id, result):
+    """
+    Update the result field for a specific signal.
+    
+    Args:
+        signal_id: ID of the signal to update
+        result: Signal result (WINNER, LOSER, PARTIAL, FALSE)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE signals SET result = ? WHERE id = ?", (result, signal_id))
     conn.commit()
     conn.close()
 
@@ -87,7 +132,7 @@ def get_last_signal(symbol):
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT timestamp, symbol, signal, price FROM signals
+            SELECT id, timestamp, symbol, signal, price, result FROM signals
             WHERE symbol = ? ORDER BY id DESC LIMIT 1
         """, (symbol,))
         row = cursor.fetchone()
@@ -95,10 +140,12 @@ def get_last_signal(symbol):
         
         if row:
             return {
-                "time": row[0],
-                "symbol": row[1],
-                "signal": row[2],
-                "price": row[3]
+                "id": row[0],
+                "time": row[1],
+                "symbol": row[2],
+                "signal": row[3],
+                "price": row[4],
+                "result": row[5]
             }
         return None
     except Exception as e:
@@ -136,27 +183,34 @@ def get_all_signals(limit=100):
         print(f"Error retrieving signals: {str(e)}")
         return []
 
-def update_signal_result(symbol, timestamp, result):
+def get_pending_signals():
     """
-    Update the result field for a specific signal.
+    Get all signals that don't have a result yet.
     
-    Args:
-        symbol: Trading pair symbol
-        timestamp: Signal timestamp
-        result: Signal result (win, loss, etc.)
+    Returns:
+        List of pending signal dictionaries
     """
     try:
         conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE signals
-            SET result = ?
-            WHERE symbol = ? AND timestamp = ?
-        """, (result, symbol, timestamp))
-        conn.commit()
+            SELECT * FROM signals
+            WHERE result IS NULL
+            ORDER BY id DESC
+        """)
+        rows = cursor.fetchall()
         conn.close()
+        
+        signals = []
+        for row in rows:
+            signal = {key: row[key] for key in row.keys()}
+            signals.append(signal)
+            
+        return signals
     except Exception as e:
-        print(f"Error updating signal result: {str(e)}")
+        print(f"Error retrieving pending signals: {str(e)}")
+        return []
 
 def export_to_csv(filename="signals_export.csv"):
     """

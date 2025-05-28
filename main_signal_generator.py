@@ -14,6 +14,7 @@ from signals.signal_generator import generate_signal
 from signals.validator import validate_signal
 from utils.risk_manager import manage_risk
 from utils.signal_storage import insert_signal
+from utils.signal_evaluator import start_evaluator
 from api.data_fetcher import get_symbols
 
 # Load configuration
@@ -29,6 +30,9 @@ def main():
     Main function to run the trading signal generator.
     """
     logger.info("Starting trade_signal_agent")
+    
+    # Start the signal evaluator in background
+    start_evaluator(interval=60)
     
     try:
         while True:
