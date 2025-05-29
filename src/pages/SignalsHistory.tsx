@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -175,7 +176,7 @@ const SignalsHistory = () => {
     };
   }).sort((a, b) => b.count - a.count);
 
-  // Load signals from SQLite database via API
+  // Load signals from SQLite database via Python backend API
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -191,12 +192,13 @@ const SignalsHistory = () => {
       if (symbolFilter) filters.symbol = symbolFilter;
       if (resultFilter) filters.result = resultFilter;
       
-      console.log("Fetching signals from SQLite database with filters:", filters);
+      console.log("Fetching signals from Python backend SQLite database with filters:", filters);
+      console.log("Backend URL:", config.apiUrl);
       
-      // Use the updated API endpoint that queries SQLite
+      // Use the updated API endpoint that queries SQLite via Python backend
       const response = await fetchSignalsHistory(filters);
       
-      console.log(`Received ${response.length} signals from SQLite database`);
+      console.log(`Received ${response.length} signals from Python backend SQLite database`);
       
       // Convert TradingSignal[] to BackendSignal[]
       const convertedSignals: BackendSignal[] = response.map(signal => convertToBackendSignal(signal));
@@ -218,14 +220,14 @@ const SignalsHistory = () => {
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${convertedSignals.length} sinais carregados do banco SQLite.`,
+          description: `${convertedSignals.length} sinais carregados do backend Python.`,
         });
       }
     } catch (error) {
-      console.error("Failed to load signals from SQLite database:", error);
+      console.error("Failed to load signals from Python backend SQLite database:", error);
       setApiError(true);
       
-      // Fallback to mock data if SQLite fails
+      // Fallback to mock data if Python backend fails
       try {
         const mockData = await import('@/lib/mockData');
         if (mockData && typeof mockData.getMockSignals === 'function') {
@@ -236,7 +238,7 @@ const SignalsHistory = () => {
           
           toast({
             title: "Usando dados locais",
-            description: "Não foi possível conectar ao banco SQLite, usando dados locais.",
+            description: "Não foi possível conectar ao backend Python, usando dados locais.",
             variant: "destructive"
           });
         }
@@ -340,7 +342,7 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Histórico detalhado dos sinais armazenados no banco SQLite"
+        description="Histórico detalhado dos sinais armazenados no banco SQLite (Backend Python)"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -418,6 +420,14 @@ const SignalsHistory = () => {
         </CardContent>
       </Card>
       
+      {/* Connection status indicator */}
+      {!isLoading && !apiError && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-green-600">
+          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          Conectado ao backend Python em {config.apiUrl}
+        </div>
+      )}
+      
       {/* Loading state */}
       {isLoading ? (
         <div className="space-y-4">
@@ -444,7 +454,10 @@ const SignalsHistory = () => {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {searchQuery || symbolFilter || resultFilter ? 
                     'Tente ajustar seus filtros para ver mais resultados.' : 
-                    'Nenhum sinal de trading foi gerado ainda pelo backend.'}
+                    'Nenhum sinal foi encontrado no banco SQLite do backend Python.'}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Certifique-se de que o backend Python está rodando em {config.apiUrl}
                 </p>
                 {(searchQuery || symbolFilter || resultFilter) && (
                   <Button 

@@ -1,8 +1,9 @@
+
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
 
-// Create an axios instance with the base URL
+// Create an axios instance with the base URL pointing to Python backend
 const api = axios.create({
   baseURL: config.apiUrl || 'http://localhost:5000',
   timeout: 10000,
@@ -59,7 +60,6 @@ export const fetchHybridSignals = async () => {
   try {
     console.log(`Fetching hybrid signals from: ${api.defaults.baseURL}/api/signals/history/hybrid`);
     
-    // Add absolute URL as a fallback to debug potential cross-origin issues
     const url = '/api/signals/history/hybrid';
     
     const response = await api.get(url);
@@ -89,12 +89,12 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    console.log(`Fetching signals history from: ${api.defaults.baseURL}/api/signals/history`);
+    console.log(`Fetching signals history from Python backend: ${api.defaults.baseURL}/api/signals/history`);
     
-    // Use the correct SQLite-based endpoint
+    // Use the SQLite-based endpoint from Python backend
     const response = await api.get('/api/signals/history', { params: filters });
     
-    console.log(`Successfully fetched ${response.data.length} signals from SQLite database`);
+    console.log(`Successfully fetched ${response.data.length} signals from Python backend SQLite database`);
     
     // Convert backend format to TradingSignal format
     const signals: TradingSignal[] = response.data.map((signal: any) => ({
@@ -125,7 +125,7 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     
     return signals;
   } catch (error) {
-    console.error('Error fetching signals history from SQLite:', error);
+    console.error('Error fetching signals history from Python backend:', error);
     if (axios.isAxiosError(error)) {
       console.log(`API responded with status: ${error.response?.status}`);
       console.log(`Error message: ${error.response?.data?.error || error.message}`);
@@ -134,7 +134,7 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
       
       // If the error is 404, it means no signals were found
       if (error.response?.status === 404) {
-        console.log('No signals found in SQLite database (404 response)');
+        console.log('No signals found in Python backend SQLite database (404 response)');
         return []; // Return empty array instead of throwing
       }
     }
