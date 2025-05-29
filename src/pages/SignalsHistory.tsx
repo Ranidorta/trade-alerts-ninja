@@ -69,6 +69,44 @@ type BackendSignal = {
   result: 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null;
 };
 
+// Helper function to convert TradingSignal to BackendSignal
+const convertToBackendSignal = (signal: TradingSignal): BackendSignal => {
+  return {
+    id: parseInt(signal.id || '0'),
+    timestamp: signal.createdAt || signal.timestamp || new Date().toISOString(),
+    symbol: signal.symbol,
+    signal: (signal.direction?.toUpperCase() as 'BUY' | 'SELL') || 'BUY',
+    price: signal.entryPrice || signal.entry_price || 0,
+    sl: signal.stopLoss || signal.sl || 0,
+    tp1: signal.tp1,
+    tp2: signal.tp2,
+    tp3: signal.tp3,
+    size: 0, // Default size since it's not in TradingSignal
+    leverage: signal.leverage,
+    result: signal.result === 1 ? "WINNER" : 
+            signal.result === 0 ? "LOSER" : 
+            signal.result === "win" ? "WINNER" :
+            signal.result === "loss" ? "LOSER" :
+            signal.result === "partial" ? "PARTIAL" :
+            signal.result === "WINNER" || signal.result === "LOSER" || 
+            signal.result === "PARTIAL" || signal.result === "FALSE" ? signal.result :
+            null
+  };
+};
+
+// Helper function to safely convert result string to BackendSignal result type
+const convertResultType = (result: any): 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null => {
+  if (!result) return null;
+  if (typeof result === 'string') {
+    const upperResult = result.toUpperCase();
+    if (upperResult === 'WINNER' || upperResult === 'LOSER' || 
+        upperResult === 'PARTIAL' || upperResult === 'FALSE') {
+      return upperResult as 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE';
+    }
+  }
+  return null;
+};
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -159,24 +197,28 @@ const SignalsHistory = () => {
       const response = await fetchSignalsHistory(filters);
       
       console.log(`Received ${response.length} real signals from backend API`);
-      setSignals(response);
+      
+      // Convert TradingSignal[] to BackendSignal[]
+      const convertedSignals: BackendSignal[] = response.map(signal => convertToBackendSignal(signal));
+      
+      setSignals(convertedSignals);
       
       // Apply search filter separately from API filters
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim();
-        const filtered = response.filter(signal => 
+        const filtered = convertedSignals.filter(signal => 
           signal.symbol.toLowerCase().includes(query) ||
           (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
         );
         setFilteredSignals(filtered);
       } else {
-        setFilteredSignals(response);
+        setFilteredSignals(convertedSignals);
       }
       
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${response.length} sinais reais encontrados no backend.`,
+          description: `${convertedSignals.length} sinais reais encontrados no backend.`,
         });
       }
     } catch (error) {
@@ -189,20 +231,7 @@ const SignalsHistory = () => {
         if (mockData && typeof mockData.getMockSignals === 'function') {
           const mockSignals = mockData.getMockSignals() as TradingSignal[];
           // Convert mock signals to backend format
-          const convertedSignals = mockSignals.map(mock => ({
-            id: parseInt(mock.id || '0'),
-            timestamp: mock.createdAt || new Date().toISOString(),
-            symbol: mock.symbol,
-            signal: mock.direction as 'BUY' | 'SELL',
-            price: mock.entryPrice || 0,
-            sl: mock.stopLoss || 0,
-            tp1: mock.tp1,
-            tp2: mock.tp2,
-            tp3: mock.tp3,
-            size: 0,
-            leverage: mock.leverage,
-            result: mock.result === 1 ? "WINNER" : mock.result === 0 ? "LOSER" : null
-          }));
+          const convertedSignals = mockSignals.map(mock => convertToBackendSignal(mock));
           setSignals(convertedSignals);
           setFilteredSignals(convertedSignals);
           
@@ -236,20 +265,7 @@ const SignalsHistory = () => {
       const mockData = await import('@/lib/mockData');
       if (mockData && typeof mockData.getMockSignals === 'function') {
         const mockSignals = mockData.getMockSignals() as TradingSignal[];
-        const convertedSignals = mockSignals.map(mock => ({
-          id: parseInt(mock.id || '0'),
-          timestamp: mock.createdAt || new Date().toISOString(),
-          symbol: mock.symbol,
-          signal: mock.direction as 'BUY' | 'SELL',
-          price: mock.entryPrice || 0,
-          sl: mock.stopLoss || 0,
-          tp1: mock.tp1,
-          tp2: mock.tp2,
-          tp3: mock.tp3,
-          size: 0,
-          leverage: mock.leverage,
-          result: mock.result === 1 ? "WINNER" : mock.result === 0 ? "LOSER" : null
-        }));
+        const convertedSignals = mockSignals.map(mock => convertToBackendSignal(mock));
         setSignals(convertedSignals);
         setFilteredSignals(convertedSignals);
         setApiError(false);
