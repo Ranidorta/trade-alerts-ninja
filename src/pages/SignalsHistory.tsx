@@ -51,6 +51,24 @@ import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
 
+// Define the backend signal type based on the actual API structure
+type BackendSignal = {
+  id: number;
+  timestamp: string;
+  symbol: string;
+  signal: 'BUY' | 'SELL' | 'buy' | 'sell';
+  price: number;
+  sl: number;
+  tp1?: number;
+  tp2?: number;
+  tp3?: number;
+  size: number;
+  rsi?: number;
+  atr?: number;
+  leverage?: number;
+  result: 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null;
+};
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -62,21 +80,22 @@ const formatDate = (dateString: string) => {
   });
 };
 
-const calculateWinRate = (signals: TradingSignal[]) => {
-  if (!signals.length) return 0;
-  
-  const winners = signals.filter(signal => 
-    signal.result === 'WINNER' || 
-    signal.result === 'win' || 
-    signal.result === 1
-  ).length;
-  
-  return (winners / signals.length) * 100;
+const getResultClass = (result: string | null) => {
+  switch (result) {
+    case 'WINNER': return 'bg-green-500/20 text-green-600 border-green-300/30';
+    case 'LOSER': return 'bg-red-500/20 text-red-600 border-red-300/30';
+    case 'PARTIAL': return 'bg-amber-500/20 text-amber-600 border-amber-300/30';
+    case 'FALSE': return 'bg-gray-500/20 text-gray-600 border-gray-300/30';
+    default: return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
+  }
 };
 
+const getDirectionClass = (direction: string) =>
+  direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
+
 const SignalsHistory = () => {
-  const [signals, setSignals] = useState<TradingSignal[]>([]);
-  const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
+  const [signals, setSignals] = useState<BackendSignal[]>([]);
+  const [filteredSignals, setFilteredSignals] = useState<BackendSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [apiError, setApiError] = useState(false);
@@ -89,34 +108,24 @@ const SignalsHistory = () => {
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
   
-  // Derived calculated data for summary
+  // Calculate performance statistics from real backend data
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => 
-    signal.result === "WINNER" || 
-    signal.result === "win" || 
-    signal.result === 1
-  ).length;
-  const losingTrades = filteredSignals.filter(signal => 
-    signal.result === "LOSER" || 
-    signal.result === "loss" || 
-    signal.result === 0
-  ).length;
-  const winRate = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
+  const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER").length;
+  const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
+  const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
+  const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
+  const pendingTrades = filteredSignals.filter(signal => signal.result === null).length;
+  
+  const completedTrades = winningTrades + losingTrades + partialTrades;
+  const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
+  const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
   
   // Symbol-based statistics
   const symbolsData = uniqueSymbols.map(symbol => {
     const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
     const count = symbolSignals.length;
-    const wins = symbolSignals.filter(s => 
-      s.result === "WINNER" || 
-      s.result === "win" || 
-      (typeof s.result === "number" && s.result === 1)
-    ).length;
-    const losses = symbolSignals.filter(s => 
-      s.result === "LOSER" || 
-      s.result === "loss" || 
-      (typeof s.result === "number" && s.result === 0)
-    ).length;
+    const wins = symbolSignals.filter(s => s.result === "WINNER").length;
+    const losses = symbolSignals.filter(s => s.result === "LOSER").length;
     const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
     
     return {
@@ -127,88 +136,8 @@ const SignalsHistory = () => {
       winRate: symbolWinRate
     };
   }).sort((a, b) => b.count - a.count);
-  
-  // Strategy-based statistics
-  const uniqueStrategies = [...new Set(filteredSignals.map(signal => signal.strategy || 'Unknown'))];
-  const strategyData = uniqueStrategies.map(strategy => {
-    const strategySignals = filteredSignals.filter(s => (s.strategy || 'Unknown') === strategy);
-    const count = strategySignals.length;
-    const wins = strategySignals.filter(s => 
-      s.result === "WINNER" || 
-      s.result === "win" || 
-      (typeof s.result === "number" && s.result === 1)
-    ).length;
-    const losses = strategySignals.filter(s => 
-      s.result === "LOSER" || 
-      s.result === "loss" || 
-      (typeof s.result === "number" && s.result === 0)
-    ).length;
-    const strategyWinRate = count > 0 ? (wins / count) * 100 : 0;
-    
-    return {
-      strategy,
-      count,
-      wins,
-      losses,
-      winRate: strategyWinRate
-    };
-  }).sort((a, b) => b.count - a.count);
-  
-  // Daily performance statistics
-  const dailyData = (() => {
-    const dailyMap = new Map();
-    
-    filteredSignals.forEach(signal => {
-      if (!signal.createdAt) return;
-      
-      const date = new Date(signal.createdAt).toLocaleDateString();
-      if (!dailyMap.has(date)) {
-        dailyMap.set(date, { date, count: 0, wins: 0, losses: 0 });
-      }
-      
-      const day = dailyMap.get(date);
-      day.count++;
-      
-      if (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) {
-        day.wins++;
-      }
-      if (signal.result === "LOSER" || signal.result === "loss" || signal.result === 0) {
-        day.losses++;
-      }
-    });
-    
-    return Array.from(dailyMap.values())
-      .map(day => ({
-        ...day,
-        winRate: day.count > 0 ? (day.wins / day.count) * 100 : 0
-      }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  })();
-  
-  const avgProfit = (() => {
-    const profitSignals = filteredSignals.filter(s => s.profit);
-    if (profitSignals.length === 0) return 0;
-    
-    const totalProfit = profitSignals.reduce((sum, signal) => {
-      return sum + (parseFloat(signal.profit?.toString() || '0') || 0);
-    }, 0);
-    
-    return totalProfit / profitSignals.length;
-  })();
-  
-  // Summary data object
-  const summaryData = {
-    totalSignals,
-    winningTrades,
-    losingTrades,
-    winRate,
-    symbolsData,
-    strategyData,
-    dailyData,
-    avgProfit
-  };
 
-  // Load signals from API - now with memoization and better error handling
+  // Load signals from real API
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -224,10 +153,12 @@ const SignalsHistory = () => {
       if (symbolFilter) filters.symbol = symbolFilter;
       if (resultFilter) filters.result = resultFilter;
       
-      console.log("Fetching signals history with filters:", filters);
+      console.log("Fetching real signals from backend API with filters:", filters);
+      
+      // Use the real API endpoint for backend signals
       const response = await fetchSignalsHistory(filters);
       
-      console.log(`Received ${response.length} signals from API`);
+      console.log(`Received ${response.length} real signals from backend API`);
       setSignals(response);
       
       // Apply search filter separately from API filters
@@ -235,7 +166,6 @@ const SignalsHistory = () => {
         const query = searchQuery.toLowerCase().trim();
         const filtered = response.filter(signal => 
           signal.symbol.toLowerCase().includes(query) ||
-          (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
           (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
         );
         setFilteredSignals(filtered);
@@ -246,20 +176,35 @@ const SignalsHistory = () => {
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${response.length} sinais históricos encontrados.`,
+          description: `${response.length} sinais reais encontrados no backend.`,
         });
       }
     } catch (error) {
-      console.error("Failed to load signals:", error);
+      console.error("Failed to load real signals from backend:", error);
       setApiError(true);
       
-      // Get mock data if API fails
+      // Fallback to mock data if API fails
       try {
         const mockData = await import('@/lib/mockData');
         if (mockData && typeof mockData.getMockSignals === 'function') {
           const mockSignals = mockData.getMockSignals() as TradingSignal[];
-          setSignals(mockSignals);
-          setFilteredSignals(mockSignals);
+          // Convert mock signals to backend format
+          const convertedSignals = mockSignals.map(mock => ({
+            id: parseInt(mock.id || '0'),
+            timestamp: mock.createdAt || new Date().toISOString(),
+            symbol: mock.symbol,
+            signal: mock.direction as 'BUY' | 'SELL',
+            price: mock.entryPrice || 0,
+            sl: mock.stopLoss || 0,
+            tp1: mock.tp1,
+            tp2: mock.tp2,
+            tp3: mock.tp3,
+            size: 0,
+            leverage: mock.leverage,
+            result: mock.result === 1 ? "WINNER" : mock.result === 0 ? "LOSER" : null
+          }));
+          setSignals(convertedSignals);
+          setFilteredSignals(convertedSignals);
           
           toast({
             title: "Usando dados locais",
@@ -291,8 +236,22 @@ const SignalsHistory = () => {
       const mockData = await import('@/lib/mockData');
       if (mockData && typeof mockData.getMockSignals === 'function') {
         const mockSignals = mockData.getMockSignals() as TradingSignal[];
-        setSignals(mockSignals);
-        setFilteredSignals(mockSignals);
+        const convertedSignals = mockSignals.map(mock => ({
+          id: parseInt(mock.id || '0'),
+          timestamp: mock.createdAt || new Date().toISOString(),
+          symbol: mock.symbol,
+          signal: mock.direction as 'BUY' | 'SELL',
+          price: mock.entryPrice || 0,
+          sl: mock.stopLoss || 0,
+          tp1: mock.tp1,
+          tp2: mock.tp2,
+          tp3: mock.tp3,
+          size: 0,
+          leverage: mock.leverage,
+          result: mock.result === 1 ? "WINNER" : mock.result === 0 ? "LOSER" : null
+        }));
+        setSignals(convertedSignals);
+        setFilteredSignals(convertedSignals);
         setApiError(false);
         
         toast({
@@ -315,7 +274,7 @@ const SignalsHistory = () => {
     loadSignals(true);
   };
   
-  // Handle search filtering - debounced search for better performance
+  // Handle search filtering
   useEffect(() => {
     if (!signals.length) return;
     
@@ -327,14 +286,13 @@ const SignalsHistory = () => {
     
     const filtered = signals.filter(signal => 
       signal.symbol.toLowerCase().includes(query) ||
-      (signal.strategy && signal.strategy.toLowerCase().includes(query)) ||
       (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
     );
     
     setFilteredSignals(filtered);
   }, [signals, searchQuery]);
   
-  // If API error is detected and we couldn't get mock data
+  // If API error is detected and we couldn't get data
   if (apiError && signals.length === 0) {
     return (
       <ApiConnectionError 
@@ -367,7 +325,7 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Histórico detalhado dos sinais gerados"
+        description="Histórico detalhado dos sinais gerados pelo backend"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -395,144 +353,6 @@ const SignalsHistory = () => {
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
         
-          {/* Symbol filter dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 gap-1">
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">Ativo</span>
-                {symbolFilter && (
-                  <Badge variant="secondary" className="ml-1 bg-primary/20">
-                    {symbolFilter}
-                  </Badge>
-                )}
-                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Filtrar por ativo</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <div className="max-h-[300px] overflow-y-auto">
-                <DropdownMenuItem 
-                  onSelect={() => setSymbolFilter('')}
-                  className={!symbolFilter ? "bg-primary/10" : ""}
-                >
-                  Todos os ativos
-                  {!symbolFilter && <Check className="ml-auto h-4 w-4" />}
-                </DropdownMenuItem>
-                
-                {uniqueSymbols.map((symbol) => (
-                  <DropdownMenuItem
-                    key={symbol}
-                    onSelect={() => setSymbolFilter(symbol)}
-                    className={symbolFilter === symbol ? "bg-primary/10" : ""}
-                  >
-                    {symbol}
-                    {symbolFilter === symbol && <Check className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-                ))}
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {/* Result filter dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 gap-1">
-                <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Resultado</span>
-                {resultFilter && (
-                  <Badge 
-                    variant="secondary" 
-                    className={`ml-1 ${
-                      resultFilter === 'WINNER' 
-                        ? 'bg-green-500/20 text-green-600 border-green-300/30' 
-                        : resultFilter === 'LOSER'
-                          ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                          : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
-                    }`}
-                  >
-                    {resultFilter}
-                  </Badge>
-                )}
-                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Filtrar por resultado</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onSelect={() => setResultFilter('')}
-                className={!resultFilter ? "bg-primary/10" : ""}
-              >
-                Todos os resultados
-                {!resultFilter && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setResultFilter('WINNER')}
-                className={resultFilter === 'WINNER' ? "bg-primary/10" : ""}
-              >
-                <Badge className="mr-2 bg-green-500/20 text-green-600 border-green-300/30">WINNER</Badge>
-                Vencedor
-                {resultFilter === 'WINNER' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setResultFilter('LOSER')}
-                className={resultFilter === 'LOSER' ? "bg-primary/10" : ""}
-              >
-                <Badge className="mr-2 bg-red-500/20 text-red-600 border-red-300/30">LOSER</Badge>
-                Perdedor
-                {resultFilter === 'LOSER' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setResultFilter('PARTIAL')}
-                className={resultFilter === 'PARTIAL' ? "bg-primary/10" : ""}
-              >
-                <Badge className="mr-2 bg-orange-500/20 text-orange-600 border-orange-300/30">PARTIAL</Badge>
-                Parcial
-                {resultFilter === 'PARTIAL' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {/* View mode selector */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 gap-1">
-                <Layers className="h-4 w-4" />
-                <span className="hidden sm:inline">
-                  {viewMode === 'table' ? 'Tabela' : viewMode === 'cards' ? 'Cards' : 'Resumo'}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Modo de visualização</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onSelect={() => setViewMode('table')}
-                className={viewMode === 'table' ? "bg-primary/10" : ""}
-              >
-                Tabela
-                {viewMode === 'table' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setViewMode('cards')}
-                className={viewMode === 'cards' ? "bg-primary/10" : ""}
-              >
-                Cards
-                {viewMode === 'cards' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onSelect={() => setViewMode('summary')}
-                className={viewMode === 'summary' ? "bg-primary/10" : ""}
-              >
-                Resumo
-                {viewMode === 'summary' && <Check className="ml-auto h-4 w-4" />}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
           {/* Clear filters button */}
           {(symbolFilter || resultFilter || searchQuery) && (
             <Button 
@@ -551,25 +371,33 @@ const SignalsHistory = () => {
         </div>
       </div>
       
-      {/* Results summary section */}
+      {/* Performance statistics from real backend data */}
       <Card className="mb-6">
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Total de Sinais</span>
               <span className="text-2xl font-bold">{totalSignals}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Sinais Vencedores</span>
+              <span className="text-sm text-muted-foreground">Vencedores</span>
               <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Sinais Perdedores</span>
+              <span className="text-sm text-muted-foreground">Perdedores</span>
               <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
             </div>
             <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Parciais</span>
+              <span className="text-2xl font-bold text-amber-500">{partialTrades}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">Pendentes</span>
+              <span className="text-2xl font-bold text-blue-500">{pendingTrades}</span>
+            </div>
+            <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
-              <span className="text-2xl font-bold text-amber-500">{winRate.toFixed(1)}%</span>
+              <span className="text-2xl font-bold text-purple-500">{accuracy.toFixed(1)}%</span>
             </div>
           </div>
         </CardContent>
@@ -586,11 +414,6 @@ const SignalsHistory = () => {
             </div>
           </div>
           <Skeleton className="h-[100px] w-full" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Skeleton className="h-[150px] w-full" />
-            <Skeleton className="h-[150px] w-full" />
-            <Skeleton className="h-[150px] w-full" />
-          </div>
           <Skeleton className="h-[200px] w-full" />
         </div>
       ) : (
@@ -606,7 +429,7 @@ const SignalsHistory = () => {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {searchQuery || symbolFilter || resultFilter ? 
                     'Tente ajustar seus filtros para ver mais resultados.' : 
-                    'Nenhum sinal de trading foi gerado ainda.'}
+                    'Nenhum sinal de trading foi gerado ainda pelo backend.'}
                 </p>
                 {(searchQuery || symbolFilter || resultFilter) && (
                   <Button 
@@ -626,54 +449,56 @@ const SignalsHistory = () => {
             </Card>
           )}
           
-          {/* Table view */}
-          {viewMode === 'table' && filteredSignals.length > 0 && (
+          {/* Real backend signals table */}
+          {filteredSignals.length > 0 && (
             <Card className="overflow-hidden">
               <Table>
                 <TableHeader className="sticky top-0 bg-background z-10">
                   <TableRow>
-                    <TableHead onClick={() => {}}>Data/Hora</TableHead>
-                    <TableHead onClick={() => {}}>Ativo</TableHead>
-                    <TableHead onClick={() => {}}>Direção</TableHead>
-                    <TableHead onClick={() => {}}>Entrada</TableHead>
-                    <TableHead onClick={() => {}}>TP</TableHead>
-                    <TableHead onClick={() => {}}>SL</TableHead>
-                    <TableHead onClick={() => {}}>Resultado</TableHead>
-                    <TableHead onClick={() => {}}>Estratégia</TableHead>
+                    <TableHead>Data/Hora</TableHead>
+                    <TableHead>Ativo</TableHead>
+                    <TableHead>Direção</TableHead>
+                    <TableHead>Entrada</TableHead>
+                    <TableHead>TP1</TableHead>
+                    <TableHead>TP2</TableHead>
+                    <TableHead>TP3</TableHead>
+                    <TableHead>SL</TableHead>
+                    <TableHead>Alavancagem</TableHead>
+                    <TableHead>Tamanho</TableHead>
+                    <TableHead>RSI</TableHead>
+                    <TableHead>ATR</TableHead>
+                    <TableHead>Resultado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredSignals.slice(0, 50).map((signal) => (
-                    <TableRow key={signal.id || `${signal.createdAt}-${signal.symbol}`}>
+                    <TableRow key={signal.id}>
                       <TableCell>
-                        {signal.createdAt ? formatDate(signal.createdAt) : 'N/A'}
+                        {formatDate(signal.timestamp)}
                       </TableCell>
                       <TableCell className="font-medium">{signal.symbol}</TableCell>
                       <TableCell>
-                        <Badge variant={signal.direction === 'BUY' ? 'success' : 'destructive'}>
-                          {signal.direction}
+                        <Badge variant={getDirectionClass(signal.signal)}>
+                          {signal.signal.toUpperCase()}
                         </Badge>
                       </TableCell>
-                      <TableCell>{signal.entryPrice}</TableCell>
-                      <TableCell>{signal.takeProfit && signal.takeProfit[0]}</TableCell>
-                      <TableCell>{signal.stopLoss}</TableCell>
+                      <TableCell>${signal.price.toFixed(4)}</TableCell>
+                      <TableCell>{signal.tp1 ? `$${signal.tp1.toFixed(4)}` : '-'}</TableCell>
+                      <TableCell>{signal.tp2 ? `$${signal.tp2.toFixed(4)}` : '-'}</TableCell>
+                      <TableCell>{signal.tp3 ? `$${signal.tp3.toFixed(4)}` : '-'}</TableCell>
+                      <TableCell className="text-red-600">${signal.sl.toFixed(4)}</TableCell>
+                      <TableCell>{signal.leverage ? `${signal.leverage}x` : '-'}</TableCell>
+                      <TableCell>{signal.size.toFixed(2)}</TableCell>
+                      <TableCell>{signal.rsi ? signal.rsi.toFixed(2) : '-'}</TableCell>
+                      <TableCell>{signal.atr ? signal.atr.toFixed(4) : '-'}</TableCell>
                       <TableCell>
                         <Badge 
                           variant="outline" 
-                          className={
-                            signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1
-                              ? 'bg-green-500/20 text-green-600 border-green-300/30' 
-                              : signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0
-                                ? 'bg-red-500/20 text-red-600 border-red-300/30'
-                                : 'bg-orange-500/20 text-orange-600 border-orange-300/30'
-                          }
+                          className={getResultClass(signal.result)}
                         >
-                          {typeof signal.result === 'number' 
-                            ? signal.result === 1 ? 'WINNER' : 'LOSER'
-                            : signal.result}
+                          {signal.result || 'PENDENTE'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{signal.strategy || '-'}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -688,29 +513,6 @@ const SignalsHistory = () => {
                 </div>
               )}
             </Card>
-          )}
-          
-          {/* Cards view */}
-          {viewMode === 'cards' && filteredSignals.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSignals.slice(0, 50).map((signal) => (
-                <SignalHistoryItem key={signal.id || `${signal.createdAt}-${signal.symbol}`} signal={signal} />
-              ))}
-              
-              {/* Load more button */}
-              {filteredSignals.length > 50 && (
-                <div className="col-span-full flex justify-center mt-4">
-                  <Button variant="outline">
-                    Carregar mais ({filteredSignals.length - 50} restantes)
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Summary view */}
-          {viewMode === 'summary' && (
-            <SignalsSummary signals={filteredSignals} />
           )}
         </>
       )}
