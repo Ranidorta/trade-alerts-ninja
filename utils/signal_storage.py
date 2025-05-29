@@ -17,7 +17,7 @@ db_path = config.get("db_path", "signals.db")
 
 def upgrade_db():
     """
-    Upgrade database schema to include new fields.
+    Upgrade database schema to include all required fields for the new signals format.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -26,32 +26,39 @@ def upgrade_db():
     cursor.execute("PRAGMA table_info(signals);")
     columns = [c[1] for c in cursor.fetchall()]
     
-    # Add result column if it doesn't exist
-    if 'result' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN result TEXT DEFAULT NULL;")
+    # Add missing columns for the new signal format
+    new_columns = [
+        ('result', 'TEXT DEFAULT NULL'),
+        ('sl', 'REAL'),
+        ('tp1', 'REAL'),
+        ('tp2', 'REAL'),
+        ('tp3', 'REAL'),
+        ('leverage', 'INTEGER'),
+        ('size', 'REAL DEFAULT 0'),
+        ('rsi', 'REAL'),
+        ('atr', 'REAL'),
+        ('strategy_name', 'TEXT'),
+        ('price', 'REAL'),
+        ('signal', 'TEXT')
+    ]
     
-    # Add additional fields for better signal tracking
-    if 'sl' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN sl REAL;")
-    if 'tp1' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN tp1 REAL;")
-    if 'tp2' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN tp2 REAL;")
-    if 'tp3' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN tp3 REAL;")
-    if 'leverage' not in columns:
-        cursor.execute("ALTER TABLE signals ADD COLUMN leverage INTEGER;")
+    for column_name, column_type in new_columns:
+        if column_name not in columns:
+            cursor.execute(f"ALTER TABLE signals ADD COLUMN {column_name} {column_type};")
+            print(f"Added column {column_name} to signals table")
     
     conn.commit()
     conn.close()
 
 def init_db():
     """
-    Initialize the SQLite database with the necessary tables.
+    Initialize the SQLite database with the necessary tables and structure.
     """
     os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
+    
+    # Create signals table with all required columns
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS signals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,15 +70,30 @@ def init_db():
             tp1 REAL,
             tp2 REAL,
             tp3 REAL,
-            size REAL,
+            size REAL DEFAULT 0,
             rsi REAL,
             atr REAL,
             leverage INTEGER,
-            result TEXT
+            result TEXT,
+            strategy_name TEXT
         )
     """)
+    
+    # Create index for better query performance
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_signals_timestamp 
+        ON signals(timestamp DESC)
+    """)
+    
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_signals_symbol 
+        ON signals(symbol)
+    """)
+    
     conn.commit()
     conn.close()
+    
+    # Run upgrade to ensure all columns exist
     upgrade_db()
 
 def insert_signal(signal):

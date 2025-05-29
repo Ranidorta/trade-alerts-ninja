@@ -4,6 +4,7 @@
 export const config = {
   apiUrl: import.meta.env.VITE_API_URL || "http://localhost:5000",
   signalsApiUrl: import.meta.env.VITE_SIGNALS_API_URL || "http://localhost:5000/api",
+  signalsHistoryUrl: import.meta.env.VITE_SIGNALS_HISTORY_URL || "http://localhost:5000/api/signals/history",
   interval: import.meta.env.VITE_INTERVAL || "15m",
   
   // Firebase Configuration

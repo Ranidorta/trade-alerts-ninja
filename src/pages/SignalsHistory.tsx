@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +50,7 @@ import ApiConnectionError from '@/components/signals/ApiConnectionError';
 import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
 
-// Define the backend signal type based on the actual API structure
+// Define the backend signal type to match SQLite database structure
 type BackendSignal = {
   id: number;
   timestamp: string;
@@ -67,6 +66,7 @@ type BackendSignal = {
   atr?: number;
   leverage?: number;
   result: 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null;
+  strategy?: string;
 };
 
 // Helper function to convert TradingSignal to BackendSignal
@@ -81,7 +81,7 @@ const convertToBackendSignal = (signal: TradingSignal): BackendSignal => {
     tp1: signal.tp1,
     tp2: signal.tp2,
     tp3: signal.tp3,
-    size: 0, // Default size since it's not in TradingSignal
+    size: signal.size || 0,
     leverage: signal.leverage,
     result: signal.result === 1 ? "WINNER" : 
             signal.result === 0 ? "LOSER" : 
@@ -90,7 +90,8 @@ const convertToBackendSignal = (signal: TradingSignal): BackendSignal => {
             signal.result === "partial" ? "PARTIAL" :
             signal.result === "WINNER" || signal.result === "LOSER" || 
             signal.result === "PARTIAL" || signal.result === "FALSE" ? signal.result :
-            null
+            null,
+    strategy: signal.strategy
   };
 };
 
@@ -140,7 +141,6 @@ const SignalsHistory = () => {
   const [symbolFilter, setSymbolFilter] = useState('');
   const [resultFilter, setResultFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'cards' | 'summary'>('table');
   const { toast } = useToast();
   
   // List of unique symbols for filtering
@@ -175,7 +175,7 @@ const SignalsHistory = () => {
     };
   }).sort((a, b) => b.count - a.count);
 
-  // Load signals from real API
+  // Load signals from SQLite database via API
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -191,12 +191,12 @@ const SignalsHistory = () => {
       if (symbolFilter) filters.symbol = symbolFilter;
       if (resultFilter) filters.result = resultFilter;
       
-      console.log("Fetching real signals from backend API with filters:", filters);
+      console.log("Fetching signals from SQLite database with filters:", filters);
       
-      // Use the real API endpoint for backend signals
+      // Use the updated API endpoint that queries SQLite
       const response = await fetchSignalsHistory(filters);
       
-      console.log(`Received ${response.length} real signals from backend API`);
+      console.log(`Received ${response.length} signals from SQLite database`);
       
       // Convert TradingSignal[] to BackendSignal[]
       const convertedSignals: BackendSignal[] = response.map(signal => convertToBackendSignal(signal));
@@ -218,26 +218,25 @@ const SignalsHistory = () => {
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${convertedSignals.length} sinais reais encontrados no backend.`,
+          description: `${convertedSignals.length} sinais carregados do banco SQLite.`,
         });
       }
     } catch (error) {
-      console.error("Failed to load real signals from backend:", error);
+      console.error("Failed to load signals from SQLite database:", error);
       setApiError(true);
       
-      // Fallback to mock data if API fails
+      // Fallback to mock data if SQLite fails
       try {
         const mockData = await import('@/lib/mockData');
         if (mockData && typeof mockData.getMockSignals === 'function') {
           const mockSignals = mockData.getMockSignals() as TradingSignal[];
-          // Convert mock signals to backend format
           const convertedSignals = mockSignals.map(mock => convertToBackendSignal(mock));
           setSignals(convertedSignals);
           setFilteredSignals(convertedSignals);
           
           toast({
             title: "Usando dados locais",
-            description: "Não foi possível conectar à API, usando dados locais.",
+            description: "Não foi possível conectar ao banco SQLite, usando dados locais.",
             variant: "destructive"
           });
         }
@@ -341,7 +340,7 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Histórico detalhado dos sinais gerados pelo backend"
+        description="Histórico detalhado dos sinais armazenados no banco SQLite"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">

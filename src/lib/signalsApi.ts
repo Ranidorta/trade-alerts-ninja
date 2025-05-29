@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -90,11 +89,55 @@ export const fetchHybridSignals = async () => {
 
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    // Fix: Use correct API endpoint with properly formed URL
+    console.log(`Fetching signals history from: ${api.defaults.baseURL}/api/signals/history`);
+    
+    // Use the correct SQLite-based endpoint
     const response = await api.get('/api/signals/history', { params: filters });
-    return response.data as TradingSignal[];
+    
+    console.log(`Successfully fetched ${response.data.length} signals from SQLite database`);
+    
+    // Convert backend format to TradingSignal format
+    const signals: TradingSignal[] = response.data.map((signal: any) => ({
+      id: signal.id?.toString() || `${signal.symbol}_${signal.timestamp}`,
+      symbol: signal.symbol,
+      direction: signal.signal?.toUpperCase() === 'BUY' ? 'BUY' : 'SELL',
+      entryPrice: signal.price || 0,
+      stopLoss: signal.sl || 0,
+      tp1: signal.tp1,
+      tp2: signal.tp2,
+      tp3: signal.tp3,
+      leverage: signal.leverage,
+      status: signal.result ? "COMPLETED" : "ACTIVE",
+      createdAt: signal.timestamp,
+      timestamp: signal.timestamp,
+      rsi: signal.rsi,
+      atr: signal.atr,
+      size: signal.size,
+      result: signal.result === 'WINNER' ? 'WINNER' : 
+              signal.result === 'LOSER' ? 'LOSER' : 
+              signal.result === 'PARTIAL' ? 'PARTIAL' : 
+              signal.result === 'FALSE' ? 'FALSE' : 
+              signal.result,
+      strategy: signal.strategy,
+      entry_price: signal.price || 0,
+      sl: signal.sl || 0
+    }));
+    
+    return signals;
   } catch (error) {
-    console.error('Error fetching signals history:', error);
+    console.error('Error fetching signals history from SQLite:', error);
+    if (axios.isAxiosError(error)) {
+      console.log(`API responded with status: ${error.response?.status}`);
+      console.log(`Error message: ${error.response?.data?.error || error.message}`);
+      console.log(`Request URL: ${error.config?.url}`);
+      console.log(`Base URL: ${api.defaults.baseURL}`);
+      
+      // If the error is 404, it means no signals were found
+      if (error.response?.status === 404) {
+        console.log('No signals found in SQLite database (404 response)');
+        return []; // Return empty array instead of throwing
+      }
+    }
     throw error;
   }
 };

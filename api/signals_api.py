@@ -1,13 +1,12 @@
-
 """
 API module for signal-related endpoints.
 
 This module provides a Flask Blueprint with routes for retrieving
-historical trading signals data stored in CSV format.
+historical trading signals data from SQLite database.
 """
 
 from flask import Blueprint, jsonify, request
-import pandas as pd
+import sqlite3
 from pathlib import Path
 import json
 import datetime
@@ -18,10 +17,20 @@ from utils.signal_storage import get_all_signals, insert_signal
 
 signals_api = Blueprint('signals_api', __name__)
 
+# Database configuration
+DB_PATH = "signals.db"
+
+def dict_factory(cursor, row):
+    """Convert SQLite row to dictionary"""
+    d = {}
+    for idx, col in enumerate(cursor.description):
+        d[col[0]] = row[idx]
+    return d
+
 @signals_api.route("/api/signals/history", methods=["GET"])
 def get_signals_history():
     """
-    Retrieve historical trading signals from CSV storage.
+    Retrieve historical trading signals from SQLite database.
     
     Returns a JSON array of signal records, sorted by timestamp in descending order.
     Supports optional filtering by symbol (asset) and result.
@@ -37,27 +46,66 @@ def get_signals_history():
     symbol = request.args.get('symbol')
     result = request.args.get('result')
     
-    file = Path("data/historical_signals.csv")
-    if not file.exists():
-        return jsonify({"error": "Nenhum sinal encontrado."}), 404
+    # Check if database exists
+    if not Path(DB_PATH).exists():
+        return jsonify({"error": "Nenhum sinal encontrado no banco de dados."}), 404
 
     try:
-        df = pd.read_csv(file)
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = dict_factory
+        cursor = conn.cursor()
+        
+        # Build query with optional filters
+        query = """
+            SELECT 
+                id, timestamp, symbol, signal, price, sl, tp1, tp2, tp3, 
+                size, leverage, rsi, atr, result, strategy_name as strategy
+            FROM signals
+            WHERE 1=1
+        """
+        params = []
         
         # Apply filters if provided
         if symbol:
-            df = df[df['asset'].str.contains(symbol, case=False)]
+            query += " AND symbol LIKE ?"
+            params.append(f"%{symbol}%")
         if result:
-            df = df[df['result'] == result]
+            query += " AND result = ?"
+            params.append(result)
             
-        # Sort by timestamp descending
-        df = df.sort_values(by='timestamp', ascending=False)
+        # Sort by timestamp descending and limit results
+        query += " ORDER BY timestamp DESC LIMIT 500"
         
-        # Convert to dict records
-        records = df.to_dict(orient="records")
-        return jsonify(records)
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Convert to frontend-compatible format
+        signals = []
+        for row in rows:
+            signal = {
+                "id": row["id"],
+                "timestamp": row["timestamp"],
+                "symbol": row["symbol"],
+                "signal": row["signal"],
+                "price": row["price"] or 0,
+                "sl": row["sl"] or 0,
+                "tp1": row["tp1"],
+                "tp2": row["tp2"],
+                "tp3": row["tp3"],
+                "size": row["size"] or 0,
+                "leverage": row["leverage"],
+                "rsi": row["rsi"],
+                "atr": row["atr"],
+                "result": row["result"],
+                "strategy": row["strategy"]
+            }
+            signals.append(signal)
+        
+        return jsonify(signals)
+        
     except Exception as e:
-        return jsonify({"error": f"Erro ao processar sinais: {str(e)}"}), 500
+        return jsonify({"error": f"Erro ao processar sinais do banco: {str(e)}"}), 500
 
 @signals_api.route("/api/signals/generate", methods=["POST"])
 def generate_new_signal():
