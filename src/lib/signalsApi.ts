@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -33,102 +34,30 @@ const initializeAuth = () => {
 
 initializeAuth();
 
-// Get signals from localStorage (from Sinais tab)
-const getSignalsFromLocalStorage = (): TradingSignal[] => {
-  try {
-    const signals = localStorage.getItem('archived_trading_signals');
-    return signals ? JSON.parse(signals) : [];
-  } catch (error) {
-    console.error('Error reading signals from localStorage:', error);
-    return [];
-  }
-};
-
-// Validate signal using Bybit API
-const validateSignalWithBybit = async (signal: TradingSignal): Promise<TradingSignal> => {
-  try {
-    console.log(`Validating signal ${signal.id} with Bybit API...`);
-    
-    // Get current price from Bybit
-    const response = await axios.get(`https://api.bybit.com/v5/market/tickers`, {
-      params: {
-        category: 'linear',
-        symbol: signal.symbol
-      }
-    });
-    
-    if (response.data?.result?.list?.[0]) {
-      const ticker = response.data.result.list[0];
-      const currentPrice = parseFloat(ticker.lastPrice);
-      
-      // Update signal with current price and validation status
-      const updatedSignal = { ...signal };
-      updatedSignal.currentPrice = currentPrice;
-      updatedSignal.verifiedAt = new Date().toISOString();
-      
-      // Check if targets were hit or stop loss was hit
-      if (signal.direction === 'BUY') {
-        // For BUY signals, check if price went above targets or below stop loss
-        if (currentPrice <= signal.stopLoss) {
-          updatedSignal.result = 'LOSER';
-          updatedSignal.status = 'COMPLETED';
-        } else if (signal.tp1 && currentPrice >= signal.tp1) {
-          updatedSignal.result = 'WINNER';
-          updatedSignal.status = 'COMPLETED';
-        }
-      } else {
-        // For SELL signals, check if price went below targets or above stop loss
-        if (currentPrice >= signal.stopLoss) {
-          updatedSignal.result = 'LOSER';
-          updatedSignal.status = 'COMPLETED';
-        } else if (signal.tp1 && currentPrice <= signal.tp1) {
-          updatedSignal.result = 'WINNER';
-          updatedSignal.status = 'COMPLETED';
-        }
-      }
-      
-      return updatedSignal;
-    }
-    
-    return signal;
-  } catch (error) {
-    console.error(`Error validating signal ${signal.id} with Bybit:`, error);
-    return {
-      ...signal,
-      error: 'Failed to validate with Bybit API'
-    };
-  }
-};
-
-// Fetch signals history from localStorage and validate with Bybit
+// Fetch signals history ONLY from backend - no localStorage fallback
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
-    console.log('Fetching signals from localStorage and validating with Bybit...');
+    console.log('Fetching signals history from backend API...');
     
-    let signals = getSignalsFromLocalStorage();
+    const params: any = {};
+    if (filters?.symbol) params.symbol = filters.symbol;
+    if (filters?.result) params.result = filters.result;
     
-    // Apply filters if provided
-    if (filters?.symbol) {
-      signals = signals.filter(signal => signal.symbol === filters.symbol);
-    }
-    if (filters?.result) {
-      signals = signals.filter(signal => signal.result === filters.result);
-    }
+    const response = await api.get('/api/signals/history', { params });
     
-    // Validate a few recent signals with Bybit API (to avoid rate limits)
-    const recentSignals = signals.slice(0, 10);
-    const validatedSignals = await Promise.all(
-      recentSignals.map(signal => validateSignalWithBybit(signal))
-    );
+    console.log(`Successfully fetched ${response.data.length} signals from backend`);
     
-    // Replace the first 10 signals with validated ones
-    const finalSignals = [...validatedSignals, ...signals.slice(10)];
-    
-    console.log(`Successfully loaded ${finalSignals.length} signals from localStorage`);
-    
-    return finalSignals;
+    return response.data as TradingSignal[];
   } catch (error) {
-    console.error('Error fetching signals history:', error);
+    console.error('Error fetching signals history from backend:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        console.log('No signals found in backend database');
+        return [];
+      }
+    }
+    
     throw error;
   }
 };
@@ -197,5 +126,27 @@ export const prefetchCommonData = async () => {
   } catch (error) {
     console.error('Error prefetching common data:', error);
     return false;
+  }
+};
+
+// Trigger manual evaluation of all signals
+export const triggerSignalEvaluation = async () => {
+  try {
+    const response = await api.post('/api/signals/evaluate');
+    return response.data;
+  } catch (error) {
+    console.error('Error triggering signal evaluation:', error);
+    throw error;
+  }
+};
+
+// Get evaluation status
+export const getEvaluationStatus = async () => {
+  try {
+    const response = await api.get('/api/signals/evaluation/status');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching evaluation status:', error);
+    throw error;
   }
 };

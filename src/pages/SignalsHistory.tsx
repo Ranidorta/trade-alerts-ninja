@@ -1,13 +1,15 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchSignalsHistory } from '@/lib/signalsApi';
+import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   RefreshCw,
   X,
   Search,
-  Calendar
+  Calendar,
+  Play,
+  BarChart3
 } from 'lucide-react';
 import {
   Table,
@@ -53,7 +55,9 @@ const SignalsHistory = () => {
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
   const { toast } = useToast();
   
   // List of unique symbols for filtering
@@ -71,7 +75,7 @@ const SignalsHistory = () => {
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
   const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
 
-  // Load signals from localStorage
+  // Load signals from backend only
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -80,11 +84,11 @@ const SignalsHistory = () => {
         setIsLoading(true);
       }
       
-      console.log("Loading signals from localStorage and validating with Bybit...");
+      console.log("Loading signals from backend API...");
       
       const response = await fetchSignalsHistory();
       
-      console.log(`Loaded ${response.length} signals`);
+      console.log(`Loaded ${response.length} signals from backend`);
       
       setSignals(response);
       setFilteredSignals(response);
@@ -92,7 +96,7 @@ const SignalsHistory = () => {
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${response.length} sinais carregados e validados com Bybit.`,
+          description: `${response.length} sinais carregados do backend.`,
         });
       }
     } catch (error) {
@@ -100,7 +104,7 @@ const SignalsHistory = () => {
       toast({
         variant: "destructive",
         title: "Erro ao carregar sinais",
-        description: "Não foi possível carregar os sinais do localStorage.",
+        description: "Não foi possível carregar os sinais do backend. Verifique se o serviço está rodando.",
       });
     } finally {
       setIsLoading(false);
@@ -109,15 +113,62 @@ const SignalsHistory = () => {
       }
     }
   }, [toast]);
+
+  // Load evaluation status
+  const loadEvaluationStatus = useCallback(async () => {
+    try {
+      const status = await getEvaluationStatus();
+      setEvaluationStatus(status);
+    } catch (error) {
+      console.error("Failed to load evaluation status:", error);
+    }
+  }, []);
   
   // Initial load
   useEffect(() => {
     loadSignals();
-  }, [loadSignals]);
+    loadEvaluationStatus();
+  }, [loadSignals, loadEvaluationStatus]);
+  
+  // Auto-refresh every 30 seconds to get updated results from backend
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadSignals(true);
+      loadEvaluationStatus();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [loadSignals, loadEvaluationStatus]);
   
   // Handle refreshing data
   const handleRefresh = () => {
     loadSignals(true);
+    loadEvaluationStatus();
+  };
+
+  // Trigger manual evaluation
+  const handleTriggerEvaluation = async () => {
+    try {
+      setIsEvaluating(true);
+      await triggerSignalEvaluation();
+      toast({
+        title: "Avaliação iniciada",
+        description: "O backend está avaliando todos os sinais pendentes.",
+      });
+      // Wait a bit then refresh
+      setTimeout(() => {
+        loadSignals(true);
+        loadEvaluationStatus();
+      }, 2000);
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro na avaliação",
+        description: "Não foi possível iniciar a avaliação dos sinais.",
+      });
+    } finally {
+      setIsEvaluating(false);
+    }
   };
   
   // Handle search filtering
@@ -144,7 +195,7 @@ const SignalsHistory = () => {
       <div className="container mx-auto px-4 py-8">
         <PageHeader
           title="Histórico de Sinais"
-          description="Carregando sinais do localStorage..."
+          description="Carregando sinais do backend..."
         />
         <div className="space-y-4">
           <Skeleton className="h-[100px] w-full" />
@@ -158,7 +209,7 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Sinais carregados do localStorage e validados com a API da Bybit"
+        description="Sinais avaliados automaticamente pelo backend usando dados reais da Bybit"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -175,6 +226,17 @@ const SignalsHistory = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* Trigger evaluation button */}
+          <Button 
+            variant="outline" 
+            className="h-9 gap-1"
+            onClick={handleTriggerEvaluation}
+            disabled={isEvaluating || isLoading}
+          >
+            <Play className={`h-4 w-4 ${isEvaluating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Avaliar Sinais</span>
+          </Button>
+
           {/* Refresh button */}
           <Button 
             variant="outline" 
@@ -199,6 +261,38 @@ const SignalsHistory = () => {
           )}
         </div>
       </div>
+
+      {/* Evaluation Status */}
+      {evaluationStatus && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Status de Avaliação
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Total: </span>
+                <span className="font-medium">{evaluationStatus.total_signals || 0}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Avaliados: </span>
+                <span className="font-medium text-green-600">{evaluationStatus.evaluated_signals || 0}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Pendentes: </span>
+                <span className="font-medium text-blue-600">{evaluationStatus.pending_signals || 0}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Backend: </span>
+                <span className="font-medium text-green-600">Conectado</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Performance statistics */}
       <Card className="mb-6">
@@ -235,7 +329,8 @@ const SignalsHistory = () => {
       {/* Connection status */}
       <div className="mb-4 flex items-center gap-2 text-sm text-green-600">
         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-        Sinais carregados do localStorage e validados com Bybit API
+        Sinais carregados do backend e avaliados automaticamente
+        <span className="text-xs text-muted-foreground ml-2">(atualiza a cada 30s)</span>
       </div>
       
       {/* No results message */}
@@ -249,7 +344,7 @@ const SignalsHistory = () => {
             <p className="mt-2 text-sm text-muted-foreground">
               {searchQuery ? 
                 'Tente ajustar seus filtros para ver mais resultados.' : 
-                'Nenhum sinal foi encontrado no localStorage. Verifique a aba Sinais.'}
+                'Nenhum sinal foi encontrado no backend. Verifique se o serviço de avaliação está rodando.'}
             </p>
             {searchQuery && (
               <Button 

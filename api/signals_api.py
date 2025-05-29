@@ -48,7 +48,7 @@ def get_signals_history():
     
     # Check if database exists
     if not Path(DB_PATH).exists():
-        return jsonify({"error": "Nenhum sinal encontrado no banco de dados."}), 404
+        return jsonify([]), 200  # Return empty array instead of error
 
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -80,24 +80,25 @@ def get_signals_history():
         rows = cursor.fetchall()
         conn.close()
         
-        # Convert to frontend-compatible format
+        # Convert to frontend-compatible format (matching TradingSignal interface)
         signals = []
         for row in rows:
             signal = {
-                "id": row["id"],
-                "timestamp": row["timestamp"],
+                "id": str(row["id"]),
                 "symbol": row["symbol"],
-                "signal": row["signal"],
-                "price": row["price"] or 0,
-                "sl": row["sl"] or 0,
-                "tp1": row["tp1"],
-                "tp2": row["tp2"],
-                "tp3": row["tp3"],
-                "size": row["size"] or 0,
-                "leverage": row["leverage"],
-                "rsi": row["rsi"],
-                "atr": row["atr"],
-                "result": row["result"],
+                "direction": row["signal"].upper() if row["signal"] else "BUY",
+                "entryPrice": float(row["price"]) if row["price"] else 0,
+                "stopLoss": float(row["sl"]) if row["sl"] else 0,
+                "tp1": float(row["tp1"]) if row["tp1"] else None,
+                "tp2": float(row["tp2"]) if row["tp2"] else None,
+                "tp3": float(row["tp3"]) if row["tp3"] else None,
+                "leverage": int(row["leverage"]) if row["leverage"] else 1,
+                "status": "COMPLETED" if row["result"] else "ACTIVE",
+                "createdAt": row["timestamp"],
+                "result": row["result"],  # Backend evaluated result
+                "rsi": float(row["rsi"]) if row["rsi"] else None,
+                "atr": float(row["atr"]) if row["atr"] else None,
+                "size": float(row["size"]) if row["size"] else 0,
                 "strategy": row["strategy"]
             }
             signals.append(signal)
@@ -105,7 +106,8 @@ def get_signals_history():
         return jsonify(signals)
         
     except Exception as e:
-        return jsonify({"error": f"Erro ao processar sinais do banco: {str(e)}"}), 500
+        print(f"Error in get_signals_history: {str(e)}")
+        return jsonify([]), 200  # Return empty array on error
 
 @signals_api.route("/api/signals/generate", methods=["POST"])
 def generate_new_signal():
