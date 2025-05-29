@@ -4,32 +4,11 @@ import { fetchSignalsHistory } from '@/lib/signalsApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  ArrowUpDown, 
-  Filter, 
-  Calendar, 
-  ChevronDown,
-  Layers,
-  BarChart3,
+  RefreshCw,
   X,
   Search,
-  RefreshCw
+  Calendar
 } from 'lucide-react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogTrigger,
-  DialogClose
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -40,74 +19,10 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
-import { SignalHistoryItem } from '@/components/signals/SignalHistoryItem';
-import SignalsSummary from '@/components/signals/SignalsSummary';
-import ApiConnectionError from '@/components/signals/ApiConnectionError';
-import { config } from '@/config/env';
 import { useToast } from '@/components/ui/use-toast';
-
-// Define the backend signal type to match SQLite database structure
-type BackendSignal = {
-  id: number;
-  timestamp: string;
-  symbol: string;
-  signal: 'BUY' | 'SELL' | 'buy' | 'sell';
-  price: number;
-  sl: number;
-  tp1?: number;
-  tp2?: number;
-  tp3?: number;
-  size: number;
-  rsi?: number;
-  atr?: number;
-  leverage?: number;
-  result: 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null;
-  strategy?: string;
-};
-
-// Helper function to convert TradingSignal to BackendSignal
-const convertToBackendSignal = (signal: TradingSignal): BackendSignal => {
-  return {
-    id: parseInt(signal.id || '0'),
-    timestamp: signal.createdAt || signal.timestamp || new Date().toISOString(),
-    symbol: signal.symbol,
-    signal: (signal.direction?.toUpperCase() as 'BUY' | 'SELL') || 'BUY',
-    price: signal.entryPrice || signal.entry_price || 0,
-    sl: signal.stopLoss || signal.sl || 0,
-    tp1: signal.tp1,
-    tp2: signal.tp2,
-    tp3: signal.tp3,
-    size: signal.size || 0,
-    leverage: signal.leverage,
-    result: signal.result === 1 ? "WINNER" : 
-            signal.result === 0 ? "LOSER" : 
-            signal.result === "win" ? "WINNER" :
-            signal.result === "loss" ? "LOSER" :
-            signal.result === "partial" ? "PARTIAL" :
-            signal.result === "WINNER" || signal.result === "LOSER" || 
-            signal.result === "PARTIAL" || signal.result === "FALSE" ? signal.result :
-            null,
-    strategy: signal.strategy
-  };
-};
-
-// Helper function to safely convert result string to BackendSignal result type
-const convertResultType = (result: any): 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE' | null => {
-  if (!result) return null;
-  if (typeof result === 'string') {
-    const upperResult = result.toUpperCase();
-    if (upperResult === 'WINNER' || upperResult === 'LOSER' || 
-        upperResult === 'PARTIAL' || upperResult === 'FALSE') {
-      return upperResult as 'WINNER' | 'LOSER' | 'PARTIAL' | 'FALSE';
-    }
-  }
-  return null;
-};
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -134,49 +49,29 @@ const getDirectionClass = (direction: string) =>
   direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 
 const SignalsHistory = () => {
-  const [signals, setSignals] = useState<BackendSignal[]>([]);
-  const [filteredSignals, setFilteredSignals] = useState<BackendSignal[]>([]);
+  const [signals, setSignals] = useState<TradingSignal[]>([]);
+  const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [apiError, setApiError] = useState(false);
-  const [symbolFilter, setSymbolFilter] = useState('');
-  const [resultFilter, setResultFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
   
-  // Calculate performance statistics from real backend data
+  // Calculate performance statistics
   const totalSignals = filteredSignals.length;
   const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER").length;
   const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
-  const pendingTrades = filteredSignals.filter(signal => signal.result === null).length;
+  const pendingTrades = filteredSignals.filter(signal => !signal.result).length;
   
   const completedTrades = winningTrades + losingTrades + partialTrades;
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
   const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
-  
-  // Symbol-based statistics
-  const symbolsData = uniqueSymbols.map(symbol => {
-    const symbolSignals = filteredSignals.filter(s => s.symbol === symbol);
-    const count = symbolSignals.length;
-    const wins = symbolSignals.filter(s => s.result === "WINNER").length;
-    const losses = symbolSignals.filter(s => s.result === "LOSER").length;
-    const symbolWinRate = count > 0 ? (wins / count) * 100 : 0;
-    
-    return {
-      symbol,
-      count,
-      wins,
-      losses,
-      winRate: symbolWinRate
-    };
-  }).sort((a, b) => b.count - a.count);
 
-  // Load signals from SQLite database via Python backend API
+  // Load signals from localStorage
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -185,106 +80,40 @@ const SignalsHistory = () => {
         setIsLoading(true);
       }
       
-      setApiError(false);
+      console.log("Loading signals from localStorage and validating with Bybit...");
       
-      // Apply any active filters to the API request
-      const filters: { symbol?: string; result?: string } = {};
-      if (symbolFilter) filters.symbol = symbolFilter;
-      if (resultFilter) filters.result = resultFilter;
+      const response = await fetchSignalsHistory();
       
-      console.log("Fetching signals from Python backend SQLite database with filters:", filters);
-      console.log("Backend URL:", config.apiUrl);
+      console.log(`Loaded ${response.length} signals`);
       
-      // Use the updated API endpoint that queries SQLite via Python backend
-      const response = await fetchSignalsHistory(filters);
-      
-      console.log(`Received ${response.length} signals from Python backend SQLite database`);
-      
-      // Convert TradingSignal[] to BackendSignal[]
-      const convertedSignals: BackendSignal[] = response.map(signal => convertToBackendSignal(signal));
-      
-      setSignals(convertedSignals);
-      
-      // Apply search filter separately from API filters
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const filtered = convertedSignals.filter(signal => 
-          signal.symbol.toLowerCase().includes(query) ||
-          (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
-        );
-        setFilteredSignals(filtered);
-      } else {
-        setFilteredSignals(convertedSignals);
-      }
+      setSignals(response);
+      setFilteredSignals(response);
       
       if (isRefreshRequest) {
         toast({
           title: "Sinais atualizados",
-          description: `${convertedSignals.length} sinais carregados do backend Python.`,
+          description: `${response.length} sinais carregados e validados com Bybit.`,
         });
       }
     } catch (error) {
-      console.error("Failed to load signals from Python backend SQLite database:", error);
-      setApiError(true);
-      
-      // Fallback to mock data if Python backend fails
-      try {
-        const mockData = await import('@/lib/mockData');
-        if (mockData && typeof mockData.getMockSignals === 'function') {
-          const mockSignals = mockData.getMockSignals() as TradingSignal[];
-          const convertedSignals = mockSignals.map(mock => convertToBackendSignal(mock));
-          setSignals(convertedSignals);
-          setFilteredSignals(convertedSignals);
-          
-          toast({
-            title: "Usando dados locais",
-            description: "Não foi possível conectar ao backend Python, usando dados locais.",
-            variant: "destructive"
-          });
-        }
-      } catch (e) {
-        console.error("Failed to load mock data:", e);
-        setSignals([]);
-        setFilteredSignals([]);
-      }
+      console.error("Failed to load signals:", error);
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar sinais",
+        description: "Não foi possível carregar os sinais do localStorage.",
+      });
     } finally {
       setIsLoading(false);
       if (isRefreshRequest) {
         setIsRefreshing(false);
       }
     }
-  }, [symbolFilter, resultFilter, searchQuery, toast]);
+  }, [toast]);
   
   // Initial load
   useEffect(() => {
     loadSignals();
   }, [loadSignals]);
-  
-  // Handle switching to local mode
-  const handleLocalModeClick = async () => {
-    try {
-      const mockData = await import('@/lib/mockData');
-      if (mockData && typeof mockData.getMockSignals === 'function') {
-        const mockSignals = mockData.getMockSignals() as TradingSignal[];
-        const convertedSignals = mockSignals.map(mock => convertToBackendSignal(mock));
-        setSignals(convertedSignals);
-        setFilteredSignals(convertedSignals);
-        setApiError(false);
-        
-        toast({
-          title: "Modo local ativado",
-          description: "Exibindo dados de exemplo armazenados localmente.",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to load mock data:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os dados locais.",
-        variant: "destructive"
-      });
-    }
-  };
   
   // Handle refreshing data
   const handleRefresh = () => {
@@ -308,45 +137,32 @@ const SignalsHistory = () => {
     
     setFilteredSignals(filtered);
   }, [signals, searchQuery]);
-  
-  // If API error is detected and we couldn't get data
-  if (apiError && signals.length === 0) {
+
+  // Loading state
+  if (isLoading) {
     return (
-      <ApiConnectionError 
-        apiUrl={config.apiUrl || 'http://localhost:5000'} 
-        onLocalModeClick={handleLocalModeClick} 
-      />
+      <div className="container mx-auto px-4 py-8">
+        <PageHeader
+          title="Histórico de Sinais"
+          description="Carregando sinais do localStorage..."
+        />
+        <div className="space-y-4">
+          <Skeleton className="h-[100px] w-full" />
+          <Skeleton className="h-[200px] w-full" />
+        </div>
+      </div>
     );
   }
-
-  const Check = (props: React.SVGProps<SVGSVGElement>) => {
-    return (
-      <svg
-        {...props}
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="20 6 9 17 4 12" />
-      </svg>
-    );
-  };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Histórico detalhado dos sinais armazenados no banco SQLite (Backend Python)"
+        description="Sinais carregados do localStorage e validados com a API da Bybit"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
-        {/* Search and filter controls */}
+        {/* Search */}
         <div className="relative w-full sm:w-64 flex-shrink-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -371,15 +187,11 @@ const SignalsHistory = () => {
           </Button>
         
           {/* Clear filters button */}
-          {(symbolFilter || resultFilter || searchQuery) && (
+          {searchQuery && (
             <Button 
               variant="ghost" 
               className="h-9"
-              onClick={() => {
-                setSymbolFilter('');
-                setResultFilter('');
-                setSearchQuery('');
-              }}
+              onClick={() => setSearchQuery('')}
             >
               <X className="h-4 w-4 mr-1" />
               Limpar filtros
@@ -388,7 +200,7 @@ const SignalsHistory = () => {
         </div>
       </div>
       
-      {/* Performance statistics from real backend data */}
+      {/* Performance statistics */}
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
@@ -420,129 +232,101 @@ const SignalsHistory = () => {
         </CardContent>
       </Card>
       
-      {/* Connection status indicator */}
-      {!isLoading && !apiError && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-green-600">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          Conectado ao backend Python em {config.apiUrl}
-        </div>
+      {/* Connection status */}
+      <div className="mb-4 flex items-center gap-2 text-sm text-green-600">
+        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+        Sinais carregados do localStorage e validados com Bybit API
+      </div>
+      
+      {/* No results message */}
+      {filteredSignals.length === 0 && (
+        <Card className="col-span-full">
+          <CardContent className="p-8 text-center">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+              <Calendar className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold">Nenhum sinal encontrado</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {searchQuery ? 
+                'Tente ajustar seus filtros para ver mais resultados.' : 
+                'Nenhum sinal foi encontrado no localStorage. Verifique a aba Sinais.'}
+            </p>
+            {searchQuery && (
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Limpar filtros
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
       
-      {/* Loading state */}
-      {isLoading ? (
-        <div className="space-y-4">
-          <div className="flex items-center space-x-4 animate-pulse">
-            <Skeleton className="h-12 w-12 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-[250px]" />
-              <Skeleton className="h-4 w-[200px]" />
-            </div>
-          </div>
-          <Skeleton className="h-[100px] w-full" />
-          <Skeleton className="h-[200px] w-full" />
-        </div>
-      ) : (
-        <>
-          {/* No results message */}
-          {filteredSignals.length === 0 && (
-            <Card className="col-span-full">
-              <CardContent className="p-8 text-center">
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                  <Calendar className="h-10 w-10 text-muted-foreground" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">Nenhum sinal encontrado</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {searchQuery || symbolFilter || resultFilter ? 
-                    'Tente ajustar seus filtros para ver mais resultados.' : 
-                    'Nenhum sinal foi encontrado no banco SQLite do backend Python.'}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Certifique-se de que o backend Python está rodando em {config.apiUrl}
-                </p>
-                {(searchQuery || symbolFilter || resultFilter) && (
-                  <Button 
-                    variant="outline" 
-                    className="mt-4"
-                    onClick={() => {
-                      setSymbolFilter('');
-                      setResultFilter('');
-                      setSearchQuery('');
-                    }}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Limpar filtros
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )}
+      {/* Signals table */}
+      {filteredSignals.length > 0 && (
+        <Card className="overflow-hidden">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              <TableRow>
+                <TableHead>Data/Hora</TableHead>
+                <TableHead>Ativo</TableHead>
+                <TableHead>Direção</TableHead>
+                <TableHead>Entrada</TableHead>
+                <TableHead>TP1</TableHead>
+                <TableHead>TP2</TableHead>
+                <TableHead>TP3</TableHead>
+                <TableHead>SL</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Resultado</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredSignals.slice(0, 50).map((signal) => (
+                <TableRow key={signal.id}>
+                  <TableCell>
+                    {formatDate(signal.createdAt)}
+                  </TableCell>
+                  <TableCell className="font-medium">{signal.symbol}</TableCell>
+                  <TableCell>
+                    <Badge variant={getDirectionClass(signal.direction || 'BUY')}>
+                      {(signal.direction || 'BUY').toUpperCase()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>${(signal.entryPrice || 0).toFixed(4)}</TableCell>
+                  <TableCell>{signal.tp1 ? `$${signal.tp1.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>{signal.tp2 ? `$${signal.tp2.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>{signal.tp3 ? `$${signal.tp3.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell className="text-red-600">${signal.stopLoss.toFixed(4)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {signal.status || 'ACTIVE'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant="outline" 
+                      className={getResultClass(signal.result as string)}
+                    >
+                      {signal.result || 'PENDENTE'}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           
-          {/* Real backend signals table */}
-          {filteredSignals.length > 0 && (
-            <Card className="overflow-hidden">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
-                  <TableRow>
-                    <TableHead>Data/Hora</TableHead>
-                    <TableHead>Ativo</TableHead>
-                    <TableHead>Direção</TableHead>
-                    <TableHead>Entrada</TableHead>
-                    <TableHead>TP1</TableHead>
-                    <TableHead>TP2</TableHead>
-                    <TableHead>TP3</TableHead>
-                    <TableHead>SL</TableHead>
-                    <TableHead>Alavancagem</TableHead>
-                    <TableHead>Tamanho</TableHead>
-                    <TableHead>RSI</TableHead>
-                    <TableHead>ATR</TableHead>
-                    <TableHead>Resultado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredSignals.slice(0, 50).map((signal) => (
-                    <TableRow key={signal.id}>
-                      <TableCell>
-                        {formatDate(signal.timestamp)}
-                      </TableCell>
-                      <TableCell className="font-medium">{signal.symbol}</TableCell>
-                      <TableCell>
-                        <Badge variant={getDirectionClass(signal.signal)}>
-                          {signal.signal.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>${signal.price.toFixed(4)}</TableCell>
-                      <TableCell>{signal.tp1 ? `$${signal.tp1.toFixed(4)}` : '-'}</TableCell>
-                      <TableCell>{signal.tp2 ? `$${signal.tp2.toFixed(4)}` : '-'}</TableCell>
-                      <TableCell>{signal.tp3 ? `$${signal.tp3.toFixed(4)}` : '-'}</TableCell>
-                      <TableCell className="text-red-600">${signal.sl.toFixed(4)}</TableCell>
-                      <TableCell>{signal.leverage ? `${signal.leverage}x` : '-'}</TableCell>
-                      <TableCell>{signal.size.toFixed(2)}</TableCell>
-                      <TableCell>{signal.rsi ? signal.rsi.toFixed(2) : '-'}</TableCell>
-                      <TableCell>{signal.atr ? signal.atr.toFixed(4) : '-'}</TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline" 
-                          className={getResultClass(signal.result)}
-                        >
-                          {signal.result || 'PENDENTE'}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              
-              {/* Load more button */}
-              {filteredSignals.length > 50 && (
-                <div className="flex justify-center p-4">
-                  <Button variant="outline">
-                    Carregar mais ({filteredSignals.length - 50} restantes)
-                  </Button>
-                </div>
-              )}
-            </Card>
+          {/* Load more button */}
+          {filteredSignals.length > 50 && (
+            <div className="flex justify-center p-4">
+              <Button variant="outline">
+                Carregar mais ({filteredSignals.length - 50} restantes)
+              </Button>
+            </div>
           )}
-        </>
+        </Card>
       )}
     </div>
   );

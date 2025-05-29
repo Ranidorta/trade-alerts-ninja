@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -24,17 +23,6 @@ export const clearAuthToken = () => {
   localStorage.removeItem('auth_token');
 };
 
-export const prefetchCommonData = async () => {
-  // This function can be used to prefetch data that's commonly needed
-  try {
-    // Example: Prefetch market overview, active signals, etc.
-    return true;
-  } catch (error) {
-    console.error('Error prefetching common data:', error);
-    return false;
-  }
-};
-
 // Initialize auth token from localStorage if available
 const initializeAuth = () => {
   const token = localStorage.getItem('auth_token');
@@ -44,6 +32,106 @@ const initializeAuth = () => {
 };
 
 initializeAuth();
+
+// Get signals from localStorage (from Sinais tab)
+const getSignalsFromLocalStorage = (): TradingSignal[] => {
+  try {
+    const signals = localStorage.getItem('archived_trading_signals');
+    return signals ? JSON.parse(signals) : [];
+  } catch (error) {
+    console.error('Error reading signals from localStorage:', error);
+    return [];
+  }
+};
+
+// Validate signal using Bybit API
+const validateSignalWithBybit = async (signal: TradingSignal): Promise<TradingSignal> => {
+  try {
+    console.log(`Validating signal ${signal.id} with Bybit API...`);
+    
+    // Get current price from Bybit
+    const response = await axios.get(`https://api.bybit.com/v5/market/tickers`, {
+      params: {
+        category: 'linear',
+        symbol: signal.symbol
+      }
+    });
+    
+    if (response.data?.result?.list?.[0]) {
+      const ticker = response.data.result.list[0];
+      const currentPrice = parseFloat(ticker.lastPrice);
+      
+      // Update signal with current price and validation status
+      const updatedSignal = { ...signal };
+      updatedSignal.currentPrice = currentPrice;
+      updatedSignal.verifiedAt = new Date().toISOString();
+      
+      // Check if targets were hit or stop loss was hit
+      if (signal.direction === 'BUY') {
+        // For BUY signals, check if price went above targets or below stop loss
+        if (currentPrice <= signal.stopLoss) {
+          updatedSignal.result = 'LOSER';
+          updatedSignal.status = 'COMPLETED';
+        } else if (signal.tp1 && currentPrice >= signal.tp1) {
+          updatedSignal.result = 'WINNER';
+          updatedSignal.status = 'COMPLETED';
+        }
+      } else {
+        // For SELL signals, check if price went below targets or above stop loss
+        if (currentPrice >= signal.stopLoss) {
+          updatedSignal.result = 'LOSER';
+          updatedSignal.status = 'COMPLETED';
+        } else if (signal.tp1 && currentPrice <= signal.tp1) {
+          updatedSignal.result = 'WINNER';
+          updatedSignal.status = 'COMPLETED';
+        }
+      }
+      
+      return updatedSignal;
+    }
+    
+    return signal;
+  } catch (error) {
+    console.error(`Error validating signal ${signal.id} with Bybit:`, error);
+    return {
+      ...signal,
+      error: 'Failed to validate with Bybit API'
+    };
+  }
+};
+
+// Fetch signals history from localStorage and validate with Bybit
+export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
+  try {
+    console.log('Fetching signals from localStorage and validating with Bybit...');
+    
+    let signals = getSignalsFromLocalStorage();
+    
+    // Apply filters if provided
+    if (filters?.symbol) {
+      signals = signals.filter(signal => signal.symbol === filters.symbol);
+    }
+    if (filters?.result) {
+      signals = signals.filter(signal => signal.result === filters.result);
+    }
+    
+    // Validate a few recent signals with Bybit API (to avoid rate limits)
+    const recentSignals = signals.slice(0, 10);
+    const validatedSignals = await Promise.all(
+      recentSignals.map(signal => validateSignalWithBybit(signal))
+    );
+    
+    // Replace the first 10 signals with validated ones
+    const finalSignals = [...validatedSignals, ...signals.slice(10)];
+    
+    console.log(`Successfully loaded ${finalSignals.length} signals from localStorage`);
+    
+    return finalSignals;
+  } catch (error) {
+    console.error('Error fetching signals history:', error);
+    throw error;
+  }
+};
 
 // Signal API functions
 export const fetchSignals = async (params?: any) => {
@@ -77,65 +165,9 @@ export const fetchHybridSignals = async () => {
       console.log(`Request URL: ${error.config?.url}`);
       console.log(`Base URL: ${api.defaults.baseURL}`);
       
-      // If the error is 404, it means no signals were found, which is a valid state
       if (error.response?.status === 404) {
         console.log('No hybrid signals found (404 response)');
-        return []; // Return empty array instead of throwing
-      }
-    }
-    throw error; // Re-throw other errors
-  }
-};
-
-export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
-  try {
-    console.log(`Fetching signals history from Python backend: ${api.defaults.baseURL}/api/signals/history`);
-    
-    // Use the SQLite-based endpoint from Python backend
-    const response = await api.get('/api/signals/history', { params: filters });
-    
-    console.log(`Successfully fetched ${response.data.length} signals from Python backend SQLite database`);
-    
-    // Convert backend format to TradingSignal format
-    const signals: TradingSignal[] = response.data.map((signal: any) => ({
-      id: signal.id?.toString() || `${signal.symbol}_${signal.timestamp}`,
-      symbol: signal.symbol,
-      direction: signal.signal?.toUpperCase() === 'BUY' ? 'BUY' : 'SELL',
-      entryPrice: signal.price || 0,
-      stopLoss: signal.sl || 0,
-      tp1: signal.tp1,
-      tp2: signal.tp2,
-      tp3: signal.tp3,
-      leverage: signal.leverage,
-      status: signal.result ? "COMPLETED" : "ACTIVE",
-      createdAt: signal.timestamp,
-      timestamp: signal.timestamp,
-      rsi: signal.rsi,
-      atr: signal.atr,
-      size: signal.size,
-      result: signal.result === 'WINNER' ? 'WINNER' : 
-              signal.result === 'LOSER' ? 'LOSER' : 
-              signal.result === 'PARTIAL' ? 'PARTIAL' : 
-              signal.result === 'FALSE' ? 'FALSE' : 
-              signal.result,
-      strategy: signal.strategy,
-      entry_price: signal.price || 0,
-      sl: signal.sl || 0
-    }));
-    
-    return signals;
-  } catch (error) {
-    console.error('Error fetching signals history from Python backend:', error);
-    if (axios.isAxiosError(error)) {
-      console.log(`API responded with status: ${error.response?.status}`);
-      console.log(`Error message: ${error.response?.data?.error || error.message}`);
-      console.log(`Request URL: ${error.config?.url}`);
-      console.log(`Base URL: ${api.defaults.baseURL}`);
-      
-      // If the error is 404, it means no signals were found
-      if (error.response?.status === 404) {
-        console.log('No signals found in Python backend SQLite database (404 response)');
-        return []; // Return empty array instead of throwing
+        return [];
       }
     }
     throw error;
@@ -154,5 +186,16 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
   } catch (error) {
     console.error('Error fetching performance metrics:', error);
     throw error;
+  }
+};
+
+export const prefetchCommonData = async () => {
+  // This function can be used to prefetch data that's commonly needed
+  try {
+    // Example: Prefetch market overview, active signals, etc.
+    return true;
+  } catch (error) {
+    console.error('Error prefetching common data:', error);
+    return false;
   }
 };
