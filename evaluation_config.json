@@ -1,0 +1,18 @@
+
+{
+  "evaluation_settings": {
+    "default_duration_hours": 24,
+    "interval_minutes": 10,
+    "max_signals_per_batch": 100,
+    "rate_limit_delay_seconds": 0.5
+  },
+  "bybit_api": {
+    "base_url": "https://api.bybit.com/v5",
+    "timeout_seconds": 10,
+    "default_interval": "15"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/evaluator.log"
+  }
+}
