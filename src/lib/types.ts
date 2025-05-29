@@ -62,7 +62,10 @@ export interface TradingSignal {
   conf_nivel?: string;   
   tp1?: number;         
   tp2?: number;          
-  tp3?: number;          
+  tp3?: number;
+  size?: number;          // Added to fix the build error
+  rsi?: number;           // Added for technical indicators
+  atr?: number;           // Added for technical indicators
 }
 
 export interface Feature {
