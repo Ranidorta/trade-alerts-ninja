@@ -12,6 +12,11 @@ import os
 import requests
 import json
 import functools
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
+logger = logging.getLogger(__name__)
 
 # Firebase Auth
 import firebase_admin
@@ -21,22 +26,54 @@ from firebase_admin import firestore
 # Import our local modules
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from strategies.bollinger_bands import strategy_bollinger_bands
-from backtesting.performance import generate_performance_report
-from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
-from routes import signal_evaluation_bp, performance_api_bp
-from api.hybrid_signals_api import hybrid_signals_api
-from api.monster_signals_api import monster_signals_api
+
+try:
+    from strategies.bollinger_bands import strategy_bollinger_bands
+    from backtesting.performance import generate_performance_report
+    from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
+    from routes import signal_evaluation_bp, performance_api_bp
+    from api.hybrid_signals_api import hybrid_signals_api
+    from api.monster_signals_api import monster_signals_api
+    logger.info("✅ Successfully imported all modules")
+except ImportError as e:
+    logger.warning(f"⚠️ Some modules failed to import: {e}")
+    # Create dummy blueprints to prevent crashes
+    from flask import Blueprint
+    signal_evaluation_bp = Blueprint('signal_evaluation_dummy', __name__)
+    performance_api_bp = Blueprint('performance_dummy', __name__)
+    hybrid_signals_api = Blueprint('hybrid_dummy', __name__)
+    monster_signals_api = Blueprint('monster_dummy', __name__)
 
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Register blueprints
-app.register_blueprint(signal_evaluation_bp)
-app.register_blueprint(performance_api_bp)
-app.register_blueprint(hybrid_signals_api)
-app.register_blueprint(monster_signals_api)
+logger.info("🚀 Starting Flask API server...")
+
+# Register blueprints with error handling
+try:
+    app.register_blueprint(signal_evaluation_bp)
+    logger.info("✅ Registered signal_evaluation_bp")
+except Exception as e:
+    logger.error(f"❌ Failed to register signal_evaluation_bp: {e}")
+
+try:
+    app.register_blueprint(performance_api_bp)
+    logger.info("✅ Registered performance_api_bp")
+except Exception as e:
+    logger.error(f"❌ Failed to register performance_api_bp: {e}")
+
+try:
+    app.register_blueprint(hybrid_signals_api)
+    logger.info("✅ Registered hybrid_signals_api")
+except Exception as e:
+    logger.error(f"❌ Failed to register hybrid_signals_api: {e}")
+
+try:
+    app.register_blueprint(monster_signals_api)
+    logger.info("✅ Registered monster_signals_api")
+except Exception as e:
+    logger.error(f"❌ Failed to register monster_signals_api: {e}")
 
 # Database configuration
 DB_PATH = "signals.db"
@@ -47,14 +84,14 @@ try:
     cred = credentials.Certificate("firebase-service-account.json")
     firebase_admin.initialize_app(cred)
     db = firestore.client()
-    print("Firebase initialized successfully")
+    logger.info("Firebase initialized successfully")
 except Exception as e:
-    print(f"Firebase initialization error: {e}")
+    logger.error(f"Firebase initialization error: {e}")
     # Continue without Firebase if file is missing (for development)
 
 # Ensure database file exists
 if not os.path.exists(DB_PATH):
-    print(f"Warning: Database file {DB_PATH} not found. Will be created when signals are generated.")
+    logger.warning(f"Warning: Database file {DB_PATH} not found. Will be created when signals are generated.")
 
 # Create raw data directory if it doesn't exist
 if not os.path.exists(RAW_DATA_DIR):
@@ -78,7 +115,7 @@ def verify_firebase_token(id_token):
     try:
         # Check if Firebase is initialized
         if not firebase_admin._apps:
-            print("Firebase not initialized, skipping auth")
+            logger.info("Firebase not initialized, skipping auth")
             return None
             
         # Verify the token
@@ -101,7 +138,7 @@ def verify_firebase_token(id_token):
         
         return decoded_token
     except Exception as e:
-        print(f"Token verification error: {e}")
+        logger.error(f"Token verification error: {e}")
         return None
 
 # Authentication middleware
@@ -225,10 +262,28 @@ def signal_status(result):
         return "COMPLETED"
     return "ACTIVE"
 
+# Add a simple health check that doesn't depend on other modules
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({"status": "OK", "timestamp": datetime.utcnow().isoformat()})
+    """Simple health check endpoint"""
+    try:
+        return jsonify({
+            "status": "OK", 
+            "timestamp": datetime.utcnow().isoformat(),
+            "message": "Flask API is running",
+            "endpoints": {
+                "monster_signals": "/api/signals/generate/monster",
+                "monster_status": "/api/signals/generate/monster/status",
+                "health": "/api/health"
+            }
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            "status": "ERROR",
+            "message": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }), 500
 
 @app.route('/api/signals', methods=['GET'])
 @require_premium  # Changed from optional_auth to require_premium for signal data
@@ -663,7 +718,7 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         conn.close()
         return True
     except Exception as e:
-        print(f"Erro ao salvar sinal no banco: {str(e)}")
+        logger.error(f"Erro ao salvar sinal no banco: {str(e)}")
         return False
 
 def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None, max_drawdown=None):
@@ -725,7 +780,8 @@ def update_strategy_performance(cursor, strategy_name, result, sharpe_ratio=None
             ''', (max_drawdown, strategy_name))
         
     except Exception as e:
-        print(f"Erro ao atualizar performance da estratégia {strategy_name}: {str(e)}")
+        logger.error(f"Erro ao atualizar performance da estratégia {strategy_name}: {str(e)}")
 
 if __name__ == '__main__':
+    logger.info("🌟 Starting Flask server on http://localhost:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)

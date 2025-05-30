@@ -5,7 +5,7 @@ import { config } from '@/config/env';
 // Create an axios instance with the base URL pointing to Python backend
 const api = axios.create({
   baseURL: config.apiUrl || 'http://localhost:5000',
-  timeout: 10000,
+  timeout: 15000, // Increased timeout
 });
 
 // Auth token management
@@ -32,6 +32,34 @@ const initializeAuth = () => {
 };
 
 initializeAuth();
+
+// Check backend health
+export const checkBackendHealth = async () => {
+  try {
+    console.log(`Checking backend health at: ${api.defaults.baseURL}/api/health`);
+    
+    const response = await api.get('/api/health', { timeout: 5000 });
+    
+    console.log('Backend health check result:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Backend health check failed:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNREFUSED') {
+        throw new Error('Backend server is not running');
+      }
+      if (error.code === 'ENOTFOUND') {
+        throw new Error('Cannot resolve backend hostname');
+      }
+      if (error.response?.status === 404) {
+        throw new Error('Health endpoint not found');
+      }
+    }
+    
+    throw error;
+  }
+};
 
 // Fetch signals history ONLY from backend - no localStorage fallback
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
@@ -153,29 +181,69 @@ export const getEvaluationStatus = async () => {
 // Generate monster signals using backend
 export const generateMonsterSignals = async (symbols?: string[]) => {
   try {
-    console.log('Generating monster signals using backend generator...');
+    console.log('🚀 Starting monster signal generation...');
+    
+    // First check backend health
+    try {
+      const healthStatus = await checkBackendHealth();
+      console.log('✅ Backend is healthy:', healthStatus);
+    } catch (healthError) {
+      console.warn('⚠️ Backend health check failed:', healthError.message);
+      throw new Error(`Backend unavailable: ${healthError.message}`);
+    }
     
     const defaultSymbols = [
       'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
       'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
     ];
     
+    console.log(`🔍 Generating monster signals for ${(symbols || defaultSymbols).length} symbols...`);
+    
     const response = await api.post('/api/signals/generate/monster', {
       symbols: symbols || defaultSymbols
     });
     
-    console.log(`Successfully generated ${response.data.signals.length} monster signals`);
+    console.log(`✅ Successfully generated ${response.data.signals.length} monster signals`);
+    console.log('Monster signals response:', response.data);
     
     return response.data.signals as TradingSignal[];
   } catch (error) {
-    console.error('Error generating monster signals:', error);
+    console.error('❌ Error generating monster signals:', error);
     
     if (axios.isAxiosError(error)) {
-      if (error.response?.status === 500) {
-        throw new Error('Backend signal generation failed. Please try again.');
-      }
+      console.error('Axios error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+          timeout: error.config?.timeout
+        }
+      });
+      
       if (error.code === 'ECONNREFUSED') {
-        throw new Error('Cannot connect to backend. Using local fallback.');
+        throw new Error('Cannot connect to backend server. Please ensure the Flask API is running on http://localhost:5000');
+      }
+      
+      if (error.code === 'ENOTFOUND') {
+        throw new Error('Cannot resolve backend hostname. Check your network connection.');
+      }
+      
+      if (error.response?.status === 500) {
+        const errorData = error.response.data;
+        throw new Error(`Backend error: ${errorData?.message || 'Internal server error'}`);
+      }
+      
+      if (error.response?.status === 404) {
+        throw new Error('Monster signals endpoint not found. Check if the API route is properly configured.');
+      }
+      
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Request timeout. The backend is taking too long to respond.');
       }
     }
     
@@ -186,10 +254,21 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
 // Get monster signal generation status
 export const getMonsterSignalStatus = async () => {
   try {
+    console.log('📊 Checking monster signal generation status...');
+    
     const response = await api.get('/api/signals/generate/monster/status');
+    
+    console.log('Monster status response:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error getting monster signal status:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNREFUSED') {
+        throw new Error('Cannot connect to backend server');
+      }
+    }
+    
     throw error;
   }
 };
