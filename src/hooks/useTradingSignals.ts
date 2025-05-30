@@ -10,9 +10,6 @@ import {
 import { logTradeSignal } from "@/lib/firebase";
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
 
-// Using a fallback URL for the backend
-const BACKEND_URL = config.signalsApiUrl || "https://trade-alerts-backend.onrender.com"; 
-
 // Set up localStorage keys
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
 const LAST_ACTIVE_SIGNAL_KEY = "last_active_signal";
@@ -69,90 +66,111 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
-      console.log(`Trying to fetch signals from: ${BACKEND_URL}/signals?strategy=CLASSIC`);
+      console.log('Trying to fetch signals...');
       
-      // First try to fetch from the API with a timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
+      // First try to fetch from any available API
       let newSignals: TradingSignal[] = [];
       let fetchedFromRemote = false;
       
       try {
-        const response = await fetch(`${BACKEND_URL}/signals?strategy=CLASSIC`, {
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          // If remote API is available, use that data
-          const data = await response.json();
-          newSignals = data;
-          fetchedFromRemote = true;
-          console.log("Signals successfully loaded from API:", newSignals.length);
-          
-          // Show success toast
-          toast({
-            title: "Signals loaded",
-            description: `Successfully loaded ${newSignals.length} signals from Monster Backend`,
-          });
-        } else {
-          throw new Error(`API returned status ${response.status}`);
+        // Try multiple backend URLs if configured
+        const backendUrls = [
+          config.signalsApiUrl,
+          'https://trade-alerts-backend.onrender.com',
+          'http://localhost:5000'
+        ].filter(Boolean);
+
+        for (const backendUrl of backendUrls) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            
+            const response = await fetch(`${backendUrl}/signals?strategy=CLASSIC`, {
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              const data = await response.json();
+              newSignals = data;
+              fetchedFromRemote = true;
+              console.log(`✅ Signals loaded from ${backendUrl}:`, newSignals.length);
+              
+              toast({
+                title: "Signals loaded",
+                description: `Successfully loaded ${newSignals.length} signals from backend`,
+              });
+              break;
+            }
+          } catch (fetchError) {
+            console.warn(`Failed to fetch from ${backendUrl}:`, fetchError.message);
+            continue;
+          }
         }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        console.warn(`Could not fetch from API: ${fetchError.message}. Trying to use cached signals.`);
         
-        // If remote API fails, check if we have signals in localStorage
+        // If no backend worked, check localStorage
+        if (!fetchedFromRemote) {
+          const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+          if (cachedSignals) {
+            newSignals = JSON.parse(cachedSignals);
+            console.log("Using cached signals:", newSignals.length);
+            
+            toast({
+              title: "Using cached signals",
+              description: "Backend unavailable. Using locally stored signals.",
+            });
+          }
+        }
+        
+        // If we still have no signals, generate demo data
+        if (newSignals.length === 0) {
+          newSignals = generateMockSignals(15);
+          console.log("Generated demo signals:", newSignals.length);
+          
+          toast({
+            title: "Using demo data",
+            description: "No backend available. Using generated demo signals.",
+          });
+        }
+        
+      } catch (fetchError) {
+        console.warn(`Could not fetch from any API: ${fetchError.message}`);
+        
+        // Try to use cached signals
         const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
         if (cachedSignals) {
           newSignals = JSON.parse(cachedSignals);
           console.log("Using cached signals:", newSignals.length);
-          
-          // Show fallback toast
-          toast({
-            title: "Using cached signals",
-            description: "Could not connect to Monster Backend. Using locally stored signals instead.",
-          });
+        } else {
+          // Generate demo data as last resort
+          newSignals = generateMockSignals(10);
+          console.log("Generated fallback demo signals:", newSignals.length);
         }
         
-        // If we still have no signals, generate mock data for demo purposes
-        if (newSignals.length === 0) {
-          newSignals = generateMockSignals(20);
-          console.log("Generated mock signals for demo:", newSignals.length);
-          
-          // Show mock data toast
-          toast({
-            title: "Using demo data",
-            description: "Using generated demo data since no Monster signals are available.",
-          });
-        }
+        toast({
+          title: "Backend unavailable",
+          description: "Using cached or demo data. Backend connection will be retried automatically.",
+        });
       }
       
-      // Process signals to add proper result information
+      // Process signals to ensure they have all required fields
       const processedSignals = newSignals.map((signal: TradingSignal) => {
-        // If result is explicitly defined, use it
-        // Otherwise determine from profit or status
         if (signal.result === undefined) {
           if (signal.profit !== undefined) {
             signal.result = signal.profit > 0 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
           } else if (signal.status === "COMPLETED") {
-            // For completed signals without result info, assume based on status
-            signal.result = Math.random() > 0.5 ? "WINNER" as SignalResult : "LOSER" as SignalResult; // Random for demo (server should provide this)
+            signal.result = Math.random() > 0.5 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
           }
         }
         
-        // Ensure targets are properly formatted with hit information
         if (signal.targets && Array.isArray(signal.targets)) {
-          // Populate target hit information based on result
           signal.targets = signal.targets.map((target, index) => ({
             ...target,
             hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index === 0 ? true : 
                  (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index > 0 ? Math.random() > 0.5 : false
           }));
         } else if (signal.entryPrice) {
-          // Create dummy targets based on entry price if none exist
           signal.targets = [
             { level: 1, price: signal.entryPrice * 1.03, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) },
             { level: 2, price: signal.entryPrice * 1.05, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && Math.random() > 0.6 },
@@ -160,20 +178,13 @@ export const useTradingSignals = () => {
           ];
         }
         
-        // Ensure all the required fields exist
         return {
           ...signal,
-          // Make sure we have a symbol
           symbol: signal.symbol || signal.pair || "UNKNOWN",
-          // Ensure direction is set
           direction: signal.direction || (Math.random() > 0.5 ? "BUY" : "SELL"),
-          // Ensure status is set
           status: signal.status || "WAITING",
-          // Ensure entryPrice exists
           entryPrice: signal.entryPrice || signal.entryAvg || 0,
-          // Ensure targets are complete
           targets: signal.targets || [],
-          // Ensure we have a timestamp
           createdAt: signal.createdAt || new Date().toISOString(),
         };
       });
@@ -184,50 +195,34 @@ export const useTradingSignals = () => {
       // Save to localStorage and history
       if (processedSignals.length > 0) {
         localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(processedSignals));
-        
-        // Save to both history systems for now to ensure smooth transition
         saveSignalsToHistory(processedSignals);
       }
       
-      // If we succeeded in fetching from remote but there are no signals,
-      // don't overwrite the localStorage cache
-      if (fetchedFromRemote && processedSignals.length === 0) {
-        toast({
-          title: "No signals available",
-          description: "The API returned no signals. This might indicate an issue with the API.",
-        });
-      }
     } catch (err: any) {
-      console.error("Error fetching trading signals:", err);
+      console.error("Error in fetchSignals:", err);
       setError(err);
       
       toast({
         variant: "destructive",
         title: "Error loading signals",
-        description: `${err.message}. Using cached data if available.`,
+        description: "Failed to load signals from any source. Please check your connection.",
       });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  // Function to add new signals (called from SignalsDashboard)
   const addSignals = useCallback((newSignals: TradingSignal[]) => {
     setSignals(currentSignals => {
-      // Filter out duplicates based on ID
       const signalIds = new Set(currentSignals.map(s => s.id));
       const uniqueNewSignals = newSignals.filter(s => !signalIds.has(s.id));
       
       if (uniqueNewSignals.length === 0) return currentSignals;
       
-      // Process new signals to ensure they have all required fields
       const processedNewSignals = uniqueNewSignals.map(signal => ({
         ...signal,
-        // Ensure we have a timestamp
         createdAt: signal.createdAt || new Date().toISOString(),
-        // Add default result if not provided
         result: signal.result !== undefined ? signal.result : undefined,
-        // Ensure targets are properly formatted
         targets: signal.targets || (signal.entryPrice ? [
           { level: 1, price: signal.entryPrice * 1.03, hit: false },
           { level: 2, price: signal.entryPrice * 1.05, hit: false },
@@ -235,21 +230,16 @@ export const useTradingSignals = () => {
         ] : [])
       }));
       
-      // Set the last active signal if this is the first signal being added
       if (processedNewSignals.length > 0 && currentSignals.length === 0) {
         setLastActiveSignal(processedNewSignals[0]);
       }
       
-      // Combine existing and new signals
       const updatedSignals = [...processedNewSignals, ...currentSignals];
       
-      // Save to localStorage and both history systems
       localStorage.setItem(SIGNALS_STORAGE_KEY, JSON.stringify(updatedSignals));
       saveSignalsToHistory(processedNewSignals);
       
-      // Log new signals to Firebase for analytics and monitoring
       processedNewSignals.forEach(signal => {
-        // Also save each individual signal to our new history system
         saveSignalToHistory(signal);
         
         logTradeSignal(signal)
@@ -263,7 +253,6 @@ export const useTradingSignals = () => {
     });
   }, [setLastActiveSignal]);
 
-  // Update signal statuses based on current prices
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
       const updatedSignals = await updateAllSignalsStatus(currentPrices);
@@ -284,7 +273,6 @@ export const useTradingSignals = () => {
     }
   }, [toast]);
 
-  // Reprocess all signals in history
   const reprocessHistory = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
       const reprocessedSignals = await reprocessAllHistory(currentPrices);
@@ -317,7 +305,7 @@ export const useTradingSignals = () => {
       const createdDate = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
       
       return {
-        id: `monster-mock-${i}-${Date.now()}`,
+        id: `demo-${i}-${Date.now()}`,
         symbol: symbols[Math.floor(Math.random() * symbols.length)],
         direction,
         entryPrice,
@@ -328,7 +316,7 @@ export const useTradingSignals = () => {
         stopLoss: direction === "BUY" 
           ? entryPrice * (1 - Math.random() * 0.05) 
           : entryPrice * (1 + Math.random() * 0.05),
-        strategy: 'monster_1h_15m_multi', // Mark as monster strategy
+        strategy: 'DEMO',
         targets: [
           { level: 1, price: direction === "BUY" ? entryPrice * 1.03 : entryPrice * 0.97, hit: isWinner },
           { level: 2, price: direction === "BUY" ? entryPrice * 1.05 : entryPrice * 0.95, hit: isWinner && Math.random() > 0.5 },
