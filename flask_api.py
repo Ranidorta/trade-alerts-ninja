@@ -26,6 +26,7 @@ from backtesting.performance import generate_performance_report
 from services.evaluate_signals_pg import Signal, Session, get_candles, evaluate_signal
 from routes import signal_evaluation_bp, performance_api_bp
 from api.hybrid_signals_api import hybrid_signals_api
+from api.monster_signals_api import monster_signals_api
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -35,6 +36,7 @@ CORS(app)  # Enable CORS for all routes
 app.register_blueprint(signal_evaluation_bp)
 app.register_blueprint(performance_api_bp)
 app.register_blueprint(hybrid_signals_api)
+app.register_blueprint(monster_signals_api)
 
 # Database configuration
 DB_PATH = "signals.db"
@@ -651,7 +653,7 @@ def save_signal_to_db(symbol, strategy_name, signal, result, position_size, entr
         cursor.execute('''
             INSERT OR IGNORE INTO signals 
             (symbol, signal_type, signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, leverage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (symbol, "BUY" if signal == 1 else "SELL", signal, result, position_size, entry_price, timestamp, strategy_name, user_id, sharpe_ratio, max_drawdown, leverage))
         
         # Atualiza tabela de performance da estratégia

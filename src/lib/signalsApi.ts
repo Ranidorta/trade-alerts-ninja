@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
@@ -147,6 +146,50 @@ export const getEvaluationStatus = async () => {
     return response.data;
   } catch (error) {
     console.error('Error fetching evaluation status:', error);
+    throw error;
+  }
+};
+
+// Generate monster signals using backend
+export const generateMonsterSignals = async (symbols?: string[]) => {
+  try {
+    console.log('Generating monster signals using backend generator...');
+    
+    const defaultSymbols = [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+      'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+    ];
+    
+    const response = await api.post('/api/signals/generate/monster', {
+      symbols: symbols || defaultSymbols
+    });
+    
+    console.log(`Successfully generated ${response.data.signals.length} monster signals`);
+    
+    return response.data.signals as TradingSignal[];
+  } catch (error) {
+    console.error('Error generating monster signals:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 500) {
+        throw new Error('Backend signal generation failed. Please try again.');
+      }
+      if (error.code === 'ECONNREFUSED') {
+        throw new Error('Cannot connect to backend. Using local fallback.');
+      }
+    }
+    
+    throw error;
+  }
+};
+
+// Get monster signal generation status
+export const getMonsterSignalStatus = async () => {
+  try {
+    const response = await api.get('/api/signals/generate/monster/status');
+    return response.data;
+  } catch (error) {
+    console.error('Error getting monster signal status:', error);
     throw error;
   }
 };

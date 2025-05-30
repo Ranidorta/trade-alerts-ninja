@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
 import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { generateAllSignals } from "@/lib/apiServices";
+import { generateMonsterSignals } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
@@ -198,11 +197,14 @@ const SignalsDashboard = () => {
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
-      title: "Gerando sinais",
-      description: "Analisando dados de mercado para encontrar oportunidades de trading..."
+      title: "Gerando sinais monster",
+      description: "Analisando múltiplos timeframes com filtros avançados para encontrar as melhores oportunidades..."
     });
+    
     try {
-      const newSignals = await generateAllSignals();
+      // Use backend monster signal generation
+      const newSignals = await generateMonsterSignals();
+      
       if (newSignals.length > 0) {
         // Mark that signals have been generated before
         localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
@@ -211,37 +213,86 @@ const SignalsDashboard = () => {
         setSignals(prevSignals => {
           const existingIds = new Set(prevSignals.map(s => s.id));
           const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+          
           if (uniqueNewSignals.length > 0) {
             addSignals(uniqueNewSignals);
             if (!activeSignal) {
               setActiveSignal(uniqueNewSignals[0]);
             }
             toast({
-              title: "Novos sinais gerados",
-              description: `Encontradas ${uniqueNewSignals.length} novas oportunidades de trading`
+              title: "Sinais monster gerados",
+              description: `Encontradas ${uniqueNewSignals.length} oportunidades de alta qualidade com análise multi-timeframe`
             });
             saveSignalsToHistory(uniqueNewSignals);
             return [...uniqueNewSignals, ...prevSignals];
           }
+          
           toast({
-            title: "Nenhum novo sinal",
-            description: "Nenhuma nova oportunidade de trading encontrada no momento"
+            title: "Nenhum novo sinal monster",
+            description: "Os filtros avançados não encontraram novas oportunidades no momento. Tente novamente em alguns minutos."
           });
           return prevSignals;
         });
       } else {
         toast({
-          title: "Nenhum novo sinal",
-          description: "Nenhuma oportunidade de trading encontrada no momento"
+          title: "Nenhum sinal monster encontrado",
+          description: "Os critérios rigorosos de análise multi-timeframe não identificaram oportunidades no momento"
         });
       }
     } catch (error) {
-      console.error("Error generating signals:", error);
-      toast({
-        title: "Erro ao gerar sinais",
-        description: "Ocorreu um erro ao analisar dados de mercado",
-        variant: "destructive"
-      });
+      console.error("Error generating monster signals:", error);
+      
+      // Fallback to local generation if backend fails
+      if (error.message?.includes('Cannot connect to backend')) {
+        toast({
+          title: "Backend indisponível",
+          description: "Tentando geração local como fallback...",
+          variant: "destructive"
+        });
+        
+        // Import and use local generation as fallback
+        try {
+          const { generateAllSignals } = await import("@/lib/apiServices");
+          const fallbackSignals = await generateAllSignals();
+          
+          if (fallbackSignals.length > 0) {
+            localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
+            setSignalsGeneratedBefore(true);
+            
+            setSignals(prevSignals => {
+              const existingIds = new Set(prevSignals.map(s => s.id));
+              const uniqueNewSignals = fallbackSignals.filter(s => !existingIds.has(s.id));
+              
+              if (uniqueNewSignals.length > 0) {
+                addSignals(uniqueNewSignals);
+                if (!activeSignal) {
+                  setActiveSignal(uniqueNewSignals[0]);
+                }
+                toast({
+                  title: "Sinais locais gerados",
+                  description: `Gerados ${uniqueNewSignals.length} sinais usando análise local`
+                });
+                saveSignalsToHistory(uniqueNewSignals);
+                return [...uniqueNewSignals, ...prevSignals];
+              }
+              return prevSignals;
+            });
+          }
+        } catch (fallbackError) {
+          console.error("Fallback generation also failed:", fallbackError);
+          toast({
+            title: "Erro na geração de sinais",
+            description: "Tanto o backend quanto a geração local falharam",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Erro ao gerar sinais monster",
+          description: error.message || "Ocorreu um erro ao analisar dados de mercado",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsGenerating(false);
       setLastUpdated(new Date());
@@ -281,7 +332,7 @@ const SignalsDashboard = () => {
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
             <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
-              Usando Dados da API Bybit
+              Usando Monster Generator Backend
             </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
               Última atualização: {formatLastUpdated()}
@@ -297,7 +348,7 @@ const SignalsDashboard = () => {
             className="flex-1 md:flex-auto"
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando...' : 'Gerar Sinais'}
+            {isGenerating ? 'Analisando Monster...' : 'Gerar Sinais Monster'}
           </Button>
           
           {!isMobile && (
@@ -511,13 +562,13 @@ const SignalsDashboard = () => {
               <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
                 <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais</h3>
+              <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais monster</h3>
               <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base max-w-md mx-auto mb-3 sm:mb-6">
-                Clique no botão "Gerar Sinais" para analisar o mercado e encontrar oportunidades de trading.
+                Clique no botão "Gerar Sinais Monster" para usar análise multi-timeframe avançada e encontrar as melhores oportunidades.
               </p>
               <Button onClick={handleGenerateSignals} disabled={isGenerating}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                {isGenerating ? 'Analisando Mercado...' : 'Gerar Sinais Agora'}
+                {isGenerating ? 'Analisando Monster...' : 'Gerar Sinais Monster Agora'}
               </Button>
             </div>
           )}

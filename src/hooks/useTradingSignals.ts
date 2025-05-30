@@ -95,7 +95,7 @@ export const useTradingSignals = () => {
           // Show success toast
           toast({
             title: "Signals loaded",
-            description: `Successfully loaded ${newSignals.length} signals from API`,
+            description: `Successfully loaded ${newSignals.length} signals from Monster Backend`,
           });
         } else {
           throw new Error(`API returned status ${response.status}`);
@@ -113,7 +113,7 @@ export const useTradingSignals = () => {
           // Show fallback toast
           toast({
             title: "Using cached signals",
-            description: "Could not connect to the API. Using locally stored signals instead.",
+            description: "Could not connect to Monster Backend. Using locally stored signals instead.",
           });
         }
         
@@ -125,7 +125,7 @@ export const useTradingSignals = () => {
           // Show mock data toast
           toast({
             title: "Using demo data",
-            description: "Using generated demo data since no signals are available.",
+            description: "Using generated demo data since no Monster signals are available.",
           });
         }
       }
@@ -317,7 +317,7 @@ export const useTradingSignals = () => {
       const createdDate = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
       
       return {
-        id: `mock-${i}-${Date.now()}`,
+        id: `monster-mock-${i}-${Date.now()}`,
         symbol: symbols[Math.floor(Math.random() * symbols.length)],
         direction,
         entryPrice,
@@ -328,6 +328,7 @@ export const useTradingSignals = () => {
         stopLoss: direction === "BUY" 
           ? entryPrice * (1 - Math.random() * 0.05) 
           : entryPrice * (1 + Math.random() * 0.05),
+        strategy: 'monster_1h_15m_multi', // Mark as monster strategy
         targets: [
           { level: 1, price: direction === "BUY" ? entryPrice * 1.03 : entryPrice * 0.97, hit: isWinner },
           { level: 2, price: direction === "BUY" ? entryPrice * 1.05 : entryPrice * 0.95, hit: isWinner && Math.random() > 0.5 },
