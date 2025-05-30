@@ -66,6 +66,7 @@ export interface TradingSignal {
   size?: number;          // Added to fix the build error
   rsi?: number;           // Added for technical indicators
   atr?: number;           // Added for technical indicators
+  success_prob?: number;  // Added for monster signals success probability
 }
 
 export interface Feature {
