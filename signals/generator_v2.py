@@ -1,3 +1,4 @@
+
 ### generator_v2.py
 
 import logging
@@ -30,35 +31,85 @@ class TradeAgent:
         self.learning_enabled = config.get("enable_learning", True)
         self.feature_window = config.get("feature_window", 50)
         self.min_success_prob = config.get("min_success_prob", 0.6)
+        self.open_signals_cache = []  # Cache for duplicate prevention
 
-    def _calculate_technical_indicators(self, df):
-        df['ema_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
-        df['ema_200'] = EMAIndicator(close=df['close'], window=200).ema_indicator()
-        df['atr'] = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range()
-        df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
-        return df
+    def is_trending(self, df, window_fast=50, window_slow=200):
+        """Check if trend is up or down using EMA crossover"""
+        if len(df) < window_slow:
+            return False, False
+        ema_fast = EMAIndicator(close=df['close'], window=window_fast).ema_indicator().iloc[-1]
+        ema_slow = EMAIndicator(close=df['close'], window=window_slow).ema_indicator().iloc[-1]
+        return ema_fast > ema_slow, ema_fast < ema_slow
+
+    def has_high_volume(self, df, window=20):
+        """Check if current volume is above average"""
+        if len(df) < window:
+            return False
+        vol = df['volume'].iloc[-1]
+        mean_vol = df['volume'].rolling(window).mean().iloc[-1]
+        return vol > mean_vol
+
+    def is_strong_candle(self, df):
+        """Check if last candle has strong body (>60% of total range)"""
+        c = df.iloc[-1]
+        body = abs(c['close'] - c['open'])
+        total = c['high'] - c['low']
+        if total == 0:
+            return False
+        return body > 0.6 * total
+
+    def atr_filter(self, df, min_atr=0.003, max_atr=0.03):
+        """Filter by ATR percentage (0.3% to 3% of price)"""
+        if len(df) < 14:
+            return False
+        atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range().iloc[-1]
+        price = df['close'].iloc[-1]
+        if price == 0:
+            return False
+        atr_pct = atr / price
+        return min_atr < atr_pct < max_atr
+
+    def get_direction(self, df_1h, df_15m):
+        """Determine direction based on multi-timeframe trend alignment"""
+        trend_up_1h, trend_down_1h = self.is_trending(df_1h)
+        trend_up_15, trend_down_15 = self.is_trending(df_15m)
+        
+        if trend_up_1h and trend_up_15:
+            return "BUY"
+        if trend_down_1h and trend_down_15:
+            return "SELL"
+        return None
+
+    def get_existing_open_signals(self):
+        """Get list of currently open signals to prevent duplicates"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT symbol FROM signals WHERE result IS NULL")
+                return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Error fetching open signals: {e}")
+            return []
 
     def extract_features(self, df):
+        """Extract features for ML prediction"""
         latest = df.iloc[-1]
+        
+        # Calculate additional indicators for features
+        rsi = RSIIndicator(close=df['close'], window=14).rsi().iloc[-1] if len(df) >= 14 else 50
+        atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range().iloc[-1] if len(df) >= 14 else 0
+        volume_ratio = latest['volume'] / df['volume'].rolling(20).mean().iloc[-1] if len(df) >= 20 else 1
+        
         features = [
-            latest['rsi'] / 100,
-            latest['atr'] / latest['close'],
-            (latest['ema_50'] - latest['ema_200']) / latest['close'],
-            latest['volume'] / df['volume'].rolling(20).mean().iloc[-1]
+            rsi / 100,
+            atr / latest['close'] if latest['close'] > 0 else 0,
+            volume_ratio,
+            (latest['close'] - latest['open']) / latest['close'] if latest['close'] > 0 else 0
         ]
         return np.array(features).reshape(1, -1)
 
-    def check_trend(self, symbol: str, timeframe='4h') -> str:
-        try:
-            df = fetch_data(symbol, timeframe)
-            df = self._calculate_technical_indicators(df)
-            is_uptrend = df['ema_50'].iloc[-1] > df['ema_200'].iloc[-1]
-            return 'UP' if is_uptrend else 'DOWN'
-        except Exception as e:
-            logger.error(f"Erro ao verificar tendência: {e}")
-            return 'UNKNOWN'
-
     def _save_to_sqlite(self, signal: Dict, features: np.ndarray):
+        """Save signal to SQLite database"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 INSERT INTO signals (
@@ -75,70 +126,138 @@ class TradeAgent:
                 None, pickle.dumps(features), 0
             ))
 
-    def generate_signal(self, symbol: str) -> Optional[Dict]:
-        logger.info(f"🔍 Analisando {symbol} para geração de sinal...")
+    def generate_signal_monster(self, symbol):
+        """
+        Monster signal generation with multi-timeframe analysis and advanced filtering
+        """
+        logger.info(f"🔍 Analisando {symbol} com filtros avançados...")
+        
         try:
-            context_score, context_reason = self.context_engine.analyze(symbol, self.context_text)
-            if context_score < self.config.get("min_context_score", 0.6):
-                logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
+            # Get existing open signals to prevent duplicates
+            existing_open_signals = self.get_existing_open_signals()
+            if symbol in existing_open_signals:
+                logger.info(f"🛑 Sinal já aberto para {symbol}. Evitando duplicata.")
                 return None
 
-            trend_direction = self.check_trend(symbol, '4h')
-            if trend_direction == 'UNKNOWN':
-                return None
-
-            df = fetch_data(symbol, '15m', limit=self.feature_window)
-            if df.empty or len(df) < 50:
+            # Fetch multi-timeframe data
+            df_15m = fetch_data(symbol, "15m", limit=210)
+            df_1h = fetch_data(symbol, "1h", limit=210)
+            
+            if df_15m.empty or df_1h.empty:
                 logger.warning(f"Dados insuficientes para {symbol}")
                 return None
 
-            df = self._calculate_technical_indicators(df)
-            if not confirm_volume(df):
-                return None
-            if not confirm_candle_pattern(df, trend_direction):
+            # Determine direction based on trend alignment
+            direction = self.get_direction(df_1h, df_15m)
+            if direction is None:
+                logger.info(f"🛑 Tendência não alinhada para {symbol}")
                 return None
 
-            features = self.extract_features(df)
+            # RSI filter
+            rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1]
+            if direction == "BUY" and rsi < 50:
+                logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f}")
+                return None
+            if direction == "SELL" and rsi > 50:
+                logger.info(f"🛑 RSI alto para SELL: {rsi:.2f}")
+                return None
 
+            # Advanced filters on 15m
+            if not self.has_high_volume(df_15m):
+                logger.info(f"🛑 Volume baixo para {symbol}")
+                return None
+            
+            if not self.is_strong_candle(df_15m):
+                logger.info(f"🛑 Candle fraco para {symbol}")
+                return None
+            
+            if not self.atr_filter(df_15m):
+                logger.info(f"🛑 ATR fora da faixa para {symbol}")
+                return None
+
+            # Calculate entry and targets
+            entry = float(df_15m['close'].iloc[-1])
+            atr = AverageTrueRange(df_15m['high'], df_15m['low'], df_15m['close'], window=14).average_true_range().iloc[-1]
+
+            if direction == "BUY":
+                sl = entry - 1.2 * atr
+                tp1 = entry + 0.8 * atr
+                tp2 = entry + 1.5 * atr
+                tp3 = entry + 2.2 * atr
+            else:
+                sl = entry + 1.2 * atr
+                tp1 = entry - 0.8 * atr
+                tp2 = entry - 1.5 * atr
+                tp3 = entry - 2.2 * atr
+
+            # Extract features for ML prediction
+            features = self.extract_features(df_15m)
+
+            # Apply ML filtering if enabled
+            success_prob = 0.75  # Default high confidence for monster filter
             if self.learning_enabled:
                 prob = self.trainer.predict(features)[0]
                 if prob < self.min_success_prob:
-                    logger.info(f"🛑 Probabilidade de sucesso baixa: {prob:.2%}")
+                    logger.info(f"🛑 Probabilidade ML baixa: {prob:.2%}")
                     return None
-            else:
-                prob = 0.5
+                success_prob = prob
 
-            entry_data = generate_entry(symbol, trend_direction, '15m')
-            if not entry_data:
-                return None
+            # Apply context analysis if available
+            context_score = 0.8  # Default
+            context_reason = "Monster filter passed"
+            if self.context_text:
+                context_score, context_reason = self.context_engine.analyze(symbol, self.context_text)
+                if context_score < self.config.get("min_context_score", 0.6):
+                    logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
+                    return None
 
+            # Create final signal
             signal = {
                 'symbol': symbol,
-                'direction': 'BUY' if trend_direction == 'UP' else 'SELL',
-                'entry_price': round(entry_data['entry'], 6),
-                'sl': round(entry_data['sl'], 6),
-                'tp': round(entry_data['tp'], 6),
-                'atr': round(entry_data['atr'], 6),
+                'direction': direction,
+                'entry_price': round(entry, 6),
+                'sl': round(sl, 6),
+                'tp': round(tp3, 6),  # Use tp3 as main target
+                'tp1': round(tp1, 6),
+                'tp2': round(tp2, 6),
+                'tp3': round(tp3, 6),
+                'atr': round(atr, 6),
                 'timestamp': datetime.utcnow().isoformat(),
                 'expires': (datetime.utcnow() + timedelta(minutes=5)).isoformat(),
-                'timeframe': 'hybrid_realtime',
+                'timeframe': 'monster_1h_15m_multi',
                 'score': round(context_score, 2),
                 'context': context_reason,
-                'success_prob': round(prob, 4),
-                'result': None
+                'success_prob': round(success_prob, 4),
+                'result': None,
+                'rsi': round(rsi, 2),
+                'strategy': 'monster_1h_15m_multi'
             }
 
+            # Save to database and storage
             save_signal(signal)
             self._save_to_sqlite(signal, features)
-            logger.info(f"✅ Sinal gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
+            
+            logger.info(f"✅ Sinal MONSTER gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
+            logger.info(f"   RSI: {rsi:.2f}, ATR: {atr:.6f}, Prob: {success_prob:.2%}")
+            
             return signal
 
         except Exception as e:
-            logger.exception(f"Erro ao gerar sinal para {symbol}")
+            logger.exception(f"Erro ao gerar sinal monster para {symbol}")
             return None
 
+    def generate_signal(self, symbol: str) -> Optional[Dict]:
+        """Main signal generation entry point - now uses monster logic"""
+        return self.generate_signal_monster(symbol)
+
     def run(self, symbols: List[str]):
+        """Run signal generation for multiple symbols"""
+        signals_generated = 0
         for symbol in symbols:
             signal = self.generate_signal(symbol)
             if signal:
                 self.alert_sender.send_signal(signal)
+                signals_generated += 1
+        
+        logger.info(f"🏁 Gerados {signals_generated} sinais monster de {len(symbols)} símbolos analisados")
+        return signals_generated
