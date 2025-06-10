@@ -124,6 +124,9 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
         direction,
         type: direction === 'BUY' ? 'LONG' : 'SHORT',
         entryPrice: parseFloat(entryPrice.toFixed(6)),
+        entryMin: parseFloat((entryPrice * 0.998).toFixed(6)), // Entry zone: -0.2%
+        entryMax: parseFloat((entryPrice * 1.002).toFixed(6)), // Entry zone: +0.2%
+        entryAvg: parseFloat(entryPrice.toFixed(6)),
         stopLoss: direction === 'BUY' 
           ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
           : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
