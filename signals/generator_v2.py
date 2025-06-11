@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from ta.trend import EMAIndicator
 from ta.volatility import AverageTrueRange
 from ta.momentum import RSIIndicator
-from logic.hybrid_logic import confirm_volume, confirm_candle_pattern, generate_entry
+from strategies.hybrid_logic import confirm_volume, confirm_candle, generate_entry
 from services.context_engine import ContextEngine
 from services.trainer import MLTrainer
 from data.fetch_data import fetch_data
@@ -58,16 +58,26 @@ class TradeAgent:
             return False
         return body > 0.6 * total
 
-    def atr_filter(self, df, min_atr=0.003, max_atr=0.03):
-        """Filter by ATR percentage (0.3% to 3% of price)"""
+    def atr_filter(self, df, min_atr=0.002, max_atr=0.05):
+        """Filter by ATR percentage (0.2% to 5% of price) - mais flexível"""
         if len(df) < 14:
+            logger.info(f"Dados insuficientes para ATR (len={len(df)})")
             return False
         atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range().iloc[-1]
         price = df['close'].iloc[-1]
         if price == 0:
+            logger.warning("Preço zero para cálculo ATR")
             return False
         atr_pct = atr / price
-        return min_atr < atr_pct < max_atr
+        
+        logger.info(f"ATR: {atr:.6f}, Preço: {price:.6f}, ATR%: {atr_pct:.2%} (faixa: {min_atr:.2%}-{max_atr:.2%})")
+        
+        if min_atr < atr_pct < max_atr:
+            logger.info(f"✅ ATR dentro da faixa aceitável")
+            return True
+        else:
+            logger.info(f"❌ ATR fora da faixa ({atr_pct:.2%})")
+            return False
 
     def get_direction(self, df_1h, df_15m):
         """Determine direction based on multi-timeframe trend alignment"""
@@ -153,14 +163,21 @@ class TradeAgent:
                 logger.info(f"🛑 Tendência não alinhada para {symbol}")
                 return None
 
-            # RSI filter
+            # RSI filter - mais flexível
             rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1]
-            if direction == "BUY" and rsi < 50:
-                logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f}")
+            rsi_min_buy = 45  # Reduzido de 50 para 45
+            rsi_max_sell = 55  # Aumentado de 50 para 55
+            
+            logger.info(f"📈 RSI atual: {rsi:.2f}")
+            
+            if direction == "BUY" and rsi < rsi_min_buy:
+                logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f} < {rsi_min_buy}")
                 return None
-            if direction == "SELL" and rsi > 50:
-                logger.info(f"🛑 RSI alto para SELL: {rsi:.2f}")
+            if direction == "SELL" and rsi > rsi_max_sell:
+                logger.info(f"🛑 RSI alto para SELL: {rsi:.2f} > {rsi_max_sell}")
                 return None
+                
+            logger.info(f"✅ RSI compatível com {direction}: {rsi:.2f}")
 
             # Advanced filters on 15m
             if not self.has_high_volume(df_15m):
