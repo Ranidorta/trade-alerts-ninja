@@ -13,7 +13,7 @@ from ta.momentum import RSIIndicator
 from strategies.hybrid_logic import confirm_volume, confirm_candle, generate_entry
 from services.context_engine import ContextEngine
 from services.trainer import MLTrainer
-from data.fetch_data import fetch_data
+from api.fetch_data import fetch_data
 from utils.save_signal import save_signal
 from services.alertSender import SignalSender
 

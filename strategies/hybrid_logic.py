@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.volatility import AverageTrueRange
 from ta.momentum import RSIIndicator
-from data.fetch_data import fetch_data
+from api.fetch_data import fetch_data
 
 logger = logging.getLogger("HybridLogic")
 last_signals = {}
