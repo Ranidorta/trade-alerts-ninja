@@ -41,8 +41,8 @@ def confirm_candle(df, direction):
 
     return strong_body and ((direction == 'UP' and bullish) or (direction == 'DOWN' and bearish))
 
-# Cooldown entre sinais do mesmo ativo
-def can_generate(symbol, cooldown_minutes=5):
+# Cooldown entre sinais do mesmo ativo - AUMENTADO para 30 minutos
+def can_generate(symbol, cooldown_minutes=30):
     now = datetime.utcnow()
     last_time = last_signals.get(symbol)
     if last_time and now - last_time < timedelta(minutes=cooldown_minutes):
@@ -93,6 +93,11 @@ def generate_entry(symbol, timeframe='15m', risk_reward_ratio=2.0):
 
     risk = abs(entry - sl) / entry
 
+    # VALIDAÇÃO ANTI-CONTRADIÇÃO: Verificar se já existe sinal ativo para este símbolo
+    if has_active_signal(symbol, trend):
+        logger.info(f"Sinal contraditório bloqueado para {symbol}: direção {trend} já ativa")
+        return None
+
     signal = {
         "symbol": symbol,
         "direction": trend,
@@ -107,3 +112,16 @@ def generate_entry(symbol, timeframe='15m', risk_reward_ratio=2.0):
 
     logger.info(f"Sinal gerado para {symbol}: {signal}")
     return signal
+
+# Verificar se existe sinal ativo que conflita
+def has_active_signal(symbol, new_direction):
+    """
+    Verifica se existe sinal ativo para o símbolo que conflita com a nova direção
+    """
+    # Esta função deve verificar sinais ativos nos últimos 30-60 minutos
+    # Por enquanto, implementação básica - pode ser expandida com storage real
+    recent_time = datetime.utcnow() - timedelta(minutes=60)
+    
+    # Implementação simplificada - na produção, consultar banco de dados/storage
+    # Por ora, retorna False para permitir primeiro sinal
+    return False

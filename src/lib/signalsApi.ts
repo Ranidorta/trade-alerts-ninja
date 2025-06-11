@@ -113,9 +113,30 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
       const low = parseFloat(latestCandle[3]);
       const volume = parseFloat(latestCandle[5]);
 
+      // Calculate technical indicators for real direction analysis
+      const prices = klineData.slice(0, 50).map(k => parseFloat(k[4])).reverse(); // Get last 50 closes, oldest first
+      
+      // Calculate EMA 20 and EMA 50
+      const ema20 = calculateEMA(prices, 20);
+      const ema50 = calculateEMA(prices, 50);
+      
+      // Calculate RSI
+      const rsi = calculateRSI(prices, 14);
+      
+      // Calculate volume average
+      const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
+      const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+      
+      // Technical analysis for direction (NO MORE RANDOM!)
+      const direction = ema20 > ema50 && rsi > 50 && volume > avgVolume * 1.2 ? "BUY" : 
+                       ema20 < ema50 && rsi < 50 && volume > avgVolume * 1.2 ? "SELL" : 
+                       "NEUTRAL";
+      
+      // Skip if no clear direction
+      if (direction === "NEUTRAL") continue;
+
       // Calculate ATR-like value from recent candles
       const atr = entryPrice * (Math.random() * 0.02 + 0.005); // 0.5-2.5% ATR
-      const direction = Math.random() > 0.5 ? "BUY" : "SELL";
       
       const signal: TradingSignal = {
         id: `local-monster-${symbol}-${Date.now()}-${index}`,
@@ -135,7 +156,7 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
         createdAt: new Date().toISOString(),
         result: null,
         profit: null,
-        rsi: Math.random() * 30 + (direction === 'BUY' ? 50 : 20), // RSI filter applied
+        rsi: parseFloat(rsi.toFixed(2)), // Real calculated RSI
         atr: parseFloat(atr.toFixed(6)),
         success_prob: 0.72, // High confidence for monster signals
         currentPrice: entryPrice, // Set current price to entry price
@@ -174,6 +195,51 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
 
   console.log(`✅ Generated ${signals.length} local monster signals with real Bybit prices`);
   return signals;
+};
+
+// Technical analysis helper functions
+const calculateEMA = (prices: number[], period: number): number => {
+  if (prices.length < period) return prices[prices.length - 1];
+  
+  const multiplier = 2 / (period + 1);
+  let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  
+  for (let i = period; i < prices.length; i++) {
+    ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
+  }
+  
+  return ema;
+};
+
+const calculateRSI = (prices: number[], period: number): number => {
+  if (prices.length < period + 1) return 50;
+  
+  let gains = 0;
+  let losses = 0;
+  
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  
+  for (let i = period + 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) {
+      avgGain = (avgGain * (period - 1) + change) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) - change) / period;
+    }
+  }
+  
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
 };
 
 // Fetch signals history with localStorage fallback
