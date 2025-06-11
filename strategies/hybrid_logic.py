@@ -22,9 +22,9 @@ def get_trend(symbol):
         
         logger.info(f"[{symbol}] 4h - EMA20: {ema_fast:.6f}, EMA50: {ema_slow:.6f}, ADX: {adx:.2f}")
 
-        # ADX mais flexível - reduzido de 25 para 20
-        if adx < 20:
-            logger.info(f"[{symbol}] ADX baixo ({adx:.2f}) para tendência definida (mín: 20)")
+        # ADX mais flexível - reduzido de 25 para 15 (super relaxado)
+        if adx < 15:
+            logger.info(f"[{symbol}] ADX baixo ({adx:.2f}) para tendência definida (mín: 15)")
             return None
 
         trend = 'UP' if ema_fast > ema_slow else 'DOWN'
@@ -45,7 +45,7 @@ def confirm_volume(df):
         current_vol = df['volume'].iloc[-1]
         avg_vol = df['volume'].rolling(20).mean().iloc[-1]
         vol_ratio = current_vol / avg_vol if avg_vol > 0 else 0
-        required_ratio = 1.15  # Reduzido de 1.2 para 1.15 (15% em vez de 20%)
+        required_ratio = 1.10  # Reduzido de 1.2 para 1.10 (10% em vez de 20%)
         
         logger.info(f"Volume atual: {current_vol:.0f}, Média 20p: {avg_vol:.0f}, Ratio: {vol_ratio:.2f} (mín: {required_ratio})")
         
@@ -79,7 +79,7 @@ def confirm_candle(df, direction):
             return False
 
         body_ratio = body / range_total
-        required_ratio = 0.5  # Reduzido de 0.6 para 0.5 (50% em vez de 60%)
+        required_ratio = 0.4  # Reduzido de 0.6 para 0.4 (40% em vez de 60%)
         bullish = candle['close'] > candle['open']
         bearish = candle['close'] < candle['open']
         
@@ -144,10 +144,10 @@ def generate_entry(symbol, timeframe='15m', risk_reward_ratio=2.0):
         logger.info(f"❌ [{symbol}] Candle incompatível com tendência {trend}")
         return None
 
-    # RSI mais flexível
+    # RSI mais flexível (super relaxado)
     rsi = RSIIndicator(df['close']).rsi().iloc[-1]
-    rsi_min_long = 45  # Reduzido de 50 para 45
-    rsi_max_short = 55  # Aumentado de 50 para 55
+    rsi_min_long = 40  # Reduzido de 50 para 40
+    rsi_max_short = 60  # Aumentado de 50 para 60
     
     logger.info(f"📈 [{symbol}] RSI atual: {rsi:.2f}")
     

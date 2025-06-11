@@ -99,8 +99,8 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
     const symbol = defaultSymbols[index];
     
     try {
-      // 40% chance for each symbol (monster filter)
-      if (Math.random() > 0.6) continue;
+      // 70% chance for each symbol (relaxed monster filter)
+      if (Math.random() > 0.3) continue;
 
       // Get real market data from Bybit
       const klineData = await fetchBybitKlines(symbol, "15", 50);
@@ -127,9 +127,12 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
       const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
       const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
       
-      // Technical analysis for direction (NO MORE RANDOM!)
-      const direction = ema20 > ema50 && rsi > 50 && volume > avgVolume * 1.2 ? "BUY" : 
-                       ema20 < ema50 && rsi < 50 && volume > avgVolume * 1.2 ? "SELL" : 
+      // Technical analysis for direction (RELAXED CRITERIA)
+      const direction = ema20 > ema50 && rsi > 40 && rsi < 80 && volume > avgVolume * 1.1 ? "BUY" : 
+                       ema20 < ema50 && rsi < 60 && rsi > 20 && volume > avgVolume * 1.1 ? "SELL" : 
+                       // Fallback: use only EMA trend if volume/RSI requirements not met
+                       ema20 > ema50 ? "BUY" :
+                       ema20 < ema50 ? "SELL" :
                        "NEUTRAL";
       
       // Skip if no clear direction
