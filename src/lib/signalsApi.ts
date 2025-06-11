@@ -176,7 +176,7 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
   return signals;
 };
 
-// Fetch signals history ONLY from backend - no localStorage fallback
+// Fetch signals history with localStorage fallback
 export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: string }) => {
   try {
     console.log('Fetching signals history from backend API...');
@@ -194,7 +194,34 @@ export const fetchSignalsHistory = async (filters?: { symbol?: string; result?: 
     return response.data as TradingSignal[];
   } catch (error) {
     console.error('Error fetching signals history from backend:', error);
-    console.log('Returning empty array for signals history');
+    console.log('Trying localStorage fallback for signals history...');
+    
+    // Try to get signals from localStorage as fallback
+    try {
+      const { getSignalHistory } = await import('@/lib/signal-storage');
+      const localSignals = getSignalHistory();
+      
+      if (localSignals && localSignals.length > 0) {
+        console.log(`Found ${localSignals.length} signals in localStorage`);
+        
+        // Apply filters if provided
+        let filteredSignals = localSignals;
+        if (filters?.symbol) {
+          filteredSignals = filteredSignals.filter(s => 
+            s.symbol?.toLowerCase().includes(filters.symbol!.toLowerCase())
+          );
+        }
+        if (filters?.result) {
+          filteredSignals = filteredSignals.filter(s => s.result === filters.result);
+        }
+        
+        return filteredSignals;
+      }
+    } catch (localError) {
+      console.error('Error accessing localStorage signals:', localError);
+    }
+    
+    console.log('No signals found in localStorage, returning empty array');
     return [];
   }
 };
