@@ -88,10 +88,13 @@ const SignalsHistory = () => {
       
       const response = await fetchSignalsHistory();
       
-      console.log(`Loaded ${response.length} signals from backend`);
+      // Limit to last 100 signals only
+      const last100Signals = response.slice(0, 100);
       
-      setSignals(response);
-      setFilteredSignals(response);
+      console.log(`Loaded ${last100Signals.length} signals from backend (limited to last 100)`);
+      
+      setSignals(last100Signals);
+      setFilteredSignals(last100Signals);
       
       if (isRefreshRequest) {
         toast({
@@ -209,7 +212,7 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Sinais avaliados automaticamente pelo backend usando dados reais da Bybit"
+        description="Últimos 100 sinais gerados, avaliados automaticamente pelo backend usando dados reais da Bybit"
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -379,7 +382,7 @@ const SignalsHistory = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSignals.slice(0, 50).map((signal) => (
+              {filteredSignals.map((signal) => (
                 <TableRow key={signal.id}>
                   <TableCell>
                     {formatDate(signal.createdAt)}
@@ -412,15 +415,6 @@ const SignalsHistory = () => {
               ))}
             </TableBody>
           </Table>
-          
-          {/* Load more button */}
-          {filteredSignals.length > 50 && (
-            <div className="flex justify-center p-4">
-              <Button variant="outline">
-                Carregar mais ({filteredSignals.length - 50} restantes)
-              </Button>
-            </div>
-          )}
         </Card>
       )}
     </div>
