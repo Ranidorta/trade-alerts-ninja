@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { fetchBybitKlines } from '@/lib/apiServices';
+import { evaluateSignalsBatch, createMockSignalsForDemo } from '@/lib/localSignalEvaluator';
+import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -59,6 +61,7 @@ const SignalsHistory = () => {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
+  const [isLocalMode, setIsLocalMode] = useState(false);
   const { toast } = useToast();
   
   // List of unique symbols for filtering
@@ -76,7 +79,7 @@ const SignalsHistory = () => {
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
   const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
 
-  // Load signals from backend only
+  // Load signals with fallback to local mode
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
@@ -85,30 +88,65 @@ const SignalsHistory = () => {
         setIsLoading(true);
       }
       
-      console.log("Loading signals from backend API...");
+      console.log("Trying to load signals from backend API...");
       
-      const response = await fetchSignalsHistory();
+      try {
+        // Try backend first
+        const response = await fetchSignalsHistory();
+        
+        if (response && response.length > 0) {
+          const last100Signals = response.slice(0, 100);
+          console.log(`✅ Loaded ${last100Signals.length} signals from backend`);
+          
+          setSignals(last100Signals);
+          setFilteredSignals(last100Signals);
+          setIsLocalMode(false);
+          
+          if (isRefreshRequest) {
+            toast({
+              title: "Sinais atualizados",
+              description: `${response.length} sinais carregados do backend.`,
+            });
+          }
+          return;
+        }
+      } catch (backendError) {
+        console.warn("Backend failed, switching to local mode:", backendError);
+      }
       
-      // Limit to last 100 signals only
-      const last100Signals = response.slice(0, 100);
+      // Fallback to local mode
+      console.log("🔧 Switching to local evaluation mode...");
+      setIsLocalMode(true);
       
-      console.log(`Loaded ${last100Signals.length} signals from backend (limited to last 100)`);
+      // Check if we have local signals
+      let localSignals = getSignalHistory();
       
-      setSignals(last100Signals);
-      setFilteredSignals(last100Signals);
-      
-      if (isRefreshRequest) {
+      // If no local signals, create demo signals
+      if (!localSignals || localSignals.length === 0) {
+        console.log("📝 Creating demo signals for evaluation...");
+        localSignals = createMockSignalsForDemo();
+        saveSignalsToHistory(localSignals);
+        
         toast({
-          title: "Sinais atualizados",
-          description: `${response.length} sinais carregados do backend.`,
+          title: "Modo Local Ativado",
+          description: "Backend indisponível. Criados sinais de demonstração para avaliação local.",
+        });
+      } else {
+        toast({
+          title: "Modo Local",
+          description: `Carregados ${localSignals.length} sinais do localStorage.`,
         });
       }
+      
+      setSignals(localSignals);
+      setFilteredSignals(localSignals);
+      
     } catch (error) {
       console.error("Failed to load signals:", error);
       toast({
         variant: "destructive",
         title: "Erro ao carregar sinais",
-        description: "Não foi possível carregar os sinais do backend. Verifique se o serviço está rodando.",
+        description: "Não foi possível carregar os sinais. Verifique sua conexão.",
       });
     } finally {
       setIsLoading(false);
@@ -150,25 +188,70 @@ const SignalsHistory = () => {
     loadEvaluationStatus();
   };
 
-  // Trigger manual evaluation
+  // Trigger manual evaluation (local or backend)
   const handleTriggerEvaluation = async () => {
     try {
       setIsEvaluating(true);
-      await triggerSignalEvaluation();
-      toast({
-        title: "Avaliação iniciada",
-        description: "O backend está avaliando todos os sinais pendentes.",
-      });
-      // Wait a bit then refresh
-      setTimeout(() => {
-        loadSignals(true);
-        loadEvaluationStatus();
-      }, 2000);
+      
+      if (isLocalMode) {
+        // Local evaluation mode
+        console.log("🔧 Starting local signal evaluation...");
+        
+        // Get pending signals (signals without results)
+        const pendingSignals = signals.filter(signal => !signal.result);
+        
+        if (pendingSignals.length === 0) {
+          toast({
+            title: "Nenhum sinal pendente",
+            description: "Todos os sinais já foram avaliados.",
+          });
+          return;
+        }
+        
+        console.log(`Evaluating ${pendingSignals.length} pending signals locally...`);
+        
+        // Evaluate signals using local evaluator
+        const evaluatedSignals = await evaluateSignalsBatch(pendingSignals);
+        
+        // Update signals array with evaluated results
+        const updatedSignals = signals.map(signal => {
+          const evaluatedSignal = evaluatedSignals.find(evaluatedSig => evaluatedSig.id === signal.id);
+          return evaluatedSignal || signal;
+        });
+        
+        // Save to localStorage and update state
+        saveSignalsToHistory(updatedSignals);
+        setSignals(updatedSignals);
+        setFilteredSignals(updatedSignals);
+        
+        toast({
+          title: "Avaliação Local Concluída",
+          description: `${pendingSignals.length} sinais avaliados usando dados reais da Bybit.`,
+        });
+        
+      } else {
+        // Backend evaluation mode
+        await triggerSignalEvaluation();
+        toast({
+          title: "Avaliação iniciada",
+          description: "O backend está avaliando todos os sinais pendentes.",
+        });
+        
+        // Wait a bit then refresh
+        setTimeout(() => {
+          loadSignals(true);
+          loadEvaluationStatus();
+        }, 2000);
+      }
+      
     } catch (error) {
+      console.error("Error in evaluation:", error);
       toast({
         variant: "destructive",
         title: "Erro na avaliação",
-        description: "Não foi possível iniciar a avaliação dos sinais.",
+        description: isLocalMode 
+          ? "Erro na avaliação local dos sinais." 
+          : "Não foi possível iniciar a avaliação dos sinais.",
       });
     } finally {
       setIsEvaluating(false);
@@ -213,7 +296,9 @@ const SignalsHistory = () => {
     <div className="container mx-auto px-4 py-8">
       <PageHeader
         title="Histórico de Sinais"
-        description="Últimos 100 sinais gerados, avaliados automaticamente pelo backend usando dados reais da Bybit"
+        description={isLocalMode 
+          ? "Sinais de demonstração avaliados localmente usando dados reais da Bybit"
+          : "Últimos 100 sinais gerados, avaliados automaticamente pelo backend usando dados reais da Bybit"}
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -331,10 +416,14 @@ const SignalsHistory = () => {
       </Card>
       
       {/* Connection status */}
-      <div className="mb-4 flex items-center gap-2 text-sm text-green-600">
-        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-        Sinais carregados do backend e avaliados automaticamente
-        <span className="text-xs text-muted-foreground ml-2">(atualiza a cada 30s)</span>
+      <div className={`mb-4 flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
+        <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+        {isLocalMode ? 
+          'Modo Local: Avaliação usando dados reais da Bybit' : 
+          'Sinais carregados do backend e avaliados automaticamente'}
+        <span className="text-xs text-muted-foreground ml-2">
+          {isLocalMode ? '(clique em "Avaliar Sinais" para avaliar)' : '(atualiza a cada 30s)'}
+        </span>
       </div>
       
       {/* No results message */}
