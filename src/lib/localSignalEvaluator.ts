@@ -167,48 +167,7 @@ const createFallbackEvaluation = (signal: TradingSignal): EvaluationResult => {
   };
 };
 
-export const createMockSignalsForDemo = (): TradingSignal[] => {
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'BNBUSDT'];
-  const signals: TradingSignal[] = [];
-  
-  for (let i = 0; i < 10; i++) {
-    const symbol = symbols[Math.floor(Math.random() * symbols.length)];
-    const direction = Math.random() > 0.5 ? 'BUY' : 'SELL';
-    const basePrice = 50000 + Math.random() * 10000;
-    const entryPrice = parseFloat(basePrice.toFixed(2));
-    
-    const signal: TradingSignal = {
-      id: `demo-${Date.now()}-${i}`,
-      symbol,
-      direction,
-      type: direction === 'BUY' ? 'LONG' : 'SHORT',
-      entryPrice,
-      entryMin: entryPrice * 0.998,
-      entryMax: entryPrice * 1.002,
-      stopLoss: direction === 'BUY' ? entryPrice * 0.98 : entryPrice * 1.02,
-      tp1: direction === 'BUY' ? entryPrice * 1.01 : entryPrice * 0.99,
-      tp2: direction === 'BUY' ? entryPrice * 1.02 : entryPrice * 0.98,
-      tp3: direction === 'BUY' ? entryPrice * 1.03 : entryPrice * 0.97,
-      status: 'ACTIVE',
-      strategy: 'local_demo',
-      createdAt: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(), // Last 7 days
-      result: null,
-      rsi: 50 + Math.random() * 30,
-      atr: entryPrice * 0.01,
-      success_prob: 0.6 + Math.random() * 0.3,
-      currentPrice: entryPrice,
-      targets: [
-        { level: 1, price: direction === 'BUY' ? entryPrice * 1.01 : entryPrice * 0.99, hit: false },
-        { level: 2, price: direction === 'BUY' ? entryPrice * 1.02 : entryPrice * 0.98, hit: false },
-        { level: 3, price: direction === 'BUY' ? entryPrice * 1.03 : entryPrice * 0.97, hit: false }
-      ]
-    };
-    
-    signals.push(signal);
-  }
-  
-  return signals;
-};
+// Removed createMockSignalsForDemo - using only real signals
 
 export const evaluateSignalsBatch = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
   console.log(`Starting local evaluation of ${signals.length} signals...`);

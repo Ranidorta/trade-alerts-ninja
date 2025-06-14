@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { fetchBybitKlines } from '@/lib/apiServices';
-import { evaluateSignalsBatch, createMockSignalsForDemo } from '@/lib/localSignalEvaluator';
+import { evaluateSignalsBatch } from '@/lib/localSignalEvaluator';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -121,20 +121,19 @@ const SignalsHistory = () => {
       // Check if we have local signals
       let localSignals = getSignalHistory();
       
-      // If no local signals, create demo signals
       if (!localSignals || localSignals.length === 0) {
-        console.log("📝 Creating demo signals for evaluation...");
-        localSignals = createMockSignalsForDemo();
-        saveSignalsToHistory(localSignals);
-        
+        console.log("❌ No real signals found in localStorage. Please load signals from backend first.");
         toast({
-          title: "Modo Local Ativado",
-          description: "Backend indisponível. Criados sinais de demonstração para avaliação local.",
+          variant: "destructive",
+          title: "Nenhum Sinal Encontrado",
+          description: "Não há sinais reais armazenados. Conecte ao backend para carregar sinais.",
         });
+        localSignals = [];
       } else {
+        console.log(`✅ Found ${localSignals.length} real signals in localStorage`);
         toast({
           title: "Modo Local",
-          description: `Carregados ${localSignals.length} sinais do localStorage.`,
+          description: `Carregados ${localSignals.length} sinais reais do localStorage.`,
         });
       }
       
@@ -197,8 +196,17 @@ const SignalsHistory = () => {
         // Local evaluation mode
         console.log("🔧 Starting local signal evaluation...");
         
-        // Get pending signals (signals without results)
-        const pendingSignals = signals.filter(signal => !signal.result);
+        // Get pending signals (signals without results or incomplete evaluation)
+        const pendingSignals = signals.filter(signal => 
+          !signal.result || 
+          signal.result === null || 
+          signal.result === undefined ||
+          signal.status === 'ACTIVE' || 
+          signal.status === 'WAITING'
+        );
+        
+        console.log(`Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
+        console.log('Pending signals:', pendingSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result, status: s.status })));
         
         if (pendingSignals.length === 0) {
           toast({
