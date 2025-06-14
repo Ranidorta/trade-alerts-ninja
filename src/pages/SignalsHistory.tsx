@@ -195,6 +195,17 @@ const SignalsHistory = () => {
       if (isLocalMode) {
         // Local evaluation mode
         console.log("🔧 Starting local signal evaluation...");
+        console.log(`📊 Total signals loaded: ${signals.length}`);
+        
+        // Log current signal states for debugging
+        const signalStates = signals.map(s => ({
+          id: s.id,
+          symbol: s.symbol,
+          result: s.result,
+          status: s.status,
+          isPending: (!s.result || s.result === null || s.result === undefined || s.status === 'ACTIVE' || s.status === 'WAITING')
+        }));
+        console.log("📋 Signal states:", signalStates);
         
         // Get pending signals (signals without results or incomplete evaluation)
         const pendingSignals = signals.filter(signal => 
@@ -205,13 +216,19 @@ const SignalsHistory = () => {
           signal.status === 'WAITING'
         );
         
-        console.log(`Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
-        console.log('Pending signals:', pendingSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result, status: s.status })));
+        console.log(`🔍 Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
+        console.log('🎯 Pending signals details:', pendingSignals.map(s => ({ 
+          id: s.id, 
+          symbol: s.symbol, 
+          result: s.result, 
+          status: s.status,
+          createdAt: s.createdAt
+        })));
         
         if (pendingSignals.length === 0) {
           toast({
             title: "Nenhum sinal pendente",
-            description: "Todos os sinais já foram avaliados.",
+            description: "Todos os sinais já foram avaliados. Carregue novos sinais do backend.",
           });
           return;
         }
