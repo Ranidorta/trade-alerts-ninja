@@ -16,6 +16,7 @@ from utils.risk_manager import manage_risk
 from utils.signal_storage import insert_signal
 from utils.signal_evaluator import start_evaluator
 from api.data_fetcher import get_symbols
+from scheduler.ml_retraining import start_ml_scheduler
 
 # Load configuration
 config_path = 'config.json'
@@ -30,6 +31,9 @@ def main():
     Main function to run the trading signal generator.
     """
     logger.info("Starting trade_signal_agent")
+    
+    # Initialize ML retraining scheduler
+    start_ml_scheduler()
     
     # Start the signal evaluator in background
     start_evaluator(interval=60)
