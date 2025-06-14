@@ -15,11 +15,26 @@ def train_signal_model(input_csv='signals_history.csv', output_model='model/sign
         input_csv: Caminho para o arquivo CSV com histórico de sinais
         output_model: Caminho onde salvar o modelo treinado
     """
+    from datetime import datetime
+    
     os.makedirs('model', exist_ok=True)
+
+    # Verifica se o arquivo existe
+    if not os.path.exists(input_csv):
+        print(f"❌ Arquivo {input_csv} não encontrado. Criando dataset inicial...")
+        # Criar CSV vazio com headers corretos
+        initial_df = pd.DataFrame(columns=['timestamp', 'symbol', 'direction', 'rsi', 'adx', 'volume_ratio', 'candle_body_ratio', 'result'])
+        initial_df.to_csv(input_csv, index=False)
+        print(f"📝 Arquivo {input_csv} criado. Aguardando dados de sinais avaliados...")
+        return None, None
 
     # Carrega os dados históricos
     df = pd.read_csv(input_csv)
-    print(f"📊 Carregados {len(df)} sinais do arquivo {input_csv}")
+    print(f"📊 [ML RETRAIN] Carregados {len(df)} sinais do arquivo {input_csv}")
+    
+    if len(df) < 10:
+        print(f"⚠️ Dados insuficientes para treinamento ({len(df)} sinais). Mínimo: 10 sinais.")
+        return None, None
 
     # Features para treinamento
     features = ['rsi', 'adx', 'volume_ratio', 'candle_body_ratio']
@@ -50,6 +65,9 @@ def train_signal_model(input_csv='signals_history.csv', output_model='model/sign
     # Salva o modelo
     joblib.dump(model, output_model)
     print(f"✅ Modelo salvo em: {output_model}")
+    
+    # Log de ciclo completo
+    print(f"📅 [ML CYCLE] Re-treinamento concluído em {datetime.utcnow().isoformat()} - Total de sinais: {len(df)} - Acurácia: {acc:.2%}")
 
     return model, label_encoder
 

@@ -2,6 +2,8 @@
 
 import pandas as pd
 
+from ml.save_evaluation_result import save_evaluation_result
+
 def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
     """
     Avalia o resultado do sinal com base nos preços futuros.
@@ -31,32 +33,42 @@ def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
 
         if direction == 'UP':
             if high >= tp3:
-                return "WINNER"
+                result = "WINNER"
+                save_evaluation_result(signal, result)
+                return result
             if high >= tp2:
                 hit_tp2 = True
             if high >= tp1:
                 hit_tp1 = True
             if low <= sl:
                 if hit_tp2:
-                    return "PARTIAL"
+                    result = "PARTIAL"
                 elif hit_tp1:
-                    return "PARTIAL"
+                    result = "PARTIAL"
                 else:
-                    return "LOSER"
+                    result = "LOSER"
+                save_evaluation_result(signal, result)
+                return result
         elif direction == 'DOWN':
             if low <= tp3:
-                return "WINNER"
+                result = "WINNER"
+                save_evaluation_result(signal, result)
+                return result
             if low <= tp2:
                 hit_tp2 = True
             if low <= tp1:
                 hit_tp1 = True
             if high >= sl:
                 if hit_tp2:
-                    return "PARTIAL"
+                    result = "PARTIAL"
                 elif hit_tp1:
-                    return "PARTIAL"
+                    result = "PARTIAL"
                 else:
-                    return "LOSER"
+                    result = "LOSER"
+                save_evaluation_result(signal, result)
+                return result
 
     # Se nenhum TP nem SL foi atingido no período analisado
-    return "FALSE"
+    result = "FALSE"
+    save_evaluation_result(signal, result)
+    return result
