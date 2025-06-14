@@ -11,24 +11,36 @@ export interface EvaluationResult {
 
 export const evaluateSignalLocally = async (signal: TradingSignal): Promise<EvaluationResult> => {
   try {
-    console.log(`🔍 Evaluating signal ${signal.id} for ${signal.symbol}...`);
+    console.log(`🔍 [LOCAL EVAL] Evaluating signal ${signal.id} for ${signal.symbol}...`);
+    console.log(`📊 [LOCAL EVAL] Signal details:`, {
+      symbol: signal.symbol,
+      direction: signal.direction,
+      entryPrice: signal.entryPrice,
+      stopLoss: signal.stopLoss,
+      tp1: signal.tp1,
+      tp2: signal.tp2,
+      tp3: signal.tp3,
+      currentResult: signal.result
+    });
     
     // Get historical data from the signal creation time using direct Bybit API
     const signalTime = new Date(signal.createdAt);
     const futureCandles = await fetchBybitCandlesForEvaluation(signal.symbol, signalTime, 48);
     
     if (!futureCandles || futureCandles.length === 0) {
-      console.warn(`⚠️ No candles data for ${signal.symbol}, using fallback evaluation`);
+      console.warn(`⚠️ [LOCAL EVAL] No candles data for ${signal.symbol}, using fallback evaluation`);
       return createFallbackEvaluation(signal);
     }
 
-    console.log(`📊 Got ${futureCandles.length} candles for ${signal.symbol}, evaluating...`);
+    console.log(`📊 [LOCAL EVAL] Got ${futureCandles.length} candles for ${signal.symbol}, evaluating...`);
 
     // Evaluate the signal using the candles
-    return evaluateSignalWithCandles(signal, futureCandles);
+    const result = evaluateSignalWithCandles(signal, futureCandles);
+    console.log(`✅ [LOCAL EVAL] Evaluation complete for ${signal.symbol}:`, result);
+    return result;
     
   } catch (error) {
-    console.error(`❌ Error evaluating signal ${signal.id}:`, error);
+    console.error(`❌ [LOCAL EVAL] Error evaluating signal ${signal.id}:`, error);
     return createFallbackEvaluation(signal);
   }
 };
@@ -223,30 +235,40 @@ const fetchBybitCandlesForEvaluation = async (symbol: string, startTime: Date, l
 };
 
 export const evaluateSignalsBatch = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
-  console.log(`Starting local evaluation of ${signals.length} signals...`);
+  console.log(`🚀 [BATCH EVAL] Starting local evaluation of ${signals.length} signals...`);
   
   const evaluatedSignals: TradingSignal[] = [];
   
   for (const signal of signals) {
     try {
+      console.log(`🔄 [BATCH EVAL] Evaluating signal ${signal.id} (${signal.symbol})...`);
       const evaluation = await evaluateSignalLocally(signal);
       
       const evaluatedSignal: TradingSignal = {
         ...signal,
         result: evaluation.result,
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        verifiedAt: new Date().toISOString()
       };
       
+      console.log(`✅ [BATCH EVAL] Signal ${signal.id} evaluated as: ${evaluation.result}`);
       evaluatedSignals.push(evaluatedSignal);
       
       // Small delay to prevent API rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     } catch (error) {
-      console.error(`Failed to evaluate signal ${signal.id}:`, error);
+      console.error(`❌ [BATCH EVAL] Failed to evaluate signal ${signal.id}:`, error);
       evaluatedSignals.push(signal); // Keep original signal if evaluation fails
     }
   }
   
-  console.log(`✅ Completed local evaluation of ${evaluatedSignals.length} signals`);
+  console.log(`🎯 [BATCH EVAL] Completed local evaluation:`, {
+    total: evaluatedSignals.length,
+    winners: evaluatedSignals.filter(s => s.result === 'WINNER').length,
+    losers: evaluatedSignals.filter(s => s.result === 'LOSER').length,
+    partial: evaluatedSignals.filter(s => s.result === 'PARTIAL').length,
+    false: evaluatedSignals.filter(s => s.result === 'FALSE').length
+  });
+  
   return evaluatedSignals;
 };

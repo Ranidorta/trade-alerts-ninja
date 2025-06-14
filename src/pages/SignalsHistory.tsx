@@ -40,13 +40,49 @@ const formatDate = (dateString: string) => {
   });
 };
 
-const getResultClass = (result: string | null) => {
-  switch (result) {
-    case 'WINNER': return 'bg-green-500/20 text-green-600 border-green-300/30';
-    case 'LOSER': return 'bg-red-500/20 text-red-600 border-red-300/30';
-    case 'PARTIAL': return 'bg-amber-500/20 text-amber-600 border-amber-300/30';
-    case 'FALSE': return 'bg-gray-500/20 text-gray-600 border-gray-300/30';
-    default: return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
+const getResultClass = (result: string | number | null | undefined) => {
+  // Handle different result formats for robustness
+  const resultStr = String(result || '').toUpperCase();
+  
+  switch (resultStr) {
+    case 'WINNER':
+    case 'WIN':
+    case '1':
+      return 'bg-green-500/20 text-green-600 border-green-300/30';
+    case 'LOSER':
+    case 'LOSS':
+    case '0':
+      return 'bg-red-500/20 text-red-600 border-red-300/30';
+    case 'PARTIAL':
+      return 'bg-amber-500/20 text-amber-600 border-amber-300/30';
+    case 'FALSE':
+    case 'MISSED':
+      return 'bg-gray-500/20 text-gray-600 border-gray-300/30';
+    default:
+      return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
+  }
+};
+
+const getResultText = (result: string | number | null | undefined) => {
+  // Handle different result formats for consistent display
+  const resultStr = String(result || '').toUpperCase();
+  
+  switch (resultStr) {
+    case 'WINNER':
+    case 'WIN':
+    case '1':
+      return 'VENCEDOR';
+    case 'LOSER':
+    case 'LOSS':
+    case '0':
+      return 'PERDEDOR';
+    case 'PARTIAL':
+      return 'PARCIAL';
+    case 'FALSE':
+    case 'MISSED':
+      return 'FALSO';
+    default:
+      return 'PENDENTE';
   }
 };
 
@@ -194,8 +230,8 @@ const SignalsHistory = () => {
       
       if (isLocalMode) {
         // Local evaluation mode
-        console.log("🔧 Starting local signal evaluation...");
-        console.log(`📊 Total signals loaded: ${signals.length}`);
+        console.log("🔧 [EVAL TRIGGER] Starting local signal evaluation...");
+        console.log(`📊 [EVAL TRIGGER] Total signals loaded: ${signals.length}`);
         
         // Log current signal states for debugging
         const signalStates = signals.map(s => ({
@@ -205,7 +241,7 @@ const SignalsHistory = () => {
           status: s.status,
           isPending: (!s.result || s.result === null || s.result === undefined || s.status === 'ACTIVE' || s.status === 'WAITING')
         }));
-        console.log("📋 Signal states:", signalStates);
+        console.log("📋 [EVAL TRIGGER] Signal states:", signalStates);
         
         // Get pending signals (signals without results or incomplete evaluation)
         const pendingSignals = signals.filter(signal => 
@@ -216,8 +252,8 @@ const SignalsHistory = () => {
           signal.status === 'WAITING'
         );
         
-        console.log(`🔍 Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
-        console.log('🎯 Pending signals details:', pendingSignals.map(s => ({ 
+        console.log(`🔍 [EVAL TRIGGER] Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
+        console.log('🎯 [EVAL TRIGGER] Pending signals details:', pendingSignals.map(s => ({ 
           id: s.id, 
           symbol: s.symbol, 
           result: s.result, 
@@ -233,10 +269,12 @@ const SignalsHistory = () => {
           return;
         }
         
-        console.log(`Evaluating ${pendingSignals.length} pending signals locally...`);
+        console.log(`📈 [EVAL TRIGGER] Evaluating ${pendingSignals.length} pending signals locally...`);
         
         // Evaluate signals using local evaluator
         const evaluatedSignals = await evaluateSignalsBatch(pendingSignals);
+        
+        console.log(`🔄 [EVAL TRIGGER] Updating ${signals.length} total signals with ${evaluatedSignals.length} evaluated results...`);
         
         // Update signals array with evaluated results
         const updatedSignals = signals.map(signal => {
@@ -244,10 +282,24 @@ const SignalsHistory = () => {
           return evaluatedSignal || signal;
         });
         
+        console.log(`💾 [EVAL TRIGGER] Saving updated signals to localStorage and updating state...`);
+        
         // Save to localStorage and update state
         saveSignalsToHistory(updatedSignals);
         setSignals(updatedSignals);
         setFilteredSignals(updatedSignals);
+        
+        // Log results summary
+        const resultsSummary = {
+          total: updatedSignals.length,
+          winners: updatedSignals.filter(s => s.result === 'WINNER').length,
+          losers: updatedSignals.filter(s => s.result === 'LOSER').length,
+          partial: updatedSignals.filter(s => s.result === 'PARTIAL').length,
+          false: updatedSignals.filter(s => s.result === 'FALSE').length,
+          pending: updatedSignals.filter(s => !s.result || s.result === null || s.result === undefined).length
+        };
+        
+        console.log(`📊 [EVAL TRIGGER] Final results summary:`, resultsSummary);
         
         toast({
           title: "Avaliação Local Concluída",
@@ -270,7 +322,7 @@ const SignalsHistory = () => {
       }
       
     } catch (error) {
-      console.error("Error in evaluation:", error);
+      console.error("❌ [EVAL TRIGGER] Error in evaluation:", error);
       toast({
         variant: "destructive",
         title: "Erro na avaliação",
@@ -521,9 +573,9 @@ const SignalsHistory = () => {
                   <TableCell>
                     <Badge 
                       variant="outline" 
-                      className={getResultClass(signal.result as string)}
+                      className={getResultClass(signal.result)}
                     >
-                      {signal.result || 'PENDENTE'}
+                      {getResultText(signal.result)}
                     </Badge>
                   </TableCell>
                 </TableRow>
