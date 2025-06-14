@@ -1,6 +1,5 @@
 // Local signal evaluation when backend is not available
 import { TradingSignal } from '@/lib/types';
-import { fetchBybitKlines } from '@/lib/apiServices';
 
 export interface EvaluationResult {
   signalId: string;
@@ -12,32 +11,24 @@ export interface EvaluationResult {
 
 export const evaluateSignalLocally = async (signal: TradingSignal): Promise<EvaluationResult> => {
   try {
-    console.log(`Evaluating signal ${signal.id} for ${signal.symbol}...`);
+    console.log(`🔍 Evaluating signal ${signal.id} for ${signal.symbol}...`);
     
-    // Get historical data from the signal creation time
+    // Get historical data from the signal creation time using direct Bybit API
     const signalTime = new Date(signal.createdAt);
-    const futureKlines = await fetchBybitKlines(signal.symbol, "15", 48);
+    const futureCandles = await fetchBybitCandlesForEvaluation(signal.symbol, signalTime, 48);
     
-    if (!futureKlines || futureKlines.length === 0) {
+    if (!futureCandles || futureCandles.length === 0) {
+      console.warn(`⚠️ No candles data for ${signal.symbol}, using fallback evaluation`);
       return createFallbackEvaluation(signal);
     }
 
-    // Convert klines to evaluation format
-    const candles = futureKlines.map(kline => ({
-      timestamp: new Date(parseInt(kline[0])),
-      high: parseFloat(kline[2]),
-      low: parseFloat(kline[3]),
-      close: parseFloat(kline[4])
-    }));
+    console.log(`📊 Got ${futureCandles.length} candles for ${signal.symbol}, evaluating...`);
 
-    // Sort by timestamp (oldest first)
-    candles.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-
-    // Evaluate the signal
-    return evaluateSignalWithCandles(signal, candles);
+    // Evaluate the signal using the candles
+    return evaluateSignalWithCandles(signal, futureCandles);
     
   } catch (error) {
-    console.error(`Error evaluating signal ${signal.id}:`, error);
+    console.error(`❌ Error evaluating signal ${signal.id}:`, error);
     return createFallbackEvaluation(signal);
   }
 };
@@ -167,7 +158,69 @@ const createFallbackEvaluation = (signal: TradingSignal): EvaluationResult => {
   };
 };
 
-// Removed createMockSignalsForDemo - using only real signals
+// Direct Bybit API integration for signal evaluation
+const fetchBybitCandlesForEvaluation = async (symbol: string, startTime: Date, limit: number = 48) => {
+  try {
+    console.log(`📡 Fetching ${limit} candles for ${symbol} from ${startTime.toISOString()}`);
+    
+    // Convert start time to Unix timestamp (seconds)
+    const startUnix = Math.floor(startTime.getTime() / 1000);
+    
+    // Bybit API endpoint for historical klines
+    const url = "https://api.bybit.com/v5/market/kline";
+    
+    const params = new URLSearchParams({
+      category: 'linear', // USDT perpetual
+      symbol: symbol,
+      interval: '15', // 15 minutes
+      start: startUnix.toString(),
+      limit: limit.toString()
+    });
+    
+    const response = await fetch(`${url}?${params}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error(`❌ Bybit API error: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.retCode !== 0) {
+      console.error(`❌ Bybit API returned error:`, data);
+      return null;
+    }
+    
+    const klines = data.result?.list;
+    if (!klines || klines.length === 0) {
+      console.warn(`⚠️ No klines returned for ${symbol}`);
+      return null;
+    }
+    
+    // Bybit returns newest first, we need oldest first for evaluation
+    klines.reverse();
+    
+    // Convert to evaluation format: [timestamp, open, high, low, close, volume, turnover]
+    const candles = klines.map((kline: string[]) => ({
+      timestamp: new Date(parseInt(kline[0])),
+      high: parseFloat(kline[2]),
+      low: parseFloat(kline[3]),
+      close: parseFloat(kline[4])
+    }));
+    
+    console.log(`✅ Successfully fetched ${candles.length} candles for ${symbol}`);
+    return candles;
+    
+  } catch (error) {
+    console.error(`❌ Error fetching Bybit candles for ${symbol}:`, error);
+    return null;
+  }
+};
 
 export const evaluateSignalsBatch = async (signals: TradingSignal[]): Promise<TradingSignal[]> => {
   console.log(`Starting local evaluation of ${signals.length} signals...`);
