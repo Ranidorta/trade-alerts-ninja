@@ -60,6 +60,7 @@ def calculate_indicators(df, label):
 def is_trend_aligned(df_15m, df_1h, df_4h, short=False):
     """
     Validates if the trend is aligned across 15m, 1h, 4h using weighted scores.
+    OTIMIZADO: Maior peso para timeframes mais longos
 
     Args:
         df_15m (pd.DataFrame): Indicators for 15m.
@@ -70,7 +71,8 @@ def is_trend_aligned(df_15m, df_1h, df_4h, short=False):
     Returns:
         bool: True if weighted trend score ≥ 0.7
     """
-    weights = {'4h': 0.5, '1h': 0.3, '15m': 0.2}
+    # NOVOS PESOS: Favorece timeframes mais longos
+    weights = {'4h': 0.60, '1h': 0.25, '15m': 0.15}
     s15 = df_15m.iloc[-1]
     s1h = df_1h.iloc[-1]
     s4h = df_4h.iloc[-1]
@@ -114,6 +116,14 @@ def generate_hybrid_signal(symbol):
         s4h = df_4h.iloc[-1]
         s15 = df_15m.iloc[-1]
 
+        # FILTRO DE VOLATILIDADE ADICIONADO
+        atr_15m = s15.get('atr_15m', 0)
+        atr_1h = s1h.get('atr_1h', 0) 
+        volatility_ok = True
+        if atr_15m > 0 and atr_1h > 0:
+            volatility_ratio = atr_15m / atr_1h
+            volatility_ok = 0.5 <= volatility_ratio <= 1.5
+        
         logs_long = []
         trend_long = is_trend_aligned(df_15m, df_1h, df_4h, short=False)
         if not trend_long: logs_long.append("❌ Long: tendência desalinhada")
@@ -121,6 +131,7 @@ def generate_hybrid_signal(symbol):
         if not (s4h['adx_4h'] > 25): logs_long.append("❌ Long: ADX baixo")
         if not (s15['close_15m'] > s4h['fib_618_4h']): logs_long.append("❌ Long: abaixo do Fibonacci")
         if not (s15['close_15m'] > s4h['poc_4h']): logs_long.append("❌ Long: abaixo do POC")
+        if not volatility_ok: logs_long.append("❌ Long: volatilidade extrema")
 
         logs_short = []
         trend_short = is_trend_aligned(df_15m, df_1h, df_4h, short=True)
@@ -129,6 +140,7 @@ def generate_hybrid_signal(symbol):
         if not (s4h['adx_4h'] > 25): logs_short.append("❌ Short: ADX baixo")
         if not (s15['close_15m'] < s4h['fib_618_4h']): logs_short.append("❌ Short: acima do Fibonacci")
         if not (s15['close_15m'] < s4h['poc_4h']): logs_short.append("❌ Short: acima do POC")
+        if not volatility_ok: logs_short.append("❌ Short: volatilidade extrema")
 
         if trend_long and not logs_long:
             entry_price = s15['close_15m']

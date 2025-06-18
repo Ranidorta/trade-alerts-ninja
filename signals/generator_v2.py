@@ -16,6 +16,10 @@ from services.trainer import MLTrainer
 from api.fetch_data import fetch_data
 from utils.save_signal import save_signal
 from services.alertSender import SignalSender
+from utils.false_breakout_detector import FalseBreakoutDetector, check_rsi_divergence
+from utils.macro_events_filter import check_fundamental_filter
+from ml.model_integration import AdvancedMLPredictor
+from core.risk_management import DynamicRiskManager, detect_market_stress
 
 logger = logging.getLogger("TradeAgent")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
@@ -30,8 +34,15 @@ class TradeAgent:
         self.db_path = config.get("db_path", "signals.db")
         self.learning_enabled = config.get("enable_learning", True)
         self.feature_window = config.get("feature_window", 50)
-        self.min_success_prob = config.get("min_success_prob", 0.6)
+        self.min_success_prob = config.get("min_success_prob", 0.65)  # Aumentado para 65%
         self.open_signals_cache = []  # Cache for duplicate prevention
+        
+        # NOVOS COMPONENTES AVANÇADOS
+        self.breakout_detector = FalseBreakoutDetector()
+        self.ml_predictor = AdvancedMLPredictor()
+        self.risk_manager = DynamicRiskManager()
+        self.safe_mode = False
+        self.safe_mode_until = None
 
     def is_trending(self, df, window_fast=50, window_slow=200):
         """Check if trend is up or down using EMA crossover"""
@@ -50,13 +61,15 @@ class TradeAgent:
         return vol > mean_vol
 
     def is_strong_candle(self, df):
-        """Check if last candle has strong body (>60% of total range)"""
+        """Check if last candle has strong body (>70% of total range) - MELHORADO"""
         c = df.iloc[-1]
         body = abs(c['close'] - c['open'])
         total = c['high'] - c['low']
         if total == 0:
             return False
-        return body > 0.6 * total
+        body_ratio = body / total
+        logger.info(f"📊 Candle body ratio: {body_ratio:.2f} (mín: 0.70)")
+        return body_ratio > 0.70  # Aumentado de 60% para 70%
 
     def atr_filter(self, df, min_atr=0.002, max_atr=0.05):
         """Filter by ATR percentage (0.2% to 5% of price) - mais flexível"""
@@ -138,18 +151,28 @@ class TradeAgent:
 
     def generate_signal_monster(self, symbol):
         """
-        Monster signal generation with multi-timeframe analysis and advanced filtering
+        Monster signal generation with ADVANCED filtering and ML validation
         """
-        logger.info(f"🔍 Analisando {symbol} com filtros avançados...")
+        logger.info(f"🔍 [MONSTER v2] Analisando {symbol} com filtros AVANÇADOS...")
         
         try:
+            # 1. VERIFICAÇÕES PRELIMINARES
+            if self.safe_mode:
+                logger.warning(f"🛡️ MODO SEGURO ATIVO - bloqueando sinais para {symbol}")
+                return None
+            
+            # Filtro fundamental (eventos macro)
+            if not check_fundamental_filter(symbol):
+                logger.info(f"🚨 Filtro fundamental bloqueou {symbol}")
+                return None
+            
             # Get existing open signals to prevent duplicates
             existing_open_signals = self.get_existing_open_signals()
             if symbol in existing_open_signals:
                 logger.info(f"🛑 Sinal já aberto para {symbol}. Evitando duplicata.")
                 return None
 
-            # Fetch multi-timeframe data
+            # 2. FETCH MULTI-TIMEFRAME DATA
             df_15m = fetch_data(symbol, "15m", limit=210)
             df_1h = fetch_data(symbol, "1h", limit=210)
             
@@ -157,18 +180,34 @@ class TradeAgent:
                 logger.warning(f"Dados insuficientes para {symbol}")
                 return None
 
-            # Determine direction based on trend alignment
+            # 3. DETECÇÃO DE STRESS DO MERCADO
+            market_stress = detect_market_stress(df_15m)
+            if market_stress:
+                logger.warning(f"🚨 Stress do mercado detectado para {symbol} - sendo conservador")
+
+            # 4. DETERMINE DIRECTION BASED ON TREND ALIGNMENT
             direction = self.get_direction(df_1h, df_15m)
             if direction is None:
                 logger.info(f"🛑 Tendência não alinhada para {symbol}")
                 return None
 
-            # RSI filter - mais flexível
-            rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1]
-            rsi_min_buy = 45  # Reduzido de 50 para 45
-            rsi_max_sell = 55  # Aumentado de 50 para 55
+            # 5. VALIDAÇÃO DE BREAKOUT (ANTI-FALSO BREAKOUT)
+            is_valid_breakout = self.breakout_detector.is_valid_breakout(df_15m, direction)
+            if not is_valid_breakout:
+                logger.info(f"🛑 Breakout inválido ou suspeito para {symbol}")
+                return None
             
-            logger.info(f"📈 RSI atual: {rsi:.2f}")
+            # 6. DETECÇÃO DE DIVERGÊNCIA RSI (NOVO)
+            has_favorable_divergence = check_rsi_divergence(df_15m, direction)
+            if has_favorable_divergence:
+                logger.info(f"🔄 Divergência RSI favorável detectada para {direction}")
+
+            # 7. RSI FILTER - mais flexível mas com divergência
+            rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1]
+            rsi_min_buy = 40 if has_favorable_divergence else 45  
+            rsi_max_sell = 60 if has_favorable_divergence else 55
+            
+            logger.info(f"📈 RSI atual: {rsi:.2f} (limites: {rsi_min_buy}-{rsi_max_sell})")
             
             if direction == "BUY" and rsi < rsi_min_buy:
                 logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f} < {rsi_min_buy}")
@@ -176,15 +215,13 @@ class TradeAgent:
             if direction == "SELL" and rsi > rsi_max_sell:
                 logger.info(f"🛑 RSI alto para SELL: {rsi:.2f} > {rsi_max_sell}")
                 return None
-                
-            logger.info(f"✅ RSI compatível com {direction}: {rsi:.2f}")
 
-            # Advanced filters on 15m
+            # 8. ADVANCED FILTERS ON 15M (MAIS RIGOROSOS)
             if not self.has_high_volume(df_15m):
                 logger.info(f"🛑 Volume baixo para {symbol}")
                 return None
             
-            if not self.is_strong_candle(df_15m):
+            if not self.is_strong_candle(df_15m):  # Agora 70% em vez de 60%
                 logger.info(f"🛑 Candle fraco para {symbol}")
                 return None
             
@@ -192,75 +229,82 @@ class TradeAgent:
                 logger.info(f"🛑 ATR fora da faixa para {symbol}")
                 return None
 
-            # Calculate entry and targets
+            # 9. CALCULATE ENTRY AND ADVANCED TARGETS
             entry = float(df_15m['close'].iloc[-1])
             atr = AverageTrueRange(df_15m['high'], df_15m['low'], df_15m['close'], window=14).average_true_range().iloc[-1]
+            
+            # Calcula ADX para targets dinâmicos
+            from ta.trend import ADXIndicator
+            adx = ADXIndicator(df_15m['high'], df_15m['low'], df_15m['close'], window=14).adx().iloc[-1]
+            
+            # GESTÃO DE RISCO DINÂMICA
+            market_volatility = self.risk_manager.is_acceptable_volatility(atr, atr)
+            take_profits, stop_loss = self.risk_manager.calculate_targets(
+                entry, atr, direction, adx, symbol
+            )
 
-            if direction == "BUY":
-                sl = entry - 1.2 * atr
-                tp1 = entry + 0.8 * atr
-                tp2 = entry + 1.5 * atr
-                tp3 = entry + 2.2 * atr
-            else:
-                sl = entry + 1.2 * atr
-                tp1 = entry - 0.8 * atr
-                tp2 = entry - 1.5 * atr
-                tp3 = entry - 2.2 * atr
+            # 10. ADVANCED ML PREDICTION
+            ml_result, ml_confidence = self.ml_predictor.predict_signal_quality(
+                df_15m, 
+                market_volatility=2.0 if market_stress else 1.0,
+                consecutive_losses=self.risk_manager.consecutive_losses
+            )
+            
+            if ml_result == "REJECTED":
+                logger.info(f"🤖 ML rejeitou o sinal (confiança: {ml_confidence:.3f})")
+                return None
+            
+            logger.info(f"🤖 ML aprovou: {ml_result} (confiança: {ml_confidence:.3f})")
 
-            # Extract features for ML prediction
-            features = self.extract_features(df_15m)
-
-            # Apply ML filtering if enabled
-            success_prob = 0.75  # Default high confidence for monster filter
-            if self.learning_enabled:
-                prob = self.trainer.predict(features)[0]
-                if prob < self.min_success_prob:
-                    logger.info(f"🛑 Probabilidade ML baixa: {prob:.2%}")
-                    return None
-                success_prob = prob
-
-            # Apply context analysis if available
-            context_score = 0.8  # Default
-            context_reason = "Monster filter passed"
+            # 11. CONTEXT ANALYSIS
+            context_score = 0.85  # Default higher for advanced filter
+            context_reason = "Advanced Monster filter v2 - all checks passed"
             if self.context_text:
                 context_score, context_reason = self.context_engine.analyze(symbol, self.context_text)
-                if context_score < self.config.get("min_context_score", 0.6):
+                if context_score < self.config.get("min_context_score", 0.65):
                     logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
                     return None
 
-            # Create final signal
+            # 12. CREATE ENHANCED SIGNAL
             signal = {
                 'symbol': symbol,
                 'direction': direction,
                 'entry_price': round(entry, 6),
-                'sl': round(sl, 6),
-                'tp': round(tp3, 6),  # Use tp3 as main target
-                'tp1': round(tp1, 6),
-                'tp2': round(tp2, 6),
-                'tp3': round(tp3, 6),
+                'sl': round(stop_loss, 6),
+                'tp': round(take_profits[2], 6),  # TP3 como target principal
+                'tp1': round(take_profits[0], 6),
+                'tp2': round(take_profits[1], 6),
+                'tp3': round(take_profits[2], 6),
                 'atr': round(atr, 6),
+                'adx': round(adx, 2),
                 'timestamp': datetime.utcnow().isoformat(),
-                'expires': (datetime.utcnow() + timedelta(minutes=5)).isoformat(),
-                'timeframe': 'monster_1h_15m_multi',
+                'expires': (datetime.utcnow() + timedelta(minutes=8)).isoformat(),  # Mais tempo
+                'timeframe': 'monster_v2_advanced',
                 'score': round(context_score, 2),
                 'context': context_reason,
-                'success_prob': round(success_prob, 4),
+                'success_prob': round(ml_confidence, 4),
                 'result': None,
                 'rsi': round(rsi, 2),
-                'strategy': 'monster_1h_15m_multi'
+                'strategy': 'monster_v2_advanced',
+                'market_stress': market_stress,
+                'breakout_valid': is_valid_breakout,
+                'rsi_divergence': has_favorable_divergence,
+                'ml_prediction': ml_result
             }
 
-            # Save to database and storage
+            # 13. SAVE TO DATABASE AND STORAGE
             save_signal(signal)
-            self._save_to_sqlite(signal, features)
             
-            logger.info(f"✅ Sinal MONSTER gerado {signal['direction']} @ {signal['entry_price']} ({symbol})")
-            logger.info(f"   RSI: {rsi:.2f}, ATR: {atr:.6f}, Prob: {success_prob:.2%}")
+            logger.info(f"✅ SINAL MONSTER V2 gerado para {symbol}:")
+            logger.info(f"   🎯 {signal['direction']} @ {signal['entry_price']}")
+            logger.info(f"   📊 RSI: {rsi:.2f}, ADX: {adx:.2f}, ATR: {atr:.6f}")
+            logger.info(f"   🤖 ML: {ml_result} ({ml_confidence:.3f})")
+            logger.info(f"   🔄 Divergência: {has_favorable_divergence}, Stress: {market_stress}")
             
             return signal
 
         except Exception as e:
-            logger.exception(f"Erro ao gerar sinal monster para {symbol}")
+            logger.exception(f"Erro ao gerar sinal monster v2 para {symbol}")
             return None
 
     def generate_signal(self, symbol: str) -> Optional[Dict]:

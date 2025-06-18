@@ -17,6 +17,8 @@ from utils.signal_storage import insert_signal
 from utils.signal_evaluator import start_evaluator
 from api.data_fetcher import get_symbols
 from scheduler.ml_retraining import start_ml_scheduler
+from ml.real_time_training import auto_retrain_model
+from core.risk_management import DynamicRiskManager
 
 # Load configuration
 config_path = 'config.json'
@@ -28,12 +30,21 @@ else:
 
 def main():
     """
-    Main function to run the trading signal generator.
+    Main function to run the ADVANCED trading signal generator with ML.
     """
-    logger.info("Starting trade_signal_agent")
+    logger.info("🚀 Starting ADVANCED trade_signal_agent v2.0")
+    
+    # Initialize components
+    risk_manager = DynamicRiskManager()
     
     # Initialize ML retraining scheduler
     start_ml_scheduler()
+    
+    # Auto-retrain ML model if needed
+    try:
+        auto_retrain_model()
+    except Exception as e:
+        logger.error(f"❌ Erro no auto-retrain inicial: {e}")
     
     # Start the signal evaluator in background
     start_evaluator(interval=60)
@@ -51,27 +62,49 @@ def main():
             
             logger.info(f"Processing {len(symbols)} symbols")
             
-            # Process each symbol
-            for symbol in symbols[:10]:  # Limit to 10 symbols for testing
-                logger.info(f"Analyzing symbol: {symbol}")
+            # Process each symbol with ADVANCED filtering
+            for symbol in symbols[:15]:  # Increase to 15 symbols for better coverage
+                logger.info(f"🔍 Analyzing symbol: {symbol}")
                 
                 try:
-                    # Generate signal
+                    # Generate signal with ADVANCED logic
                     raw_signal = generate_signal(symbol)
                     
                     # Validate signal
                     signal = validate_signal(raw_signal)
                     
                     if signal:
-                        # Apply risk management
+                        # Apply DYNAMIC risk management
                         final = manage_risk(signal)
                         
                         if final:
                             # Store signal
                             insert_signal(final)
-                            logger.info(f"Signal stored: {symbol} {final['signal']} @ {final['entry_price']}")
+                            logger.info(f"✅ ADVANCED Signal stored: {symbol} {final['signal']} @ {final['entry_price']}")
+                            
+                            # Update risk manager with result (placeholder)
+                            # Em produção, isso seria chamado quando o resultado fosse conhecido
+                            # risk_manager.evaluate_trade_result(final.get('result', 'PENDING'))
+                        else:
+                            logger.info(f"🛑 Signal blocked by risk management: {symbol}")
+                    else:
+                        logger.info(f"🛑 Signal validation failed: {symbol}")
+                        
                 except Exception as e:
-                    logger.exception(f"Error processing {symbol}: {str(e)}")
+                    logger.exception(f"❌ Error processing {symbol}: {str(e)}")
+            
+            # Periodic ML model update (a cada 10 ciclos = ~10 minutos)
+            if hasattr(main, 'cycle_count'):
+                main.cycle_count += 1
+            else:
+                main.cycle_count = 1
+                
+            if main.cycle_count % 10 == 0:
+                try:
+                    logger.info("🔄 Verificando necessidade de re-treino ML...")
+                    auto_retrain_model()
+                except Exception as e:
+                    logger.error(f"❌ Erro no re-treino periódico: {e}")
             
             # Sleep before next cycle
             logger.info("Waiting 60 seconds before next cycle...")
