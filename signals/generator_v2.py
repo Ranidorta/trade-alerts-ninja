@@ -1,4 +1,3 @@
-
 ### generator_v2.py
 
 import logging
@@ -20,6 +19,8 @@ from utils.false_breakout_detector import FalseBreakoutDetector, check_rsi_diver
 from utils.macro_events_filter import check_fundamental_filter
 from ml.model_integration import AdvancedMLPredictor
 from core.risk_management import DynamicRiskManager, detect_market_stress
+from signals.intraday_signal_integrator import generate_intraday_signal
+from utils.quick_intraday_performance_alert import should_halt_intraday_trading
 
 logger = logging.getLogger("TradeAgent")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
@@ -307,9 +308,49 @@ class TradeAgent:
             logger.exception(f"Erro ao gerar sinal monster v2 para {symbol}")
             return None
 
+    def generate_signal_intraday(self, symbol):
+        """
+        NOVO: Geração de sinais para Day Trade com validações rápidas
+        """
+        logger.info(f"🏃‍♂️ [INTRADAY] Gerando sinal rápido para {symbol}")
+        
+        try:
+            # Verifica se deve parar trading intradiário
+            if should_halt_intraday_trading():
+                logger.warning("🛑 Trading intradiário suspenso por performance")
+                return None
+            
+            # Usa o novo sistema integrado
+            intraday_signal = generate_intraday_signal(symbol)
+            
+            if intraday_signal:
+                logger.info(f"✅ Sinal intradiário gerado: {symbol} {intraday_signal['direction']} @ {intraday_signal['entry_price']}")
+                return intraday_signal
+            else:
+                logger.info(f"🛑 Nenhum sinal intradiário aprovado para {symbol}")
+                return None
+                
+        except Exception as e:
+            logger.exception(f"Erro na geração de sinal intradiário para {symbol}")
+            return None
+
     def generate_signal(self, symbol: str) -> Optional[Dict]:
-        """Main signal generation entry point - now uses monster logic"""
-        return self.generate_signal_monster(symbol)
+        """
+        ATUALIZADO: Método principal que escolhe entre Monster e Intraday
+        """
+        try:
+            # Primeiro tenta gerar sinal intradiário (mais rápido)
+            intraday_signal = self.generate_signal_intraday(symbol)
+            if intraday_signal:
+                return intraday_signal
+            
+            # Se não gerar sinal intradiário, usa o Monster (estratégia principal)
+            monster_signal = self.generate_signal_monster(symbol)
+            return monster_signal
+            
+        except Exception as e:
+            logger.exception(f"Erro na geração de sinal para {symbol}")
+            return None
 
     def run(self, symbols: List[str]):
         """Run signal generation for multiple symbols"""
