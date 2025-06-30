@@ -9,6 +9,7 @@ import {
 } from "@/lib/signalHistoryService";
 import { logTradeSignal } from "@/lib/firebase";
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
+import { generateMonsterSignals } from "@/lib/signalsApi";
 
 // Set up localStorage keys
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
@@ -66,14 +67,13 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
-      console.log('Trying to fetch signals...');
+      console.log('🚀 Starting signal generation process...');
       
-      // First try to fetch from any available API
       let newSignals: TradingSignal[] = [];
       let fetchedFromRemote = false;
       
       try {
-        // Try multiple backend URLs if configured
+        // First try to fetch from backends
         const backendUrls = [
           config.signalsApiUrl,
           'https://trade-alerts-backend.onrender.com',
@@ -83,7 +83,7 @@ export const useTradingSignals = () => {
         for (const backendUrl of backendUrls) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
             
             const response = await fetch(`${backendUrl}/signals?strategy=CLASSIC`, {
               signal: controller.signal
@@ -109,49 +109,40 @@ export const useTradingSignals = () => {
           }
         }
         
-        // If no backend worked, check localStorage
-        if (!fetchedFromRemote) {
-          const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
-          if (cachedSignals) {
-            newSignals = JSON.parse(cachedSignals);
-            console.log("Using cached signals:", newSignals.length);
-            
-            toast({
-              title: "Using cached signals",
-              description: "Backend unavailable. Using locally stored signals.",
-            });
-          }
-        }
+      } catch (fetchError) {
+        console.warn(`Could not fetch from any backend: ${fetchError.message}`);
+      }
+      
+      // If no backend worked, generate monster signals locally
+      if (!fetchedFromRemote) {
+        console.log('📡 Backend unavailable, generating local monster signals...');
         
-        // If we still have no signals, generate demo data
-        if (newSignals.length === 0) {
-          newSignals = generateMockSignals(15);
-          console.log("Generated demo signals:", newSignals.length);
+        try {
+          // Use the monster signal generation from signalsApi
+          newSignals = await generateMonsterSignals([
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+          ]);
+          
+          console.log(`✅ Generated ${newSignals.length} local monster signals`);
+          
+          toast({
+            title: "Monster signals generated",
+            description: `Generated ${newSignals.length} high-quality signals using real market data`,
+          });
+          
+        } catch (monsterError) {
+          console.error('❌ Monster signal generation failed:', monsterError);
+          
+          // Final fallback to demo data
+          newSignals = generateMockSignals(10);
+          console.log("Generated fallback demo signals:", newSignals.length);
           
           toast({
             title: "Using demo data",
-            description: "No backend available. Using generated demo signals.",
+            description: "Signal generation unavailable. Using demo data.",
           });
         }
-        
-      } catch (fetchError) {
-        console.warn(`Could not fetch from any API: ${fetchError.message}`);
-        
-        // Try to use cached signals
-        const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
-        if (cachedSignals) {
-          newSignals = JSON.parse(cachedSignals);
-          console.log("Using cached signals:", newSignals.length);
-        } else {
-          // Generate demo data as last resort
-          newSignals = generateMockSignals(10);
-          console.log("Generated fallback demo signals:", newSignals.length);
-        }
-        
-        toast({
-          title: "Backend unavailable",
-          description: "Using cached or demo data. Backend connection will be retried automatically.",
-        });
       }
       
       // Process signals to ensure they have all required fields
@@ -205,7 +196,7 @@ export const useTradingSignals = () => {
       toast({
         variant: "destructive",
         title: "Error loading signals",
-        description: "Failed to load signals from any source. Please check your connection.",
+        description: "Failed to load signals. Please try again.",
       });
     } finally {
       setLoading(false);
