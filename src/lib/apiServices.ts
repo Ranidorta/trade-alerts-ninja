@@ -24,11 +24,12 @@ const handleApiError = (error: any, endpoint: string) => {
   return null;
 };
 
-// Fetch kline data from Bybit
+// Fetch kline data from Bybit - CORRECTED VERSION
 export const fetchBybitKlines = async (
   symbol: string,
   interval: string = "5", // 5 min interval
-  limit: number = 50
+  startTime?: number, // timestamp in seconds
+  limit: number = 200
 ) => {
   try {
     const params = new URLSearchParams({
@@ -36,6 +37,19 @@ export const fetchBybitKlines = async (
       symbol: symbol.toUpperCase(),
       interval: interval,
       limit: limit.toString()
+    });
+    
+    // Add start time if provided (convert to milliseconds)
+    if (startTime) {
+      params.append("start", (startTime * 1000).toString());
+    }
+    
+    console.log(`📊 [BYBIT_API] Fetching ${symbol} candles with params:`, {
+      category: "linear",
+      symbol: symbol.toUpperCase(),
+      interval: interval,
+      limit,
+      startTime: startTime ? new Date(startTime * 1000).toISOString() : 'not specified'
     });
     
     const response = await fetch(`${BYBIT_API_URL}?${params}`, {
@@ -49,14 +63,23 @@ export const fetchBybitKlines = async (
     }
     
     const data = await response.json();
+    
+    console.log(`📊 [BYBIT_API] Response for ${symbol}:`, {
+      retCode: data.retCode,
+      retMsg: data.retMsg,
+      dataLength: data.result?.list?.length || 0
+    });
+    
     if (data.retCode === 0 && data.result?.list) {
+      console.log(`✅ [BYBIT_API] Successfully fetched ${data.result.list.length} candles for ${symbol}`);
       return data.result.list;
     } else {
-      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
+      console.error(`❌ [BYBIT_API] Error in Bybit API response for ${symbol}:`, data.retMsg);
       return null;
     }
   } catch (error) {
-    return handleApiError(error, `Bybit Klines for ${symbol}`);
+    console.error(`❌ [BYBIT_API] Failed to fetch ${symbol}:`, error);
+    return null;
   }
 };
 
@@ -820,4 +843,3 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
-
