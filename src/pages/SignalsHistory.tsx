@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
-import { fetchBybitKlines } from '@/lib/apiServices';
-import { validateMultipleSignals } from '@/lib/signalValidationEngine';
+import { validateMultipleSignalsFromBackend } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,7 +97,7 @@ const SignalsHistory = () => {
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
   const [isLocalMode, setIsLocalMode] = useState(false);
@@ -119,8 +118,8 @@ const SignalsHistory = () => {
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
   const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
 
-  // Load signals with fallback to local mode
-  const loadSignals = useCallback(async (isRefreshRequest = false) => {
+  // Carrega sinais do backend
+  const loadSignalsFromBackend = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
         setIsRefreshing(true);
@@ -128,60 +127,58 @@ const SignalsHistory = () => {
         setIsLoading(true);
       }
       
-      console.log("Trying to load signals from backend API...");
+      console.log("🔄 [SIGNALS_LOAD] Carregando sinais do backend...");
       
       try {
-        // Try backend first
-        const response = await fetchSignalsHistory();
+        // Tentar carregar do backend primeiro
+        const backendSignals = await fetchSignalsHistory();
         
-        if (response && response.length > 0) {
-          const last100Signals = response.slice(0, 100);
-          console.log(`✅ Loaded ${last100Signals.length} signals from backend`);
+        if (backendSignals && backendSignals.length > 0) {
+          console.log(`✅ [SIGNALS_LOAD] ${backendSignals.length} sinais carregados do backend`);
           
-          setSignals(last100Signals);
-          setFilteredSignals(last100Signals);
+          setSignals(backendSignals);
+          setFilteredSignals(backendSignals);
           setIsLocalMode(false);
           
           if (isRefreshRequest) {
             toast({
               title: "Sinais atualizados",
-              description: `${response.length} sinais carregados do backend.`,
+              description: `${backendSignals.length} sinais carregados do backend.`,
             });
           }
           return;
         }
       } catch (backendError) {
-        console.warn("Backend failed, switching to local mode:", backendError);
+        console.warn("❌ [SIGNALS_LOAD] Backend falhou, tentando localStorage:", backendError);
       }
       
-      // Fallback to local mode
-      console.log("🔧 Switching to local evaluation mode...");
+      // Fallback para localStorage
+      console.log("🔧 [SIGNALS_LOAD] Usando localStorage como fallback...");
       setIsLocalMode(true);
       
-      // Check if we have local signals
-      let localSignals = getSignalHistory();
+      const localSignals = getSignalHistory();
       
       if (!localSignals || localSignals.length === 0) {
-        console.log("❌ No real signals found in localStorage. Please load signals from backend first.");
+        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage");
         toast({
           variant: "destructive",
           title: "Nenhum Sinal Encontrado",
-          description: "Não há sinais reais armazenados. Conecte ao backend para carregar sinais.",
+          description: "Não há sinais salvos. Conecte ao backend para carregar sinais.",
         });
-        localSignals = [];
+        setSignals([]);
+        setFilteredSignals([]);
       } else {
-        console.log(`✅ Found ${localSignals.length} real signals in localStorage`);
+        console.log(`✅ [SIGNALS_LOAD] ${localSignals.length} sinais carregados do localStorage`);
+        setSignals(localSignals);
+        setFilteredSignals(localSignals);
         toast({
           title: "Modo Local",
-          description: `Carregados ${localSignals.length} sinais reais do localStorage.`,
+          description: `${localSignals.length} sinais carregados do localStorage.`,
         });
       }
       
-      setSignals(localSignals);
-      setFilteredSignals(localSignals);
-      
     } catch (error) {
-      console.error("Failed to load signals:", error);
+      console.error("❌ [SIGNALS_LOAD] Erro ao carregar sinais:", error);
       toast({
         variant: "destructive",
         title: "Erro ao carregar sinais",
@@ -195,141 +192,119 @@ const SignalsHistory = () => {
     }
   }, [toast]);
 
-  // Load evaluation status
+  // Carrega status de avaliação
   const loadEvaluationStatus = useCallback(async () => {
     try {
       const status = await getEvaluationStatus();
       setEvaluationStatus(status);
     } catch (error) {
-      console.error("Failed to load evaluation status:", error);
+      console.error("❌ [EVAL_STATUS] Erro ao carregar status:", error);
     }
   }, []);
   
-  // Initial load
+  // Carregamento inicial
   useEffect(() => {
-    loadSignals();
+    loadSignalsFromBackend();
     loadEvaluationStatus();
-  }, [loadSignals, loadEvaluationStatus]);
+  }, [loadSignalsFromBackend, loadEvaluationStatus]);
   
-  // Auto-refresh every 30 seconds to get updated results from backend
+  // Auto-refresh a cada 30 segundos
   useEffect(() => {
     const interval = setInterval(() => {
-      loadSignals(true);
+      loadSignalsFromBackend(true);
       loadEvaluationStatus();
-    }, 30000); // 30 seconds
+    }, 30000);
     
     return () => clearInterval(interval);
-  }, [loadSignals, loadEvaluationStatus]);
+  }, [loadSignalsFromBackend, loadEvaluationStatus]);
   
-  // Handle refreshing data
+  // Refresh manual
   const handleRefresh = () => {
-    loadSignals(true);
+    loadSignalsFromBackend(true);
     loadEvaluationStatus();
   };
 
-  // Trigger manual evaluation (local or backend)
-  const handleTriggerEvaluation = async () => {
+  // Validação de sinais (fluxo correto)
+  const handleValidateSignals = async () => {
     try {
-      setIsEvaluating(true);
+      setIsValidating(true);
       
-      if (isLocalMode) {
-        // Local evaluation mode using improved validation engine
-        console.log("🔧 [EVAL_TRIGGER] Starting enhanced local signal validation...");
-        console.log(`📊 [EVAL_TRIGGER] Total signals loaded: ${signals.length}`);
-        
-        // Get pending signals (signals without results or incomplete evaluation)
-        const pendingSignals = signals.filter(signal => 
-          !signal.result || 
-          signal.result === null || 
-          signal.result === undefined ||
-          signal.result === "PENDING" ||
-          signal.status === 'ACTIVE' || 
-          signal.status === 'WAITING'
-        );
-        
-        console.log(`🔍 [EVAL_TRIGGER] Found ${pendingSignals.length} pending signals for validation`);
-        
-        if (pendingSignals.length === 0) {
-          toast({
-            title: "Nenhum sinal pendente",
-            description: "Todos os sinais já foram validados com dados históricos.",
-          });
-          return;
-        }
-        
+      console.log("🔍 [VALIDATION] Iniciando validação de sinais...");
+      
+      // Filtrar sinais que precisam de validação
+      const pendingSignals = signals.filter(signal => 
+        !signal.result || 
+        signal.result === null || 
+        signal.result === undefined ||
+        signal.result === "PENDING"
+      );
+      
+      console.log(`📊 [VALIDATION] ${pendingSignals.length} sinais precisam de validação`);
+      
+      if (pendingSignals.length === 0) {
         toast({
-          title: "Validação iniciada",
-          description: `Validando ${pendingSignals.length} sinais usando dados históricos da Bybit...`,
+          title: "Nenhum sinal pendente",
+          description: "Todos os sinais já foram validados.",
         });
-        
-        console.log(`📈 [EVAL_TRIGGER] Validating ${pendingSignals.length} signals with historical data...`);
-        
-        // Use the enhanced validation engine
-        const validatedSignals = await validateMultipleSignals(pendingSignals);
-        
-        console.log(`🔄 [EVAL_TRIGGER] Merging validated results with existing signals...`);
-        
-        // Update signals array with validated results
-        const updatedSignals = signals.map(signal => {
-          const validatedSignal = validatedSignals.find(vs => vs.id === signal.id);
-          return validatedSignal || signal;
-        });
-        
-        console.log(`💾 [EVAL_TRIGGER] Saving updated signals...`);
-        
-        // Save to localStorage and update state
-        saveSignalsToHistory(updatedSignals);
-        setSignals(updatedSignals);
-        setFilteredSignals(updatedSignals);
-        
-        // Count results
-        const completedValidations = validatedSignals.filter(s => 
-          s.result && s.result !== "PENDING"
-        ).length;
-        
-        const resultsSummary = {
-          total: validatedSignals.length,
-          completed: completedValidations,
-          winners: validatedSignals.filter(s => s.result === 'WINNER').length,
-          losers: validatedSignals.filter(s => s.result === 'LOSER').length,
-          partial: validatedSignals.filter(s => s.result === 'PARTIAL').length,
-          false: validatedSignals.filter(s => s.result === 'FALSE').length,
-          stillPending: validatedSignals.filter(s => !s.result || s.result === 'PENDING').length
-        };
-        
-        console.log(`📊 [EVAL_TRIGGER] Validation results:`, resultsSummary);
-        
-        toast({
-          title: "Validação concluída",
-          description: `${completedValidations} de ${pendingSignals.length} sinais validados com dados reais.`,
-        });
-        
-      } else {
-        // Backend evaluation mode
-        await triggerSignalEvaluation();
-        toast({
-          title: "Avaliação iniciada",
-          description: "O backend está avaliando todos os sinais pendentes.",
-        });
-        
-        // Wait a bit then refresh
-        setTimeout(() => {
-          loadSignals(true);
-          loadEvaluationStatus();
-        }, 2000);
+        return;
       }
       
+      toast({
+        title: "Validação iniciada",
+        description: `Validando ${pendingSignals.length} sinais com dados da Bybit...`,
+      });
+      
+      // Validar sinais usando dados históricos da Bybit
+      const validationResults = await validateMultipleSignalsFromBackend(pendingSignals);
+      
+      console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
+      
+      // Atualizar sinais com os resultados
+      const updatedSignals = signals.map(signal => {
+        const validation = validationResults.find(v => v.signalId === signal.id);
+        if (validation) {
+          return {
+            ...signal,
+            result: validation.result,
+            profit: validation.profit,
+            validationDetails: validation.validationDetails,
+            verifiedAt: new Date().toISOString(),
+            completedAt: validation.result !== "PENDING" ? new Date().toISOString() : undefined,
+            // Atualizar targets se existirem
+            targets: signal.targets?.map(target => ({
+              ...target,
+              hit: validation.hitTargets.includes(target.level)
+            }))
+          };
+        }
+        return signal;
+      });
+      
+      // Salvar resultados
+      setSignals(updatedSignals);
+      setFilteredSignals(updatedSignals);
+      
+      if (isLocalMode) {
+        saveSignalsToHistory(updatedSignals);
+      }
+      
+      // Mostrar resultado
+      const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
+      
+      toast({
+        title: "Validação concluída",
+        description: `${completedValidations} de ${pendingSignals.length} sinais validados com sucesso.`,
+      });
+      
     } catch (error) {
-      console.error("❌ [EVAL_TRIGGER] Error in validation:", error);
+      console.error("❌ [VALIDATION] Erro na validação:", error);
       toast({
         variant: "destructive",
         title: "Erro na validação",
-        description: isLocalMode 
-          ? "Erro na validação com dados históricos." 
-          : "Não foi possível iniciar a validação dos sinais.",
+        description: "Não foi possível validar os sinais. Tente novamente.",
       });
     } finally {
-      setIsEvaluating(false);
+      setIsValidating(false);
     }
   };
   
@@ -372,8 +347,8 @@ const SignalsHistory = () => {
       <PageHeader
         title="Histórico de Sinais"
         description={isLocalMode 
-          ? "Sinais de demonstração avaliados localmente usando dados reais da Bybit"
-          : "Últimos 100 sinais gerados, avaliados automaticamente pelo backend usando dados reais da Bybit"}
+          ? "Sinais carregados do localStorage - validação usando dados reais da Bybit"
+          : "Sinais carregados do backend - validação automática"}
       />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -390,24 +365,24 @@ const SignalsHistory = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {/* Trigger evaluation button */}
+          {/* Botão de validação */}
           <Button 
             variant="outline" 
             className="h-9 gap-1"
-            onClick={handleTriggerEvaluation}
-            disabled={isEvaluating || isLoading}
+            onClick={handleValidateSignals}
+            disabled={isValidating || isLoading}
           >
-            {isEvaluating ? (
+            {isValidating ? (
               <RefreshCw className="h-4 w-4 animate-spin" />
             ) : (
               <CheckCircle className="h-4 w-4" />
             )}
             <span className="hidden sm:inline">
-              {isEvaluating ? 'Validando...' : 'Validar com Histórico'}
+              {isValidating ? 'Validando...' : 'Validar Sinais'}
             </span>
           </Button>
 
-          {/* Refresh button */}
+          {/* Botão de refresh */}
           <Button 
             variant="outline" 
             className="h-9 gap-1"
@@ -418,7 +393,7 @@ const SignalsHistory = () => {
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
         
-          {/* Clear filters button */}
+          {/* Limpar filtros */}
           {searchQuery && (
             <Button 
               variant="ghost" 
@@ -503,7 +478,7 @@ const SignalsHistory = () => {
           'Modo Local: Avaliação usando dados reais da Bybit' : 
           'Sinais carregados do backend e avaliados automaticamente'}
         <span className="text-xs text-muted-foreground ml-2">
-          {isLocalMode ? '(clique em "Validar com Histórico" para validar)' : '(atualiza a cada 30s)'}
+          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : '(atualiza a cada 30s)'}
         </span>
       </div>
       
