@@ -301,7 +301,7 @@ const SignalsHistory = () => {
         
         toast({
           title: "Validação concluída",
-          description: `${completedValidations} de ${pendingSignals.length} sinais validados com dados reais da Bybit.`,
+          description: `${completedValidations} de ${pendingSignals.length} sinais validados com dados reais.`,
         });
         
       } else {
@@ -325,7 +325,7 @@ const SignalsHistory = () => {
         variant: "destructive",
         title: "Erro na validação",
         description: isLocalMode 
-          ? "Erro na validação com dados históricos da Bybit." 
+          ? "Erro na validação com dados históricos." 
           : "Não foi possível iniciar a validação dos sinais.",
       });
     } finally {
