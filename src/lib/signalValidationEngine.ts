@@ -1,4 +1,3 @@
-
 import { TradingSignal, SignalResult } from "./types";
 import { fetchBybitKlines } from "./apiServices";
 
@@ -15,7 +14,7 @@ export async function validateSignalWithPriceHistory(signal: TradingSignal): Pro
   try {
     console.log(`🔍 [VALIDATION] Starting validation for signal ${signal.id} - ${signal.symbol}`);
     
-    if (signal.result !== undefined && signal.result !== null) {
+    if (signal.result !== undefined && signal.result !== null && signal.result !== "PENDING") {
       console.log(`⏭️ [VALIDATION] Signal ${signal.id} already has result: ${signal.result}`);
       return signal;
     }
@@ -30,12 +29,11 @@ export async function validateSignalWithPriceHistory(signal: TradingSignal): Pro
     
     console.log(`📅 [VALIDATION] Time range: ${signalTime.toISOString()} to ${actualEndTime.toISOString()}`);
     
-    // Fetch historical price data from Bybit
+    // Fetch historical price data from Bybit - using correct 3 parameters
     const klines = await fetchBybitKlines(
       signal.symbol,
-      '15m', // 15-minute intervals for better precision
-      Math.floor(signalTime.getTime() / 1000),
-      Math.floor(actualEndTime.getTime() / 1000)
+      '15', // 15-minute intervals for better precision
+      Math.floor(signalTime.getTime() / 1000)
     );
 
     if (!klines || klines.length === 0) {

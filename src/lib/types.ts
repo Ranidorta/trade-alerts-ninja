@@ -1,7 +1,7 @@
 export type SignalType = "LONG" | "SHORT";
 export type SignalDirection = "BUY" | "SELL";
 export type SignalStatus = "ACTIVE" | "COMPLETED" | "WAITING";
-export type SignalResult = "WINNER" | "LOSER" | "PARTIAL" | "FALSE" | "win" | "loss" | "partial" | "missed" | 0 | 1;
+export type SignalResult = "WINNER" | "LOSER" | "PARTIAL" | "FALSE" | "PENDING" | "win" | "loss" | "partial" | "missed" | 0 | 1;
 
 export interface PriceTarget {
   level: number;
@@ -67,6 +67,7 @@ export interface TradingSignal {
   rsi?: number;           // Added for technical indicators
   atr?: number;           // Added for technical indicators
   success_prob?: number;  // Added for monster signals success probability
+  validationDetails?: string; // Added for validation details
 }
 
 export interface Feature {

@@ -58,6 +58,8 @@ const getResultClass = (result: string | number | null | undefined) => {
     case 'FALSE':
     case 'MISSED':
       return 'bg-gray-500/20 text-gray-600 border-gray-300/30';
+    case 'PENDING':
+      return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
     default:
       return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
   }
@@ -81,6 +83,8 @@ const getResultText = (result: string | number | null | undefined) => {
     case 'FALSE':
     case 'MISSED':
       return 'FALSO';
+    case 'PENDING':
+      return 'PENDENTE';
     default:
       return 'PENDENTE';
   }
@@ -109,7 +113,7 @@ const SignalsHistory = () => {
   const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
-  const pendingTrades = filteredSignals.filter(signal => !signal.result).length;
+  const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
   
   const completedTrades = winningTrades + losingTrades + partialTrades;
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
