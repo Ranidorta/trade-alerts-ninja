@@ -24,7 +24,7 @@ const handleApiError = (error: any, endpoint: string) => {
   return null;
 };
 
-// Fetch kline data from Bybit - CORRECTED VERSION
+// Fetch kline data from Bybit - FIXED VERSION
 export const fetchBybitKlines = async (
   symbol: string,
   interval: string = "5", // 5 min interval
@@ -39,7 +39,7 @@ export const fetchBybitKlines = async (
       limit: limit.toString()
     });
     
-    // Add start time if provided (convert to milliseconds)
+    // Add start time if provided (Bybit expects milliseconds)
     if (startTime) {
       params.append("start", (startTime * 1000).toString());
     }
@@ -75,11 +75,11 @@ export const fetchBybitKlines = async (
       return data.result.list;
     } else {
       console.error(`❌ [BYBIT_API] Error in Bybit API response for ${symbol}:`, data.retMsg);
-      return null;
+      throw new Error(`Bybit API error: ${data.retMsg}`);
     }
   } catch (error) {
     console.error(`❌ [BYBIT_API] Failed to fetch ${symbol}:`, error);
-    return null;
+    throw error; // Re-throw to trigger fallback in validation engine
   }
 };
 

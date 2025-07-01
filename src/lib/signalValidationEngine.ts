@@ -1,4 +1,3 @@
-
 import { TradingSignal, SignalResult } from "./types";
 import { fetchBybitKlines } from "./apiServices";
 
@@ -79,15 +78,14 @@ export async function validateSignalWithPriceHistory(signal: TradingSignal): Pro
       };
     }
 
-    const entryPrice = signal.entryPrice || 0;
-    const stopLoss = signal.stopLoss || 0;
-    const direction = signal.direction?.toUpperCase() || 'BUY';
+    const entryPrice = signal.entryPrice || signal.entry_price || 0;
+    const stopLoss = signal.stopLoss || signal.sl || 0;
+    const direction = (signal.direction || 'BUY').toUpperCase();
     
-    // Get target prices
-    const targets = signal.targets || [];
-    const tp1 = signal.tp1 || targets.find(t => t.level === 1)?.price || 0;
-    const tp2 = signal.tp2 || targets.find(t => t.level === 2)?.price || 0;
-    const tp3 = signal.tp3 || targets.find(t => t.level === 3)?.price || 0;
+    // Get target prices - handle different signal formats
+    const tp1 = signal.tp1 || (signal.targets && signal.targets[0]?.price) || 0;
+    const tp2 = signal.tp2 || (signal.targets && signal.targets[1]?.price) || 0;
+    const tp3 = signal.tp3 || (signal.targets && signal.targets[2]?.price) || 0;
 
     console.log(`🎯 [VALIDATION] Signal details:`, {
       symbol: signal.symbol,
@@ -232,8 +230,8 @@ export async function validateSignalWithPriceHistory(signal: TradingSignal): Pro
 function generateMockPriceData(signal: TradingSignal, startTime: Date, endTime: Date) {
   console.log(`🔧 [VALIDATION] Generating mock price data for ${signal.symbol}`);
   
-  const entryPrice = signal.entryPrice || 50000;
-  const direction = signal.direction?.toUpperCase() || 'BUY';
+  const entryPrice = signal.entryPrice || signal.entry_price || 50000;
+  const direction = (signal.direction || 'BUY').toUpperCase();
   const mockData = [];
   
   // Generate 24 hours of 5-minute candles (288 candles)
