@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { fetchBybitKlines } from '@/lib/apiServices';
-import { evaluateSignalsBatch } from '@/lib/localSignalEvaluator';
+import { validateMultipleSignals } from '@/lib/signalValidationEngine';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,8 @@ import {
   Search,
   Calendar,
   Play,
-  BarChart3
+  BarChart3,
+  CheckCircle
 } from 'lucide-react';
 import {
   Table,
@@ -229,81 +229,75 @@ const SignalsHistory = () => {
       setIsEvaluating(true);
       
       if (isLocalMode) {
-        // Local evaluation mode
-        console.log("🔧 [EVAL TRIGGER] Starting local signal evaluation...");
-        console.log(`📊 [EVAL TRIGGER] Total signals loaded: ${signals.length}`);
-        
-        // Log current signal states for debugging
-        const signalStates = signals.map(s => ({
-          id: s.id,
-          symbol: s.symbol,
-          result: s.result,
-          status: s.status,
-          isPending: (!s.result || s.result === null || s.result === undefined || s.status === 'ACTIVE' || s.status === 'WAITING')
-        }));
-        console.log("📋 [EVAL TRIGGER] Signal states:", signalStates);
+        // Local evaluation mode using improved validation engine
+        console.log("🔧 [EVAL_TRIGGER] Starting enhanced local signal validation...");
+        console.log(`📊 [EVAL_TRIGGER] Total signals loaded: ${signals.length}`);
         
         // Get pending signals (signals without results or incomplete evaluation)
         const pendingSignals = signals.filter(signal => 
           !signal.result || 
           signal.result === null || 
           signal.result === undefined ||
+          signal.result === "PENDING" ||
           signal.status === 'ACTIVE' || 
           signal.status === 'WAITING'
         );
         
-        console.log(`🔍 [EVAL TRIGGER] Found ${pendingSignals.length} pending signals out of ${signals.length} total signals`);
-        console.log('🎯 [EVAL TRIGGER] Pending signals details:', pendingSignals.map(s => ({ 
-          id: s.id, 
-          symbol: s.symbol, 
-          result: s.result, 
-          status: s.status,
-          createdAt: s.createdAt
-        })));
+        console.log(`🔍 [EVAL_TRIGGER] Found ${pendingSignals.length} pending signals for validation`);
         
         if (pendingSignals.length === 0) {
           toast({
             title: "Nenhum sinal pendente",
-            description: "Todos os sinais já foram avaliados. Carregue novos sinais do backend.",
+            description: "Todos os sinais já foram validados com dados históricos.",
           });
           return;
         }
         
-        console.log(`📈 [EVAL TRIGGER] Evaluating ${pendingSignals.length} pending signals locally...`);
-        
-        // Evaluate signals using local evaluator
-        const evaluatedSignals = await evaluateSignalsBatch(pendingSignals);
-        
-        console.log(`🔄 [EVAL TRIGGER] Updating ${signals.length} total signals with ${evaluatedSignals.length} evaluated results...`);
-        
-        // Update signals array with evaluated results
-        const updatedSignals = signals.map(signal => {
-          const evaluatedSignal = evaluatedSignals.find(evaluatedSig => evaluatedSig.id === signal.id);
-          return evaluatedSignal || signal;
+        toast({
+          title: "Validação iniciada",
+          description: `Validando ${pendingSignals.length} sinais usando dados históricos da Bybit...`,
         });
         
-        console.log(`💾 [EVAL TRIGGER] Saving updated signals to localStorage and updating state...`);
+        console.log(`📈 [EVAL_TRIGGER] Validating ${pendingSignals.length} signals with historical data...`);
+        
+        // Use the enhanced validation engine
+        const validatedSignals = await validateMultipleSignals(pendingSignals);
+        
+        console.log(`🔄 [EVAL_TRIGGER] Merging validated results with existing signals...`);
+        
+        // Update signals array with validated results
+        const updatedSignals = signals.map(signal => {
+          const validatedSignal = validatedSignals.find(vs => vs.id === signal.id);
+          return validatedSignal || signal;
+        });
+        
+        console.log(`💾 [EVAL_TRIGGER] Saving updated signals...`);
         
         // Save to localStorage and update state
         saveSignalsToHistory(updatedSignals);
         setSignals(updatedSignals);
         setFilteredSignals(updatedSignals);
         
-        // Log results summary
+        // Count results
+        const completedValidations = validatedSignals.filter(s => 
+          s.result && s.result !== "PENDING"
+        ).length;
+        
         const resultsSummary = {
-          total: updatedSignals.length,
-          winners: updatedSignals.filter(s => s.result === 'WINNER').length,
-          losers: updatedSignals.filter(s => s.result === 'LOSER').length,
-          partial: updatedSignals.filter(s => s.result === 'PARTIAL').length,
-          false: updatedSignals.filter(s => s.result === 'FALSE').length,
-          pending: updatedSignals.filter(s => !s.result || s.result === null || s.result === undefined).length
+          total: validatedSignals.length,
+          completed: completedValidations,
+          winners: validatedSignals.filter(s => s.result === 'WINNER').length,
+          losers: validatedSignals.filter(s => s.result === 'LOSER').length,
+          partial: validatedSignals.filter(s => s.result === 'PARTIAL').length,
+          false: validatedSignals.filter(s => s.result === 'FALSE').length,
+          stillPending: validatedSignals.filter(s => !s.result || s.result === 'PENDING').length
         };
         
-        console.log(`📊 [EVAL TRIGGER] Final results summary:`, resultsSummary);
+        console.log(`📊 [EVAL_TRIGGER] Validation results:`, resultsSummary);
         
         toast({
-          title: "Avaliação Local Concluída",
-          description: `${pendingSignals.length} sinais avaliados usando dados reais da Bybit.`,
+          title: "Validação concluída",
+          description: `${completedValidations} de ${pendingSignals.length} sinais validados com dados reais da Bybit.`,
         });
         
       } else {
@@ -322,13 +316,13 @@ const SignalsHistory = () => {
       }
       
     } catch (error) {
-      console.error("❌ [EVAL TRIGGER] Error in evaluation:", error);
+      console.error("❌ [EVAL_TRIGGER] Error in validation:", error);
       toast({
         variant: "destructive",
-        title: "Erro na avaliação",
+        title: "Erro na validação",
         description: isLocalMode 
-          ? "Erro na avaliação local dos sinais." 
-          : "Não foi possível iniciar a avaliação dos sinais.",
+          ? "Erro na validação com dados históricos da Bybit." 
+          : "Não foi possível iniciar a validação dos sinais.",
       });
     } finally {
       setIsEvaluating(false);
@@ -399,8 +393,14 @@ const SignalsHistory = () => {
             onClick={handleTriggerEvaluation}
             disabled={isEvaluating || isLoading}
           >
-            <Play className={`h-4 w-4 ${isEvaluating ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Avaliar Sinais</span>
+            {isEvaluating ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {isEvaluating ? 'Validando...' : 'Validar com Histórico'}
+            </span>
           </Button>
 
           {/* Refresh button */}
@@ -499,7 +499,7 @@ const SignalsHistory = () => {
           'Modo Local: Avaliação usando dados reais da Bybit' : 
           'Sinais carregados do backend e avaliados automaticamente'}
         <span className="text-xs text-muted-foreground ml-2">
-          {isLocalMode ? '(clique em "Avaliar Sinais" para avaliar)' : '(atualiza a cada 30s)'}
+          {isLocalMode ? '(clique em "Validar com Histórico" para validar)' : '(atualiza a cada 30s)'}
         </span>
       </div>
       
