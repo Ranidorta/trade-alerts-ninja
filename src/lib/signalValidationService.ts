@@ -102,19 +102,10 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
     
     // Check if signal is from the future (invalid timestamps)
     if (signalTime > now) {
-      console.warn(`⚠️ [SIGNAL_VALIDATION] Signal ${signal.id} has future timestamp - using demo validation`);
-      
-      // For demo purposes, randomly assign results to future-dated signals
-      const demoResults: SignalResult[] = ["WINNER", "LOSER", "PARTIAL", "FALSE"];
-      const randomResult = demoResults[Math.floor(Math.random() * demoResults.length)];
-      
+      console.warn(`⚠️ [SIGNAL_VALIDATION] Signal ${signal.id} has future timestamp - cannot validate`);
       return {
         ...signal,
-        result: randomResult,
-        status: "COMPLETED",
-        verifiedAt: new Date().toISOString(),
-        validationDetails: `Demo validation result (future timestamp detected)`,
-        completedAt: new Date().toISOString()
+        error: "Cannot validate signal with future timestamp"
       };
     }
     
@@ -153,26 +144,10 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
 
     if (relevantPrices.length === 0) {
       console.warn(`❌ [SIGNAL_VALIDATION] No relevant price data in validation period for ${signal.symbol}`);
-      
-      // For signals older than what Bybit API can provide (200 candles), simulate validation
-      if (now.getTime() - signalTime.getTime() > 24 * 60 * 60 * 1000) {
-        const demoResults: SignalResult[] = ["WINNER", "LOSER", "PARTIAL", "FALSE"];
-        const randomResult = demoResults[Math.floor(Math.random() * demoResults.length)];
-        
-        return {
-          ...signal,
-          result: randomResult,
-          status: "COMPLETED",
-          verifiedAt: new Date().toISOString(),
-          validationDetails: `Historical simulation result (signal too old for real-time data)`,
-          completedAt: new Date().toISOString()
-        };
-      }
-      
       return {
         ...signal,
         result: "PENDING",
-        validationDetails: "No price data in validation period"
+        validationDetails: "No historical price data available for this time period"
       };
     }
 
