@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { fetchBybitKlines } from '@/lib/apiServices';
-import { validateMultipleSignals } from '@/lib/signalValidationEngine';
+import { validateMultipleSignalsWithBybit } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -269,8 +269,8 @@ const SignalsHistory = () => {
       
       console.log(`🔍 [EVAL_TRIGGER] Validating ${pendingSignals.length} pending signals...`);
       
-      // Use validation engine to validate signals with Bybit data
-      const validatedSignals = await validateMultipleSignals(pendingSignals);
+      // Use validation service to validate signals with Bybit data
+      const validatedSignals = await validateMultipleSignalsWithBybit(pendingSignals);
       
       // Update state with validated results
       const updatedSignals = signals.map(signal => {
