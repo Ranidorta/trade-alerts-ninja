@@ -34,8 +34,7 @@ export async function validateSignalWithPriceHistory(signal: TradingSignal): Pro
     const klines = await fetchBybitKlines(
       signal.symbol,
       '15m', // 15-minute intervals for better precision
-      Math.floor(signalTime.getTime() / 1000),
-      Math.floor(actualEndTime.getTime() / 1000)
+      100 // Get enough data points for 24 hours of 15-minute intervals
     );
 
     if (!klines || klines.length === 0) {
