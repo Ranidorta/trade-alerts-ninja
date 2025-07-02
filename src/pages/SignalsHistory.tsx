@@ -301,17 +301,38 @@ const SignalsHistory = () => {
     }
   };
   
-  // Função para renderizar targets com destaque
+  // Função para renderizar targets com destaque para parciais
   const renderTargets = (signal: TradingSignal) => {
+    const isPartial = signal.result === "PARTIAL";
+    const isWinner = signal.result === "WINNER";
+    const isLoser = signal.result === "LOSER";
+    
+    // Para sinais parciais, determinar quais TPs foram atingidos baseado nos hitTargets
+    const getTPStatus = (tpLevel: number) => {
+      if (isWinner) return "hit"; // Todos os TPs foram atingidos
+      if (isLoser) return "missed"; // Nenhum TP foi atingido
+      if (isPartial && signal.targets) {
+        const target = signal.targets.find(t => t.level === tpLevel);
+        return target?.hit ? "hit" : "missed";
+      }
+      return "pending"; // Status padrão
+    };
+
     return (
       <div className="space-y-1">
         {signal.tp1 && (
           <div className="flex items-center gap-1">
             <Badge 
-              variant={signal.targets?.find(t => t.level === 1)?.hit ? "default" : "outline"}
-              className={`text-xs ${signal.targets?.find(t => t.level === 1)?.hit ? 'bg-green-500 text-white' : ''}`}
+              variant={getTPStatus(1) === "hit" ? "default" : "outline"}
+              className={`text-xs ${
+                getTPStatus(1) === "hit" 
+                  ? 'bg-green-500 text-white' 
+                  : getTPStatus(1) === "missed" && isLoser
+                  ? 'bg-red-100 text-red-600 border-red-300'
+                  : ''
+              }`}
             >
-              {signal.targets?.find(t => t.level === 1)?.hit && <Target className="h-3 w-3 mr-1" />}
+              {getTPStatus(1) === "hit" && <Target className="h-3 w-3 mr-1" />}
               TP1: ${signal.tp1.toFixed(4)}
             </Badge>
           </div>
@@ -319,10 +340,16 @@ const SignalsHistory = () => {
         {signal.tp2 && (
           <div className="flex items-center gap-1">
             <Badge 
-              variant={signal.targets?.find(t => t.level === 2)?.hit ? "default" : "outline"}
-              className={`text-xs ${signal.targets?.find(t => t.level === 2)?.hit ? 'bg-green-500 text-white' : ''}`}
+              variant={getTPStatus(2) === "hit" ? "default" : "outline"}
+              className={`text-xs ${
+                getTPStatus(2) === "hit" 
+                  ? 'bg-green-500 text-white' 
+                  : getTPStatus(2) === "missed" && isLoser
+                  ? 'bg-red-100 text-red-600 border-red-300'
+                  : ''
+              }`}
             >
-              {signal.targets?.find(t => t.level === 2)?.hit && <Target className="h-3 w-3 mr-1" />}
+              {getTPStatus(2) === "hit" && <Target className="h-3 w-3 mr-1" />}
               TP2: ${signal.tp2.toFixed(4)}
             </Badge>
           </div>
@@ -330,10 +357,16 @@ const SignalsHistory = () => {
         {signal.tp3 && (
           <div className="flex items-center gap-1">
             <Badge 
-              variant={signal.targets?.find(t => t.level === 3)?.hit ? "default" : "outline"}
-              className={`text-xs ${signal.targets?.find(t => t.level === 3)?.hit ? 'bg-green-500 text-white' : ''}`}
+              variant={getTPStatus(3) === "hit" ? "default" : "outline"}
+              className={`text-xs ${
+                getTPStatus(3) === "hit" 
+                  ? 'bg-green-500 text-white' 
+                  : getTPStatus(3) === "missed" && isLoser
+                  ? 'bg-red-100 text-red-600 border-red-300'
+                  : ''
+              }`}
             >
-              {signal.targets?.find(t => t.level === 3)?.hit && <Target className="h-3 w-3 mr-1" />}
+              {getTPStatus(3) === "hit" && <Target className="h-3 w-3 mr-1" />}
               TP3: ${signal.tp3.toFixed(4)}
             </Badge>
           </div>
@@ -502,7 +535,7 @@ const SignalsHistory = () => {
               <span className="text-2xl font-bold text-blue-500">{pendingTrades}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
+              <span className="text-sm text-muted-foreference">Taxa de Acerto</span>
               <span className="text-2xl font-bold text-purple-500">{accuracy.toFixed(1)}%</span>
             </div>
           </div>
