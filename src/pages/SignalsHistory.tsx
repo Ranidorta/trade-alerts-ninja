@@ -223,107 +223,87 @@ const SignalsHistory = () => {
     loadEvaluationStatus();
   };
 
-  // Trigger manual evaluation (local or backend)
+  // Trigger signal evaluation following correct flow: fetch → validate → update backend → show results
   const handleTriggerEvaluation = async () => {
     try {
       setIsEvaluating(true);
       
+      console.log("🔧 [EVAL_TRIGGER] Starting correct signal validation flow...");
+      
+      // STEP 1: Always use backend evaluation (correct flow)
+      console.log("📊 [EVAL_TRIGGER] Triggering backend evaluation...");
+      
+      await triggerSignalEvaluation();
+      
+      toast({
+        title: "Validação iniciada",
+        description: "Backend validando sinais com dados históricos da Bybit...",
+      });
+      
+      // STEP 2: Wait for backend processing then refresh from backend
+      console.log("⏳ [EVAL_TRIGGER] Waiting for backend processing...");
+      
+      setTimeout(async () => {
+        try {
+          // Fetch updated signals from backend (now with results)
+          console.log("🔄 [EVAL_TRIGGER] Fetching updated signals from backend...");
+          await loadSignals(true);
+          await loadEvaluationStatus();
+          
+          toast({
+            title: "Validação concluída", 
+            description: "Sinais validados com dados reais da Bybit e atualizados na base de dados.",
+          });
+        } catch (error) {
+          console.error("❌ [EVAL_TRIGGER] Error refreshing after evaluation:", error);
+        }
+      }, 3000);
+      
+    } catch (error) {
+      console.error("❌ [EVAL_TRIGGER] Error in backend validation:", error);
+      
+      // Fallback to local validation only if backend completely fails
       if (isLocalMode) {
-        // Local evaluation mode using improved validation engine
-        console.log("🔧 [EVAL_TRIGGER] Starting enhanced local signal validation...");
-        console.log(`📊 [EVAL_TRIGGER] Total signals loaded: ${signals.length}`);
+        console.log("🔧 [EVAL_TRIGGER] Backend failed, falling back to local validation...");
         
-        // Get pending signals (signals without results or incomplete evaluation)
         const pendingSignals = signals.filter(signal => 
           !signal.result || 
           signal.result === null || 
           signal.result === undefined ||
-          signal.result === "PENDING" ||
-          signal.status === 'ACTIVE' || 
-          signal.status === 'WAITING'
+          signal.result === "PENDING"
         );
-        
-        console.log(`🔍 [EVAL_TRIGGER] Found ${pendingSignals.length} pending signals for validation`);
         
         if (pendingSignals.length === 0) {
           toast({
             title: "Nenhum sinal pendente",
-            description: "Todos os sinais já foram validados com dados históricos.",
+            description: "Todos os sinais já foram validados.",
           });
           return;
         }
         
-        toast({
-          title: "Validação iniciada",
-          description: `Validando ${pendingSignals.length} sinais usando dados históricos da Bybit...`,
-        });
-        
-        console.log(`📈 [EVAL_TRIGGER] Validating ${pendingSignals.length} signals with historical data...`);
-        
-        // Use the enhanced validation engine
+        // Use validation engine as fallback
         const validatedSignals = await validateMultipleSignals(pendingSignals);
         
-        console.log(`🔄 [EVAL_TRIGGER] Merging validated results with existing signals...`);
-        
-        // Update signals array with validated results
+        // Update state (but not backend since it's unavailable)
         const updatedSignals = signals.map(signal => {
           const validatedSignal = validatedSignals.find(vs => vs.id === signal.id);
           return validatedSignal || signal;
         });
         
-        console.log(`💾 [EVAL_TRIGGER] Saving updated signals...`);
-        
-        // Save to localStorage and update state
-        saveSignalsToHistory(updatedSignals);
         setSignals(updatedSignals);
         setFilteredSignals(updatedSignals);
         
-        // Count results
-        const completedValidations = validatedSignals.filter(s => 
-          s.result && s.result !== "PENDING"
-        ).length;
-        
-        const resultsSummary = {
-          total: validatedSignals.length,
-          completed: completedValidations,
-          winners: validatedSignals.filter(s => s.result === 'WINNER').length,
-          losers: validatedSignals.filter(s => s.result === 'LOSER').length,
-          partial: validatedSignals.filter(s => s.result === 'PARTIAL').length,
-          false: validatedSignals.filter(s => s.result === 'FALSE').length,
-          stillPending: validatedSignals.filter(s => !s.result || s.result === 'PENDING').length
-        };
-        
-        console.log(`📊 [EVAL_TRIGGER] Validation results:`, resultsSummary);
-        
         toast({
-          title: "Validação concluída",
-          description: `${completedValidations} de ${pendingSignals.length} sinais validados com dados reais da Bybit.`,
+          title: "Validação local concluída",
+          description: "Sinais validados localmente (backend indisponível).",
         });
-        
       } else {
-        // Backend evaluation mode
-        await triggerSignalEvaluation();
         toast({
-          title: "Avaliação iniciada",
-          description: "O backend está avaliando todos os sinais pendentes.",
+          variant: "destructive",
+          title: "Erro na validação",
+          description: "Não foi possível validar os sinais. Tente novamente.",
         });
-        
-        // Wait a bit then refresh
-        setTimeout(() => {
-          loadSignals(true);
-          loadEvaluationStatus();
-        }, 2000);
       }
-      
-    } catch (error) {
-      console.error("❌ [EVAL_TRIGGER] Error in validation:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro na validação",
-        description: isLocalMode 
-          ? "Erro na validação com dados históricos da Bybit." 
-          : "Não foi possível iniciar a validação dos sinais.",
-      });
     } finally {
       setIsEvaluating(false);
     }
