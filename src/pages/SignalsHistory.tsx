@@ -11,7 +11,8 @@ import {
   Calendar,
   Play,
   BarChart3,
-  CheckCircle
+  CheckCircle,
+  Target
 } from 'lucide-react';
 import {
   Table,
@@ -106,15 +107,17 @@ const SignalsHistory = () => {
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
   
-  // Calculate performance statistics
+  // Calculate performance statistics - INCLUIR PARCIAIS COMO VENCEDORES
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER").length;
+  const winningTrades = filteredSignals.filter(signal => 
+    signal.result === "WINNER" || signal.result === "PARTIAL"
+  ).length;
   const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
   const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
   
-  const completedTrades = winningTrades + losingTrades + partialTrades;
+  const completedTrades = winningTrades + losingTrades;
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
   const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
 
@@ -298,6 +301,48 @@ const SignalsHistory = () => {
     }
   };
   
+  // Função para renderizar targets com destaque
+  const renderTargets = (signal: TradingSignal) => {
+    return (
+      <div className="space-y-1">
+        {signal.tp1 && (
+          <div className="flex items-center gap-1">
+            <Badge 
+              variant={signal.targets?.find(t => t.level === 1)?.hit ? "default" : "outline"}
+              className={`text-xs ${signal.targets?.find(t => t.level === 1)?.hit ? 'bg-green-500 text-white' : ''}`}
+            >
+              {signal.targets?.find(t => t.level === 1)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP1: ${signal.tp1.toFixed(4)}
+            </Badge>
+          </div>
+        )}
+        {signal.tp2 && (
+          <div className="flex items-center gap-1">
+            <Badge 
+              variant={signal.targets?.find(t => t.level === 2)?.hit ? "default" : "outline"}
+              className={`text-xs ${signal.targets?.find(t => t.level === 2)?.hit ? 'bg-green-500 text-white' : ''}`}
+            >
+              {signal.targets?.find(t => t.level === 2)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP2: ${signal.tp2.toFixed(4)}
+            </Badge>
+          </div>
+        )}
+        {signal.tp3 && (
+          <div className="flex items-center gap-1">
+            <Badge 
+              variant={signal.targets?.find(t => t.level === 3)?.hit ? "default" : "outline"}
+              className={`text-xs ${signal.targets?.find(t => t.level === 3)?.hit ? 'bg-green-500 text-white' : ''}`}
+            >
+              {signal.targets?.find(t => t.level === 3)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP3: ${signal.tp3.toFixed(4)}
+            </Badge>
+          </div>
+        )}
+        {!signal.tp1 && !signal.tp2 && !signal.tp3 && <span className="text-xs text-muted-foreground">-</span>}
+      </div>
+    );
+  };
+
   // Handle search filtering
   useEffect(() => {
     if (!signals.length) return;
@@ -429,7 +474,7 @@ const SignalsHistory = () => {
         </Card>
       )}
       
-      {/* Performance statistics */}
+      {/* Performance statistics - PARCIAIS COMO VENCEDORES */}
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
@@ -440,6 +485,9 @@ const SignalsHistory = () => {
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Vencedores</span>
               <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
+              <span className="text-xs text-muted-foreground">
+                (inclui {partialTrades} parciais)
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Perdedores</span>
@@ -509,9 +557,7 @@ const SignalsHistory = () => {
                 <TableHead>Ativo</TableHead>
                 <TableHead>Direção</TableHead>
                 <TableHead>Entrada</TableHead>
-                <TableHead>TP1</TableHead>
-                <TableHead>TP2</TableHead>
-                <TableHead>TP3</TableHead>
+                <TableHead>Targets (TP)</TableHead>
                 <TableHead>SL</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Resultado</TableHead>
@@ -530,9 +576,9 @@ const SignalsHistory = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>${(signal.entryPrice || 0).toFixed(4)}</TableCell>
-                  <TableCell>{signal.tp1 ? `$${signal.tp1.toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{signal.tp2 ? `$${signal.tp2.toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{signal.tp3 ? `$${signal.tp3.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>
+                    {renderTargets(signal)}
+                  </TableCell>
                   <TableCell className="text-red-600">${signal.stopLoss.toFixed(4)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
