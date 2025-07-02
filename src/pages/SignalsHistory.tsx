@@ -207,15 +207,6 @@ const SignalsHistory = () => {
     loadEvaluationStatus();
   }, [loadSignals, loadEvaluationStatus]);
   
-  // Auto-refresh every 30 seconds to get updated results from backend
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadSignals(true);
-      loadEvaluationStatus();
-    }, 30000); // 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [loadSignals, loadEvaluationStatus]);
   
   // Handle refreshing data
   const handleRefresh = () => {
