@@ -208,16 +208,6 @@ const SignalsHistory = () => {
     loadEvaluationStatus();
   }, [loadSignalsFromBackend, loadEvaluationStatus]);
   
-  // Auto-refresh a cada 30 segundos
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadSignalsFromBackend(true);
-      loadEvaluationStatus();
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [loadSignalsFromBackend, loadEvaluationStatus]);
-  
   // Refresh manual
   const handleRefresh = () => {
     loadSignalsFromBackend(true);
@@ -478,7 +468,7 @@ const SignalsHistory = () => {
           'Modo Local: Avaliação usando dados reais da Bybit' : 
           'Sinais carregados do backend e avaliados automaticamente'}
         <span className="text-xs text-muted-foreground ml-2">
-          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : '(atualiza a cada 30s)'}
+          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
         </span>
       </div>
       
