@@ -533,9 +533,9 @@ const SignalsHistory = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>${(signal.entryPrice || 0).toFixed(4)}</TableCell>
-                  <TableCell>{signal.tp1 ? `$${signal.tp1.toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{signal.tp2 ? `$${signal.tp2.toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{signal.tp3 ? `$${signal.tp3.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>{(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price) ? `$${(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price || 0).toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>{(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price) ? `$${(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price || 0).toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>{(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price) ? `$${(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price || 0).toFixed(4)}` : '-'}</TableCell>
                   <TableCell className="text-red-600">${signal.stopLoss.toFixed(4)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
