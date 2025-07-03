@@ -278,6 +278,9 @@ const SignalsHistory = () => {
         return validatedSignal || signal;
       });
       
+      console.log(`🔄 [EVAL_TRIGGER] Updated ${validatedSignals.length} signals with validation results`);
+      console.log("📋 [EVAL_TRIGGER] Sample validated signal:", validatedSignals[0]);
+      
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
       
