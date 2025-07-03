@@ -325,6 +325,15 @@ Leverage: ${signal.leverage}x
               </div>
             )}
             
+            {signal.analysis && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="text-xs text-slate-500 dark:text-slate-400">Análise do Sinal</div>
+                <div className="text-sm mt-1 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-md">
+                  <pre className="whitespace-pre-wrap font-sans">{signal.analysis}</pre>
+                </div>
+              </div>
+            )}
+            
             {signal.notes && (
               <div className="mt-4 pt-4 border-t">
                 <div className="text-xs text-slate-500 dark:text-slate-400">Notes</div>

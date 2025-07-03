@@ -68,6 +68,7 @@ export interface TradingSignal {
   atr?: number;           // Added for technical indicators
   success_prob?: number;  // Added for monster signals success probability
   validationDetails?: string; // Added for validation information
+  analysis?: string;      // Added for signal analysis details
 }
 
 export interface Feature {
