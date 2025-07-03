@@ -109,13 +109,47 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
       };
     }
     
-    // Fetch historical data from Bybit API
-    const historicalData = await fetchBybitHistoricalData(
-      signal.symbol,
-      '15', // 15-minute intervals for better precision
-      'linear', // Linear derivatives for most crypto pairs
-      200 // Maximum allowed by Bybit API
-    );
+    // Calculate how many days of data we need (signal date + 24h validation period)
+    const validationEndTime = new Date(signalTime.getTime() + 24 * 60 * 60 * 1000);
+    const actualEndTime = validationEndTime > now ? now : validationEndTime;
+    const daysNeeded = Math.ceil((actualEndTime.getTime() - signalTime.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    
+    // Calculate how many API calls we need (200 candles per call, 15min intervals = 50 hours per call)
+    const candlesPerDay = (24 * 60) / 15; // 96 candles per day for 15min intervals
+    const totalCandlesNeeded = daysNeeded * candlesPerDay;
+    const apiCallsNeeded = Math.ceil(totalCandlesNeeded / 200);
+    
+    console.log(`📊 [SIGNAL_VALIDATION] Need ${daysNeeded} days of data (${totalCandlesNeeded} candles), will make ${apiCallsNeeded} API calls`);
+    
+    // Fetch historical data with multiple API calls if needed
+    let allHistoricalData: any[] = [];
+    
+    for (let i = 0; i < apiCallsNeeded && i < 5; i++) { // Limit to 5 calls max to avoid excessive requests
+      try {
+        const startTime = new Date(signalTime.getTime() - (i * 200 * 15 * 60 * 1000)); // Go back 200 candles worth of time
+        
+        const batchData = await fetchBybitHistoricalData(
+          signal.symbol,
+          '15', // 15-minute intervals for better precision
+          'linear', // Linear derivatives for most crypto pairs
+          200 // Maximum allowed by Bybit API
+        );
+        
+        if (batchData && batchData.length > 0) {
+          allHistoricalData.push(...batchData);
+        }
+        
+        // Add small delay between requests to be respectful to the API
+        if (i < apiCallsNeeded - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } catch (error) {
+        console.warn(`⚠️ [SIGNAL_VALIDATION] Failed to fetch batch ${i + 1}:`, error);
+        // Continue with other batches
+      }
+    }
+    
+    const historicalData = allHistoricalData;
 
     if (!historicalData || historicalData.length === 0) {
       console.warn(`❌ [SIGNAL_VALIDATION] No price data available for ${signal.symbol}`);
@@ -135,8 +169,6 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
     }));
 
     // Filter price points to validation period (24 hours from signal creation)
-    const endTime = new Date(signalTime.getTime() + 24 * 60 * 60 * 1000);
-    const actualEndTime = endTime > now ? now : endTime;
     
     const relevantPrices = pricePoints.filter(p => 
       p.time >= signalTime && p.time <= actualEndTime
