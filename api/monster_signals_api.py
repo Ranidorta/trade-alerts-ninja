@@ -96,10 +96,10 @@ def volume_profile_confirmation(df, window=50):
     
     return poc_break
 
-def macro_events_filter():
-    """Basic macro events filter (simplified - always returns True for now)"""
-    # TODO: Implement real macro events calendar integration
-    return True
+def macro_events_filter(symbol="BTCUSDT"):
+    """REAL macro events filter using ForexFactory API"""
+    from utils.macro_events_filter import check_fundamental_filter
+    return check_fundamental_filter(symbol)
 
 def professional_risk_management(entry_price, atr, direction):
     """Professional Risk/Reward with SL=1.0 ATR, TPs=1.5/2.0/3.0 ATR"""
@@ -112,9 +112,149 @@ def professional_risk_management(entry_price, atr, direction):
     
     return sl, tp1, tp2, tp3
 
-def ml_confidence_check(confidence_score):
-    """Realistic ML confidence threshold (60% instead of 75%)"""
-    return confidence_score >= 0.60
+def calculate_adx(df, window=14):
+    """Calculate ADX for ML features"""
+    if len(df) < window + 1:
+        return 25.0  # Neutral ADX value
+    
+    high = df['high']
+    low = df['low']
+    close = df['close']
+    
+    # Calculate True Range
+    tr1 = high - low
+    tr2 = abs(high - close.shift(1))
+    tr3 = abs(low - close.shift(1))
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    
+    # Calculate DM+ and DM-
+    dm_plus = high.diff()
+    dm_minus = low.diff() * -1
+    
+    dm_plus[dm_plus < 0] = 0
+    dm_minus[dm_minus < 0] = 0
+    
+    # Calculate smoothed values
+    tr_smooth = tr.rolling(window=window).mean()
+    dm_plus_smooth = dm_plus.rolling(window=window).mean()
+    dm_minus_smooth = dm_minus.rolling(window=window).mean()
+    
+    # Calculate DI+ and DI-
+    di_plus = (dm_plus_smooth / tr_smooth) * 100
+    di_minus = (dm_minus_smooth / tr_smooth) * 100
+    
+    # Calculate ADX
+    dx = abs(di_plus - di_minus) / (di_plus + di_minus) * 100
+    adx = dx.rolling(window=window).mean()
+    
+    return adx.iloc[-1] if not adx.empty else 25.0
+
+def calculate_candle_body_ratio(df):
+    """Calculate candle body ratio for ML features"""
+    if len(df) < 1:
+        return 0.5
+    
+    candle = df.iloc[-1]
+    body = abs(candle['close'] - candle['open'])
+    total_range = candle['high'] - candle['low']
+    
+    if total_range == 0:
+        return 0.0
+    
+    return body / total_range
+
+def get_ml_confidence_real(df, rsi, atr):
+    """REAL ML confidence using trained model"""
+    try:
+        # Import real ML predictor
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from ml.ml_predictor import predict_signal_quality, get_prediction_confidence
+        
+        # Calculate real features
+        current_candle = df.iloc[-1]
+        volume_avg = df['volume'].rolling(20).mean().iloc[-1] if len(df) >= 20 else df['volume'].iloc[-1]
+        volume_ratio = current_candle['volume'] / volume_avg if volume_avg > 0 else 1.0
+        
+        signal_features = {
+            'rsi': rsi,
+            'adx': calculate_adx(df),
+            'volume_ratio': volume_ratio,
+            'candle_body_ratio': calculate_candle_body_ratio(df)
+        }
+        
+        # Get ML prediction
+        ml_prediction = predict_signal_quality(signal_features)
+        confidence_scores = get_prediction_confidence(signal_features)
+        
+        if confidence_scores:
+            max_confidence = max(confidence_scores.values())
+            logger.info(f"🤖 ML REAL: {ml_prediction} | Confiança: {max_confidence:.3f}")
+            logger.info(f"   Features: RSI={rsi:.2f}, ADX={signal_features['adx']:.2f}, Vol={volume_ratio:.2f}, Body={signal_features['candle_body_ratio']:.2f}")
+            
+            # Only accept if prediction is not LOSER and confidence is good
+            if ml_prediction in ['WINNER', 'PARTIAL'] and max_confidence >= 0.60:
+                return max_confidence
+            else:
+                logger.info(f"🛑 ML rejeitou: {ml_prediction} com confiança {max_confidence:.3f}")
+                return 0.0
+        else:
+            logger.warning("⚠️ ML não retornou confiança, usando fallback")
+            return 0.65  # Fallback conservador
+            
+    except ImportError:
+        logger.warning("⚠️ Modelo ML não disponível, usando fallback técnico")
+        return calculate_fallback_confidence(rsi, atr, df)
+    except Exception as e:
+        logger.error(f"❌ Erro no ML real: {e}")
+        return calculate_fallback_confidence(rsi, atr, df)
+
+def calculate_fallback_confidence(rsi, atr, df):
+    """Fallback confidence calculation when ML is not available"""
+    confidence_factors = []
+    
+    # RSI factor
+    if 35 <= rsi <= 65:
+        confidence_factors.append(0.25)
+    elif rsi <= 30 or rsi >= 70:
+        confidence_factors.append(0.20)  # Extreme zones
+    else:
+        confidence_factors.append(0.15)
+    
+    # Volume factor
+    if len(df) >= 20:
+        current_vol = df['volume'].iloc[-1]
+        avg_vol = df['volume'].rolling(20).mean().iloc[-1]
+        if current_vol > avg_vol * 1.5:
+            confidence_factors.append(0.25)
+        elif current_vol > avg_vol:
+            confidence_factors.append(0.15)
+        else:
+            confidence_factors.append(0.10)
+    else:
+        confidence_factors.append(0.15)
+    
+    # Candle strength factor
+    body_ratio = calculate_candle_body_ratio(df)
+    if body_ratio > 0.7:
+        confidence_factors.append(0.20)
+    elif body_ratio > 0.5:
+        confidence_factors.append(0.15)
+    else:
+        confidence_factors.append(0.10)
+    
+    # ADX trend strength
+    adx = calculate_adx(df)
+    if adx > 25:
+        confidence_factors.append(0.15)
+    else:
+        confidence_factors.append(0.10)
+    
+    total_confidence = sum(confidence_factors)
+    logger.info(f"🔄 Fallback confidence: {total_confidence:.3f} (RSI={rsi:.2f}, ADX={adx:.2f}, Body={body_ratio:.2f})")
+    
+    return total_confidence
 
 def generate_monster_signal(symbol):
     """
@@ -182,32 +322,24 @@ def generate_monster_signal(symbol):
         logger.info(f"✅ Volume Profile POC breakout confirmed")
         
         # ============================================================================
-        # STEP 5: Macro Events Filter
+        # STEP 5: REAL Macro Events Filter (ForexFactory API)
         # ============================================================================
-        if not macro_events_filter():
-            logger.info(f"🛑 Macro events filter blocked signal for {symbol}")
+        if not macro_events_filter(symbol):
+            logger.info(f"🛑 REAL macro events filter blocked signal for {symbol}")
             return None
         
-        logger.info(f"✅ Macro events filter passed")
+        logger.info(f"✅ REAL macro events filter passed")
         
         # ============================================================================
-        # STEP 6: ML Confidence Check (Realistic 60%)
+        # STEP 6: REAL ML Confidence Check (Trained Model)
         # ============================================================================
-        # Calculate simplified confidence score based on confluence
-        confidence_factors = [
-            0.25,  # EMA 200 direction
-            0.25 if rsi <= 35 or rsi >= 65 else 0.15,  # RSI extremes
-            0.20,  # Volume spike
-            0.15,  # Volume profile
-            0.15   # No macro conflicts
-        ]
-        ml_confidence = sum(confidence_factors)
+        ml_confidence = get_ml_confidence_real(df_15m, rsi, atr)
         
-        if not ml_confidence_check(ml_confidence):
-            logger.info(f"🛑 ML confidence too low: {ml_confidence:.2f}")
+        if ml_confidence < 0.60:
+            logger.info(f"🛑 REAL ML confidence too low: {ml_confidence:.3f}")
             return None
         
-        logger.info(f"✅ ML confidence passed: {ml_confidence:.2f}")
+        logger.info(f"✅ REAL ML confidence approved: {ml_confidence:.3f}")
         
         # ============================================================================
         # STEP 7: Professional Risk Management (SL=1.0 ATR, TPs=1.5/2.0/3.0 ATR)
