@@ -3,9 +3,11 @@ import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
 
-// Create multiple backend URLs to try
+// Create multiple backend URLs to try (Monster V2 API Server first)
 const BACKEND_URLS = [
-  config.apiUrl || 'http://localhost:5000',
+  'http://localhost:5000',    // Monster V2 API Server com IA Adaptativa
+  'http://127.0.0.1:5000',
+  config.apiUrl || 'http://localhost:8000',
   'https://trade-alerts-backend.onrender.com',
   'https://trading-signals-api.herokuapp.com'
 ];
