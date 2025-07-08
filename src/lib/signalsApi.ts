@@ -394,24 +394,26 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
     }
     
     // Convert to TradingSignal format with validation
+    const entryPrice = Number(backendSignal.entry_price);
+    
     const signal: TradingSignal = {
       id: `adaptive-ai-${backendSignal.symbol}-${Date.now()}`,
       symbol: backendSignal.symbol,
       pair: backendSignal.symbol,
       direction: backendSignal.direction as 'BUY' | 'SELL',
       type: backendSignal.direction === 'BUY' ? 'LONG' : 'SHORT',
-      entryPrice: Number(backendSignal.entry_price),
-      entryMin: Number(backendSignal.entry_price) * 0.999,
-      entryMax: Number(backendSignal.entry_price) * 1.001,
-      entryAvg: Number(backendSignal.entry_price),
+      entryPrice: entryPrice,
+      entryMin: entryPrice * 0.999,
+      entryMax: entryPrice * 1.001,
+      entryAvg: entryPrice,
       stopLoss: Number(backendSignal.stop_loss),
-      status: 'WAITING',
+      status: 'ACTIVE',
       strategy: backendSignal.strategy || 'adaptive_ai',
       createdAt: new Date().toISOString(),
-      result: null,
-      profit: null,
+      result: undefined,
+      profit: undefined,
       success_prob: Number(backendSignal.confidence),
-      currentPrice: Number(backendSignal.entry_price),
+      currentPrice: entryPrice,
       targets: backendSignal.targets.map((target: number, index: number) => ({
         level: index + 1,
         price: Number(target),

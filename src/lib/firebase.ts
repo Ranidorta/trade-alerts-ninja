@@ -59,7 +59,9 @@ export async function logTradeSignal(signalData: TradingSignal) {
 
     // 2. Save details to Firestore
     const signalId = signalData.id || `signal_${Date.now()}`;
-    await setDoc(doc(db, "signals", signalId), {
+    
+    // Clean data object to remove undefined values
+    const cleanData: any = {
       asset: signalData.symbol || signalData.pair || "UNKNOWN",
       direction: signalData.direction || "UNKNOWN",
       timestamp: new Date(),
@@ -72,14 +74,22 @@ export async function logTradeSignal(signalData: TradingSignal) {
         (typeof signalData.result === 'number' ? (signalData.result === 1 ? "win" : "loss") : signalData.result) : 
         "pending",
       strategy: signalData.strategy || "default",
-      profit: signalData.profit,
       leverage: signalData.leverage || 1,
       timeframe: signalData.timeframe || "1h",
       status: signalData.status,
       createdAt: new Date(signalData.createdAt),
-      hitTargets: signalData.hitTargets || [],
-      verifiedAt: signalData.verifiedAt ? new Date(signalData.verifiedAt) : null
-    });
+      hitTargets: signalData.hitTargets || []
+    };
+    
+    // Only add optional fields if they are defined
+    if (signalData.profit !== undefined) {
+      cleanData.profit = signalData.profit;
+    }
+    if (signalData.verifiedAt) {
+      cleanData.verifiedAt = new Date(signalData.verifiedAt);
+    }
+    
+    await setDoc(doc(db, "signals", signalId), cleanData);
     
     // 3. Update strategy statistics (similar to Firebase Functions trigger)
     if (signalData.result !== undefined) {

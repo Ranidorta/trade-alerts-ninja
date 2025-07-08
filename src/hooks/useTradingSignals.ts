@@ -141,40 +141,8 @@ export const useTradingSignals = () => {
         }
       }
       
-      // Process signals to ensure they have all required fields
-      const processedSignals = newSignals.map((signal: TradingSignal) => {
-        if (signal.result === undefined) {
-          if (signal.profit !== undefined) {
-            signal.result = signal.profit > 0 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
-          } else if (signal.status === "COMPLETED") {
-            signal.result = Math.random() > 0.5 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
-          }
-        }
-        
-        if (signal.targets && Array.isArray(signal.targets)) {
-          signal.targets = signal.targets.map((target, index) => ({
-            ...target,
-            hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index === 0 ? true : 
-                 (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && index > 0 ? Math.random() > 0.5 : false
-          }));
-        } else if (signal.entryPrice) {
-          signal.targets = [
-            { level: 1, price: signal.entryPrice * 1.03, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) },
-            { level: 2, price: signal.entryPrice * 1.05, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && Math.random() > 0.6 },
-            { level: 3, price: signal.entryPrice * 1.08, hit: (signal.result === "WINNER" || signal.result === "win" || signal.result === 1) && Math.random() > 0.8 }
-          ];
-        }
-        
-        return {
-          ...signal,
-          symbol: signal.symbol || signal.pair || "UNKNOWN",
-          direction: signal.direction || (Math.random() > 0.5 ? "BUY" : "SELL"),
-          status: signal.status || "WAITING",
-          entryPrice: signal.entryPrice || signal.entryAvg || 0,
-          targets: signal.targets || [],
-          createdAt: signal.createdAt || new Date().toISOString(),
-        };
-      });
+      // Signals already come properly formatted from the API
+      const processedSignals = newSignals;
       
       // Update state with processed signals
       setSignals(processedSignals);
@@ -206,16 +174,8 @@ export const useTradingSignals = () => {
       
       if (uniqueNewSignals.length === 0) return currentSignals;
       
-      const processedNewSignals = uniqueNewSignals.map(signal => ({
-        ...signal,
-        createdAt: signal.createdAt || new Date().toISOString(),
-        result: signal.result !== undefined ? signal.result : undefined,
-        targets: signal.targets || (signal.entryPrice ? [
-          { level: 1, price: signal.entryPrice * 1.03, hit: false },
-          { level: 2, price: signal.entryPrice * 1.05, hit: false },
-          { level: 3, price: signal.entryPrice * 1.08, hit: false }
-        ] : [])
-      }));
+      // Signals already come properly formatted
+      const processedNewSignals = uniqueNewSignals;
       
       if (processedNewSignals.length > 0 && currentSignals.length === 0) {
         setLastActiveSignal(processedNewSignals[0]);
