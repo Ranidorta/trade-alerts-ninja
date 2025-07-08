@@ -28,6 +28,15 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
   const [showChart, setShowChart] = useState(false);
   const { toast } = useToast();
   
+  // Debug: Log signal data
+  console.log('🎯 SignalCard rendering with signal:', signal);
+  console.log('📋 Signal data breakdown:');
+  console.log('- entryMin:', signal.entryMin);
+  console.log('- entryMax:', signal.entryMax);
+  console.log('- entryAvg:', signal.entryAvg);
+  console.log('- stopLoss:', signal.stopLoss);
+  console.log('- targets:', signal.targets);
+  
   const isShort = signal.type === "SHORT";
   const typeColor = isShort ? "crypto-red" : "crypto-green";
   const typeIcon = isShort ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />;

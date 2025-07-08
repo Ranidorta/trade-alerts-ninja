@@ -389,14 +389,30 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
     
     // Validate backend response format
     const backendSignal = response.data;
+    console.log('🔍 Validating backend signal fields:');
+    console.log('- symbol:', backendSignal.symbol);
+    console.log('- direction:', backendSignal.direction);
+    console.log('- entry_price:', backendSignal.entry_price);
+    console.log('- stop_loss:', backendSignal.stop_loss);
+    console.log('- targets:', backendSignal.targets);
+    console.log('- confidence:', backendSignal.confidence);
+    
     if (!backendSignal || !backendSignal.symbol || !backendSignal.direction || 
         !backendSignal.entry_price || !backendSignal.stop_loss || 
         !Array.isArray(backendSignal.targets)) {
+      console.error('❌ Invalid signal format from backend:', backendSignal);
       throw new Error('Invalid signal format from backend');
     }
     
     // Convert to TradingSignal format with validation
     const entryPrice = Number(backendSignal.entry_price);
+    const stopLoss = Number(backendSignal.stop_loss);
+    const confidence = Number(backendSignal.confidence);
+    
+    console.log('🔧 Converting backend data:');
+    console.log('- entryPrice (converted):', entryPrice);
+    console.log('- stopLoss (converted):', stopLoss);
+    console.log('- confidence (converted):', confidence);
     
     const signal: TradingSignal = {
       id: `adaptive-ai-${backendSignal.symbol}-${Date.now()}`,
@@ -408,13 +424,13 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       entryMin: entryPrice * 0.999,
       entryMax: entryPrice * 1.001,
       entryAvg: entryPrice,
-      stopLoss: Number(backendSignal.stop_loss),
+      stopLoss: stopLoss,
       status: 'ACTIVE',
       strategy: backendSignal.strategy || 'adaptive_ai',
       createdAt: new Date().toISOString(),
       result: undefined,
       profit: undefined,
-      success_prob: Number(backendSignal.confidence),
+      success_prob: confidence,
       currentPrice: entryPrice,
       targets: backendSignal.targets.map((target: number, index: number) => ({
         level: index + 1,
@@ -423,8 +439,14 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       }))
     };
     
-    console.log(`✅ Processed signal:`, signal);
-    console.log(`Entry Price: ${signal.entryPrice}, Stop Loss: ${signal.stopLoss}, Targets:`, signal.targets);
+    console.log(`✅ Final processed signal:`, signal);
+    console.log(`📊 Signal details:`);
+    console.log(`- Symbol: ${signal.symbol}`);
+    console.log(`- Direction: ${signal.direction} (${signal.type})`);
+    console.log(`- Entry Zone: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})`);
+    console.log(`- Stop Loss: ${signal.stopLoss}`);
+    console.log(`- Targets:`, signal.targets);
+    console.log(`- Confidence: ${signal.success_prob}`);
     
     return [signal];
     
