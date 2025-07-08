@@ -82,7 +82,12 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
       bValue = resultToNumber(b.result);
     }
     
-    if (aValue === bValue) return 0;
+    if (aValue === bValue) {
+      // Se valores iguais, sempre ordenar por data mais recente como critério secundário
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return bDate - aDate; // Mais recente primeiro
+    }
     
     const comparison = aValue < bValue ? -1 : 1;
     return sortDirection === "asc" ? comparison : -comparison;
