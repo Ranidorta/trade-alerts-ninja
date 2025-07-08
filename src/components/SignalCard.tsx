@@ -34,6 +34,7 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
   console.log('- entryMin:', signal.entryMin);
   console.log('- entryMax:', signal.entryMax);
   console.log('- entryAvg:', signal.entryAvg);
+  console.log('- entryPrice:', signal.entryPrice);
   console.log('- stopLoss:', signal.stopLoss);
   console.log('- targets:', signal.targets);
   
@@ -185,15 +186,25 @@ Leverage: ${signal.leverage}x
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="space-y-1">
             <div className="text-xs text-slate-500 dark:text-slate-400">Entry Zone</div>
-            <div className="font-medium truncate">{signal.entryMin} - {signal.entryMax}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">Average: {signal.entryAvg}</div>
+            <div className="font-medium truncate">
+              {signal.entryMin && signal.entryMax ? 
+                `${signal.entryMin.toFixed(2)} - ${signal.entryMax.toFixed(2)}` : 
+                signal.entryPrice ? signal.entryPrice.toFixed(2) : 'N/A'
+              }
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              Average: {signal.entryAvg ? signal.entryAvg.toFixed(2) : 
+                       signal.entryPrice ? signal.entryPrice.toFixed(2) : 'N/A'}
+            </div>
           </div>
           <div className="space-y-1">
             <div className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</div>
-            <div className="font-medium text-error truncate">{signal.stopLoss}</div>
-            {signal.entryAvg && (
+            <div className="font-medium text-error truncate">
+              {signal.stopLoss ? signal.stopLoss.toFixed(2) : 'N/A'}
+            </div>
+            {(signal.entryAvg || signal.entryPrice) && signal.stopLoss && (
               <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
+                Risk: {((Math.abs(signal.stopLoss - (signal.entryAvg || signal.entryPrice)) / (signal.entryAvg || signal.entryPrice)) * 100).toFixed(2)}%
               </div>
             )}
           </div>
@@ -211,7 +222,7 @@ Leverage: ${signal.leverage}x
           )}
           
           <div className={cn("grid gap-2", expanded ? "grid-cols-1" : "grid-cols-3")}>
-            {signal.targets?.map((target, index) => (
+            {signal.targets && signal.targets.length > 0 ? signal.targets.map((target, index) => (
               <div 
                 key={index} 
                 className={cn(
@@ -221,11 +232,15 @@ Leverage: ${signal.leverage}x
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-medium">{`TP${index + 1}`}</div>
-                  <div className="font-medium truncate">{target.price}</div>
+                  <div className="font-medium truncate">{target.price ? target.price.toFixed(2) : 'N/A'}</div>
                 </div>
                 {target.hit && <Check className="h-4 w-4 text-success flex-shrink-0" />}
               </div>
-            ))}
+            )) : (
+              <div className="col-span-3 text-center text-sm text-slate-500 dark:text-slate-400 py-4">
+                Nenhum target disponível
+              </div>
+            )}
           </div>
         </div>
         
