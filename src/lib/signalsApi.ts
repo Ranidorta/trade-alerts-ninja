@@ -385,6 +385,8 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       method: 'GET'
     });
     
+    console.log('✅ Raw backend response:', response.data);
+    
     // Validate backend response format
     const backendSignal = response.data;
     if (!backendSignal || !backendSignal.symbol || !backendSignal.direction || 
@@ -421,8 +423,8 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       }))
     };
     
-    console.log(`✅ Adaptive AI Signal: ${signal.symbol} ${signal.direction} @ ${signal.entryPrice} (Confidence: ${signal.success_prob})`);
-    console.log('Backend response:', backendSignal);
+    console.log(`✅ Processed signal:`, signal);
+    console.log(`Entry Price: ${signal.entryPrice}, Stop Loss: ${signal.stopLoss}, Targets:`, signal.targets);
     
     return [signal];
     
