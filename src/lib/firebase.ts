@@ -77,7 +77,7 @@ export async function logTradeSignal(signalData: TradingSignal) {
       timeframe: signalData.timeframe || "1h",
       status: signalData.status,
       createdAt: new Date(signalData.createdAt),
-      hitTargets: signalData.hitTargets,
+      hitTargets: signalData.hitTargets || [],
       verifiedAt: signalData.verifiedAt ? new Date(signalData.verifiedAt) : null
     });
     
