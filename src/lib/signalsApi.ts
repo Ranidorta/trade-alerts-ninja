@@ -401,12 +401,13 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       return response.data.signals as TradingSignal[];
       
     } catch (backendError) {
-      console.warn('Backend monster generation failed, using local generation...');
+      console.warn('🔄 Backend offline, using Mock Monster V2 + AI...');
       
-      // Use local generation as fallback
-      const localSignals = generateLocalMonsterSignals(symbols);
+      // Use Mock Backend with AI simulation
+      const { generateMockMonsterSignals } = await import('./mockBackendApi');
+      const mockSignals = await generateMockMonsterSignals(symbols);
       
-      return localSignals;
+      return mockSignals;
     }
     
   } catch (error) {
