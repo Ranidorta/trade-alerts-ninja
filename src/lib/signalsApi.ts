@@ -3,9 +3,10 @@ import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
 
-// Create multiple backend URLs to try (Monster V2 API Server first)
+// Create multiple backend URLs to try (Adaptive AI API first)
 const BACKEND_URLS = [
-  'http://localhost:5000',    // Monster V2 API Server com IA Adaptativa
+  'https://trade-alerts-ninja.onrender.com',  // IA Adaptativa Principal
+  'http://localhost:5000',    // Monster V2 API Server com IA Adaptativa Local
   'http://127.0.0.1:5000',
   config.apiUrl || 'http://localhost:8000',
   'https://trade-alerts-backend.onrender.com',
@@ -375,33 +376,51 @@ export const getEvaluationStatus = async () => {
   }
 };
 
-// Generate monster signals using backend with local fallback
+// Generate adaptive AI signals from backend
 export const generateMonsterSignals = async (symbols?: string[]) => {
   try {
-    console.log('🚀 Starting monster signal generation...');
+    console.log('🚀 Starting adaptive AI signal generation...');
     
-    // Try backend first
+    // Try adaptive AI backend first
     try {
-      console.log('Attempting backend monster signal generation...');
+      console.log('Calling adaptive AI endpoint...');
       
-      const response = await tryBackendUrls('/api/signals/generate/monster', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: {
-          symbols: symbols || [
-            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-          ]
-        }
+      const response = await tryBackendUrls('/generate_adaptive_signal', {
+        method: 'GET'
       });
       
-      console.log(`✅ Backend generated ${response.data.signals.length} monster signals`);
-      return response.data.signals as TradingSignal[];
+      // Convert backend response to TradingSignal format
+      const backendSignal = response.data;
+      const signal: TradingSignal = {
+        id: `adaptive-ai-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        symbol: backendSignal.symbol,
+        pair: backendSignal.symbol,
+        direction: backendSignal.direction,
+        type: backendSignal.direction === 'BUY' ? 'LONG' : 'SHORT',
+        entryPrice: backendSignal.entry_price,
+        entryMin: backendSignal.entry_price * 0.999,
+        entryMax: backendSignal.entry_price * 1.001,
+        entryAvg: backendSignal.entry_price,
+        stopLoss: backendSignal.stop_loss,
+        status: 'WAITING',
+        strategy: backendSignal.strategy || 'adaptive_ai',
+        createdAt: new Date().toISOString(),
+        result: null,
+        profit: null,
+        success_prob: backendSignal.confidence,
+        currentPrice: backendSignal.entry_price,
+        targets: backendSignal.targets ? backendSignal.targets.map((target: number, index: number) => ({
+          level: index + 1,
+          price: target,
+          hit: false
+        })) : []
+      };
+      
+      console.log(`✅ Generated adaptive AI signal: ${signal.symbol} ${signal.direction} @ ${signal.entryPrice}`);
+      return [signal];
       
     } catch (backendError) {
-      console.warn('🔄 Backend offline, using Mock Monster V2 + AI...');
+      console.warn('🔄 Adaptive AI backend offline, using Mock Monster V2 + AI...');
       
       // Use Mock Backend with AI simulation
       const { generateMockMonsterSignals } = await import('./mockBackendApi');
@@ -411,7 +430,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
     }
     
   } catch (error) {
-    console.error('❌ Error in monster signal generation:', error);
+    console.error('❌ Error in adaptive AI signal generation:', error);
     
     // Final fallback to local generation
     console.log('Using final fallback: local monster signal generation');
