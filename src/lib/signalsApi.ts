@@ -376,65 +376,57 @@ export const getEvaluationStatus = async () => {
   }
 };
 
-// Generate adaptive AI signals from backend
+// Generate adaptive AI signals from backend (NO MOCK DATA)
 export const generateMonsterSignals = async (symbols?: string[]) => {
   try {
-    console.log('🚀 Starting adaptive AI signal generation...');
+    console.log('🚀 Calling adaptive AI backend...');
     
-    // Try adaptive AI backend first
-    try {
-      console.log('Calling adaptive AI endpoint...');
-      
-      const response = await tryBackendUrls('/generate_adaptive_signal', {
-        method: 'GET'
-      });
-      
-      // Convert backend response to TradingSignal format
-      const backendSignal = response.data;
-      const signal: TradingSignal = {
-        id: `adaptive-ai-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        symbol: backendSignal.symbol,
-        pair: backendSignal.symbol,
-        direction: backendSignal.direction,
-        type: backendSignal.direction === 'BUY' ? 'LONG' : 'SHORT',
-        entryPrice: backendSignal.entry_price,
-        entryMin: backendSignal.entry_price * 0.999,
-        entryMax: backendSignal.entry_price * 1.001,
-        entryAvg: backendSignal.entry_price,
-        stopLoss: backendSignal.stop_loss,
-        status: 'WAITING',
-        strategy: backendSignal.strategy || 'adaptive_ai',
-        createdAt: new Date().toISOString(),
-        result: null,
-        profit: null,
-        success_prob: backendSignal.confidence,
-        currentPrice: backendSignal.entry_price,
-        targets: backendSignal.targets ? backendSignal.targets.map((target: number, index: number) => ({
-          level: index + 1,
-          price: target,
-          hit: false
-        })) : []
-      };
-      
-      console.log(`✅ Generated adaptive AI signal: ${signal.symbol} ${signal.direction} @ ${signal.entryPrice}`);
-      return [signal];
-      
-    } catch (backendError) {
-      console.warn('🔄 Adaptive AI backend offline, using Mock Monster V2 + AI...');
-      
-      // Use Mock Backend with AI simulation
-      const { generateMockMonsterSignals } = await import('./mockBackendApi');
-      const mockSignals = await generateMockMonsterSignals(symbols);
-      
-      return mockSignals;
+    const response = await tryBackendUrls('/generate_adaptive_signal', {
+      method: 'GET'
+    });
+    
+    // Validate backend response format
+    const backendSignal = response.data;
+    if (!backendSignal || !backendSignal.symbol || !backendSignal.direction || 
+        !backendSignal.entry_price || !backendSignal.stop_loss || 
+        !Array.isArray(backendSignal.targets)) {
+      throw new Error('Invalid signal format from backend');
     }
     
-  } catch (error) {
-    console.error('❌ Error in adaptive AI signal generation:', error);
+    // Convert to TradingSignal format with validation
+    const signal: TradingSignal = {
+      id: `adaptive-ai-${backendSignal.symbol}-${Date.now()}`,
+      symbol: backendSignal.symbol,
+      pair: backendSignal.symbol,
+      direction: backendSignal.direction as 'BUY' | 'SELL',
+      type: backendSignal.direction === 'BUY' ? 'LONG' : 'SHORT',
+      entryPrice: Number(backendSignal.entry_price),
+      entryMin: Number(backendSignal.entry_price) * 0.999,
+      entryMax: Number(backendSignal.entry_price) * 1.001,
+      entryAvg: Number(backendSignal.entry_price),
+      stopLoss: Number(backendSignal.stop_loss),
+      status: 'WAITING',
+      strategy: backendSignal.strategy || 'adaptive_ai',
+      createdAt: new Date().toISOString(),
+      result: null,
+      profit: null,
+      success_prob: Number(backendSignal.confidence),
+      currentPrice: Number(backendSignal.entry_price),
+      targets: backendSignal.targets.map((target: number, index: number) => ({
+        level: index + 1,
+        price: Number(target),
+        hit: false
+      }))
+    };
     
-    // Final fallback to local generation
-    console.log('Using final fallback: local monster signal generation');
-    return generateLocalMonsterSignals(symbols);
+    console.log(`✅ Adaptive AI Signal: ${signal.symbol} ${signal.direction} @ ${signal.entryPrice} (Confidence: ${signal.success_prob})`);
+    console.log('Backend response:', backendSignal);
+    
+    return [signal];
+    
+  } catch (error) {
+    console.error('❌ Failed to get signal from adaptive AI backend:', error);
+    throw new Error(`Backend connection failed: ${error.message}`);
   }
 };
 

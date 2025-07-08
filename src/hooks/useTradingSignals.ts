@@ -113,35 +113,31 @@ export const useTradingSignals = () => {
         console.warn(`Could not fetch from any backend: ${fetchError.message}`);
       }
       
-      // If no backend worked, generate monster signals locally
+      // If no backend worked, call adaptive AI directly
       if (!fetchedFromRemote) {
-        console.log('📡 Backend unavailable, generating local monster signals...');
+        console.log('📡 Calling adaptive AI backend directly...');
         
         try {
-          // Use the monster signal generation from signalsApi
-          newSignals = await generateMonsterSignals([
-            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-          ]);
+          // Call the adaptive AI generation directly 
+          newSignals = await generateMonsterSignals();
           
-          console.log(`✅ Generated ${newSignals.length} local monster signals`);
+          console.log(`✅ Generated ${newSignals.length} adaptive AI signals from backend`);
           
           toast({
-            title: "Monster signals generated",
-            description: `Generated ${newSignals.length} high-quality signals using real market data`,
+            title: "Adaptive AI signals generated",
+            description: `Generated ${newSignals.length} signals from adaptive AI backend`,
           });
           
-        } catch (monsterError) {
-          console.error('❌ Monster signal generation failed:', monsterError);
-          
-          // Final fallback to demo data
-          newSignals = generateMockSignals(10);
-          console.log("Generated fallback demo signals:", newSignals.length);
+        } catch (adaptiveError) {
+          console.error('❌ Adaptive AI backend failed:', adaptiveError);
           
           toast({
-            title: "Using demo data",
-            description: "Signal generation unavailable. Using demo data.",
+            variant: "destructive",
+            title: "Backend unavailable",
+            description: "Could not connect to adaptive AI backend. Please try again.",
           });
+          
+          return; // Don't use fallback data
         }
       }
       
