@@ -107,19 +107,19 @@ const SignalsHistory = () => {
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
   
-  // Calculate performance statistics - INCLUIR PARCIAIS COMO VENCEDORES
+  // Calculate performance statistics
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => 
-    signal.result === "WINNER" || signal.result === "PARTIAL"
-  ).length;
-  const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
+  const pureWinners = filteredSignals.filter(signal => signal.result === "WINNER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
+  const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
   const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
   
-  const completedTrades = winningTrades + losingTrades;
-  const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
-  const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
+  // Para taxa de acerto, parciais contam como vencedores
+  const winningTradesForRate = pureWinners + partialTrades;
+  const completedTrades = winningTradesForRate + losingTrades;
+  const winRate = completedTrades > 0 ? (winningTradesForRate / completedTrades) * 100 : 0;
+  const accuracy = totalSignals > 0 ? (winningTradesForRate / totalSignals) * 100 : 0;
 
   // Carrega sinais do backend
   const loadSignalsFromBackend = useCallback(async (isRefreshRequest = false) => {
@@ -492,9 +492,9 @@ const SignalsHistory = () => {
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Vencedores</span>
-              <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
+              <span className="text-2xl font-bold text-green-500">{pureWinners}</span>
               <span className="text-xs text-muted-foreground">
-                (inclui {partialTrades} parciais)
+                (apenas vencedores puros)
               </span>
             </div>
             <div className="flex flex-col">
