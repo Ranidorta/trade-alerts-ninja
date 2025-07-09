@@ -23,7 +23,8 @@ import "./App.css";
 
 // Import gamer theme styles
 import "./styles/gamer-theme.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { ensurePerformanceDataInitialized } from "@/lib/performanceInitializer";
 
 // Protected route component for basic authentication
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -99,6 +100,11 @@ const AppRoutes = () => {
 const App = () => {
   // Move the QueryClient initialization inside the component
   const [queryClient] = useState(() => new QueryClient());
+  
+  // Initialize performance data on app startup
+  useEffect(() => {
+    ensurePerformanceDataInitialized();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

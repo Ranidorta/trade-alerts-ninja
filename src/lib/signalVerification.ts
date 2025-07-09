@@ -84,6 +84,22 @@ export async function verifyAllSignals(signalsToVerify?: TradingSignal[]): Promi
     // Save the updated signals to local storage
     saveSignalsToHistory(updatedSignals);
     
+    // Save validated signals to performance storage
+    try {
+      const { autoValidateSignal, validateAndSaveSignal } = await import('./performanceStorage');
+      
+      verifiedSignals.forEach(signal => {
+        const validationResult = autoValidateSignal(signal);
+        if (validationResult) {
+          validateAndSaveSignal(signal, validationResult);
+        }
+      });
+      
+      console.log(`💾 Saved ${verifiedSignals.length} verified signals to performance storage`);
+    } catch (perfError) {
+      console.error('Failed to save verified signals to performance storage:', perfError);
+    }
+    
     return updatedSignals;
   } catch (error) {
     console.error("Error verifying signals:", error);

@@ -2,10 +2,12 @@
 import React, { useState } from "react";
 import { useStrategyPerformance } from "@/hooks/useStrategyPerformance";
 import { usePerformanceMetrics } from "@/hooks/usePerformanceMetrics";
+import { usePerformanceStorage } from "@/hooks/usePerformanceStorage";
 import PageHeader from "@/components/signals/PageHeader";
 import StrategyPerformanceTable from "@/components/signals/StrategyPerformanceTable";
 import StrategyPerformanceChart from "@/components/signals/StrategyPerformanceChart";
 import PerformanceChart from "@/components/signals/PerformanceChart";
+import PerformanceStatsCard from "@/components/signals/PerformanceStatsCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { analyzeSignalsHistory } from "@/lib/signalHistoryService";
@@ -55,7 +57,19 @@ const PerformanceDashboard = () => {
   const [chartType, setChartType] = useState<"pie" | "bar">("pie");
   
   // Fetch performance data from API
-  const { data: performanceData, isLoading: isLoadingPerformance, refetch: refetchPerformance } = usePerformanceMetrics(days);
+  const { data: apiPerformanceData, isLoading: isLoadingPerformance, refetch: refetchPerformance } = usePerformanceMetrics(days);
+  
+  // Local performance data (always available)
+  const { 
+    performanceData: localPerformanceData, 
+    isLoading: isLoadingLocal, 
+    refreshData: refreshLocalData,
+    getAnalytics 
+  } = usePerformanceStorage();
+  
+  // Use API data if available, otherwise fallback to local data
+  const performanceData = apiPerformanceData || localPerformanceData;
+  const isLoading = isLoadingPerformance && isLoadingLocal;
   
   const { signals, updateSignalStatuses } = useTradingSignals();
   const { strategies, loading, fetchStrategyPerformance, recalculateStatistics } = useStrategyPerformance();
@@ -71,6 +85,13 @@ const PerformanceDashboard = () => {
         description: "Sincronizando dados locais com a API...",
       });
       
+      // Process signals history to update performance data
+      const { processSignalsHistory } = await import('@/lib/performanceStorage');
+      const newValidated = processSignalsHistory();
+      
+      // Refresh local data
+      refreshLocalData();
+      
       // Update signal statuses first
       await updateSignalStatuses();
       
@@ -82,7 +103,7 @@ const PerformanceDashboard = () => {
       
       toast({
         title: "Sincronização completa",
-        description: "Dados sincronizados com sucesso",
+        description: `Dados sincronizados! ${newValidated} novos sinais validados.`,
       });
     } catch (error) {
       console.error("Error syncing data:", error);
@@ -155,31 +176,34 @@ const PerformanceDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{performanceData.total}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sinais validados no sistema
+                  </p>
                 </CardContent>
               </Card>
               
-              <PerformanceBreakdownCard 
+              <PerformanceStatsCard 
                 title="Sinais Vencedores"
                 value={performanceData.vencedor.quantidade}
                 percentage={performanceData.vencedor.percentual}
-                color="#10b981"
-                icon={<div className="h-4 w-4 rounded-full bg-green-500" />}
+                type="vencedor"
+                total={performanceData.total}
               />
               
-              <PerformanceBreakdownCard 
+              <PerformanceStatsCard 
                 title="Sinais Parciais"
                 value={performanceData.parcial.quantidade}
                 percentage={performanceData.parcial.percentual}
-                color="#f59e0b"
-                icon={<div className="h-4 w-4 rounded-full bg-amber-500" />}
+                type="parcial"
+                total={performanceData.total}
               />
               
-              <PerformanceBreakdownCard 
+              <PerformanceStatsCard 
                 title="Sinais Perdedores"
                 value={performanceData.perdedor.quantidade}
                 percentage={performanceData.perdedor.percentual}
-                color="#ef4444"
-                icon={<div className="h-4 w-4 rounded-full bg-red-500" />}
+                type="perdedor"
+                total={performanceData.total}
               />
             </div>
           )}

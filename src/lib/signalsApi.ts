@@ -336,7 +336,17 @@ export const fetchPerformanceMetrics = async ({ queryKey }: { queryKey: string[]
     return response.data as PerformanceData;
   } catch (error) {
     console.error('Error fetching performance metrics:', error);
-    throw error;
+    
+    // Fallback to localStorage performance data
+    const { getPerformanceData, processSignalsHistory } = await import('@/lib/performanceStorage');
+    
+    // Process any new signals from history
+    processSignalsHistory();
+    
+    // Return localStorage performance data
+    const localData = getPerformanceData();
+    console.log('📊 Using localStorage performance data:', localData);
+    return localData;
   }
 };
 
