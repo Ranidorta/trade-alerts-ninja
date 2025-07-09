@@ -51,15 +51,6 @@ export const saveSignalsToHistory = (signals: TradingSignal[]) => {
   localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(combined));
   
   console.log(`Saved ${signals.length} signals to history. Total signals: ${combined.length}`);
-
-  // Auto-sync with performance storage
-  try {
-    import('@/lib/performanceStorage').then(({ processSignalsHistory }) => {
-      processSignalsHistory();
-    });
-  } catch (error) {
-    console.error('Failed to sync performance data:', error);
-  }
 };
 
 // Retrieves all signals from history

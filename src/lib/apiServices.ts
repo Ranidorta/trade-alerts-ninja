@@ -24,12 +24,11 @@ const handleApiError = (error: any, endpoint: string) => {
   return null;
 };
 
-// Fetch kline data from Bybit - FIXED VERSION
+// Fetch kline data from Bybit
 export const fetchBybitKlines = async (
   symbol: string,
   interval: string = "5", // 5 min interval
-  startTime?: number, // timestamp in seconds
-  limit: number = 200
+  limit: number = 50
 ) => {
   try {
     const params = new URLSearchParams({
@@ -37,19 +36,6 @@ export const fetchBybitKlines = async (
       symbol: symbol.toUpperCase(),
       interval: interval,
       limit: limit.toString()
-    });
-    
-    // Add start time if provided (Bybit expects milliseconds)
-    if (startTime) {
-      params.append("start", (startTime * 1000).toString());
-    }
-    
-    console.log(`📊 [BYBIT_API] Fetching ${symbol} candles with params:`, {
-      category: "linear",
-      symbol: symbol.toUpperCase(),
-      interval: interval,
-      limit,
-      startTime: startTime ? new Date(startTime * 1000).toISOString() : 'not specified'
     });
     
     const response = await fetch(`${BYBIT_API_URL}?${params}`, {
@@ -63,23 +49,14 @@ export const fetchBybitKlines = async (
     }
     
     const data = await response.json();
-    
-    console.log(`📊 [BYBIT_API] Response for ${symbol}:`, {
-      retCode: data.retCode,
-      retMsg: data.retMsg,
-      dataLength: data.result?.list?.length || 0
-    });
-    
     if (data.retCode === 0 && data.result?.list) {
-      console.log(`✅ [BYBIT_API] Successfully fetched ${data.result.list.length} candles for ${symbol}`);
       return data.result.list;
     } else {
-      console.error(`❌ [BYBIT_API] Error in Bybit API response for ${symbol}:`, data.retMsg);
-      throw new Error(`Bybit API error: ${data.retMsg}`);
+      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
+      return null;
     }
   } catch (error) {
-    console.error(`❌ [BYBIT_API] Failed to fetch ${symbol}:`, error);
-    throw error; // Re-throw to trigger fallback in validation engine
+    return handleApiError(error, `Bybit Klines for ${symbol}`);
   }
 };
 
@@ -843,3 +820,4 @@ export const getMultipleCryptoCoins = async (symbols: string[]): Promise<CryptoC
   
   return results;
 };
+

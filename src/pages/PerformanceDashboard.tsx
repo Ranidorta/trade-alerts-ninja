@@ -1,35 +1,36 @@
+
 import React, { useState } from "react";
 import { useStrategyPerformance } from "@/hooks/useStrategyPerformance";
 import { usePerformanceMetrics } from "@/hooks/usePerformanceMetrics";
-import { usePerformanceStorage } from "@/hooks/usePerformanceStorage";
 import PageHeader from "@/components/signals/PageHeader";
 import StrategyPerformanceTable from "@/components/signals/StrategyPerformanceTable";
 import StrategyPerformanceChart from "@/components/signals/StrategyPerformanceChart";
 import PerformanceChart from "@/components/signals/PerformanceChart";
-import PerformanceStatsCard from "@/components/signals/PerformanceStatsCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { analyzeSignalsHistory } from "@/lib/signalHistoryService";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PerformanceData } from "@/lib/types";
-const PerformanceBreakdownCard = ({
-  title,
-  value,
-  color,
-  percentage,
-  icon
-}: {
-  title: string;
-  value: number;
+
+const PerformanceBreakdownCard = ({ title, value, color, percentage, icon }: { 
+  title: string; 
+  value: number; 
   color: string;
   percentage: number;
   icon: React.ReactNode;
 }) => {
-  return <Card>
+  return (
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">
           {title}
@@ -37,99 +38,75 @@ const PerformanceBreakdownCard = ({
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold" style={{
-        color
-      }}>
+        <div className="text-2xl font-bold" style={{ color }}>
           {value}
         </div>
         <p className="text-xs text-muted-foreground">
           {percentage.toFixed(2)}% do total
         </p>
       </CardContent>
-    </Card>;
+    </Card>
+  );
 };
+
 const PerformanceDashboard = () => {
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
   const [days, setDays] = useState(30);
-
+  const [chartType, setChartType] = useState<"pie" | "bar">("pie");
+  
   // Fetch performance data from API
-  const {
-    data: apiPerformanceData,
-    isLoading: isLoadingPerformance,
-    refetch: refetchPerformance
-  } = usePerformanceMetrics(days);
-
-  // Local performance data (always available)
-  const {
-    performanceData: localPerformanceData,
-    isLoading: isLoadingLocal,
-    refreshData: refreshLocalData,
-    getAnalytics
-  } = usePerformanceStorage();
-
-  // Use API data if available, otherwise fallback to local data
-  const performanceData = apiPerformanceData || localPerformanceData;
-  const isLoading = isLoadingPerformance && isLoadingLocal;
-  const {
-    signals,
-    updateSignalStatuses
-  } = useTradingSignals();
-  const {
-    strategies,
-    loading,
-    fetchStrategyPerformance,
-    recalculateStatistics
-  } = useStrategyPerformance();
-
+  const { data: performanceData, isLoading: isLoadingPerformance, refetch: refetchPerformance } = usePerformanceMetrics(days);
+  
+  const { signals, updateSignalStatuses } = useTradingSignals();
+  const { strategies, loading, fetchStrategyPerformance, recalculateStatistics } = useStrategyPerformance();
+  
   // Get performance metrics from local signals history as backup
   const metrics = analyzeSignalsHistory();
-
+  
   // Function to sync Firebase with local data
   const syncWithFirebase = async () => {
     try {
       toast({
         title: "Atualizando dados",
-        description: "Sincronizando dados locais com a API..."
+        description: "Sincronizando dados locais com a API...",
       });
-
-      // Process signals history to update performance data
-      const {
-        processSignalsHistory
-      } = await import('@/lib/performanceStorage');
-      const newValidated = processSignalsHistory();
-
-      // Refresh local data
-      refreshLocalData();
-
+      
       // Update signal statuses first
       await updateSignalStatuses();
-
+      
       // Then recalculate Firebase statistics
       await recalculateStatistics();
-
+      
       // Refetch performance data
       await refetchPerformance();
+      
       toast({
         title: "Sincronização completa",
-        description: `Dados sincronizados! ${newValidated} novos sinais validados.`
+        description: "Dados sincronizados com sucesso",
       });
     } catch (error) {
       console.error("Error syncing data:", error);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Falha ao sincronizar dados com a API"
+        description: "Falha ao sincronizar dados com a API",
       });
     }
   };
-  return <div className="container py-8">
-      <PageHeader title="Dashboard de Performance" description="Acompanhe o desempenho dos sinais e estratégias de trading" />
+  
+  return (
+    <div className="container py-8">
+      <PageHeader 
+        title="Dashboard de Performance"
+        description="Acompanhe o desempenho dos sinais e estratégias de trading"
+      />
       
       <div className="mb-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <Select value={days.toString()} onValueChange={value => setDays(parseInt(value, 10))}>
+          <Select 
+            value={days.toString()} 
+            onValueChange={(value) => setDays(parseInt(value, 10))}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Período" />
             </SelectTrigger>
@@ -138,6 +115,19 @@ const PerformanceDashboard = () => {
               <SelectItem value="30">Últimos 30 dias</SelectItem>
               <SelectItem value="90">Últimos 90 dias</SelectItem>
               <SelectItem value="365">Último ano</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select 
+            value={chartType} 
+            onValueChange={(value: "pie" | "bar") => setChartType(value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Tipo de gráfico" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pie">Gráfico de Pizza</SelectItem>
+              <SelectItem value="bar">Gráfico de Barras</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -149,32 +139,54 @@ const PerformanceDashboard = () => {
       </div>
       
       <Tabs defaultValue="overview" className="space-y-4">
-        
+        <TabsList>
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="strategies">Estratégias</TabsTrigger>
+          <TabsTrigger value="assets">Ativos</TabsTrigger>
+        </TabsList>
         
         <TabsContent value="overview" className="space-y-6">
           {/* Performance Summary Cards */}
-          {performanceData && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {performanceData && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">Total de Sinais</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{performanceData.total}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Sinais validados no sistema
-                  </p>
                 </CardContent>
               </Card>
               
-              <PerformanceStatsCard title="Sinais Vencedores" value={performanceData.vencedor.quantidade} percentage={performanceData.vencedor.percentual} type="vencedor" total={performanceData.total} />
+              <PerformanceBreakdownCard 
+                title="Sinais Vencedores"
+                value={performanceData.vencedor.quantidade}
+                percentage={performanceData.vencedor.percentual}
+                color="#10b981"
+                icon={<div className="h-4 w-4 rounded-full bg-green-500" />}
+              />
               
-              <PerformanceStatsCard title="Sinais Parciais" value={performanceData.parcial.quantidade} percentage={performanceData.parcial.percentual} type="parcial" total={performanceData.total} />
+              <PerformanceBreakdownCard 
+                title="Sinais Parciais"
+                value={performanceData.parcial.quantidade}
+                percentage={performanceData.parcial.percentual}
+                color="#f59e0b"
+                icon={<div className="h-4 w-4 rounded-full bg-amber-500" />}
+              />
               
-              <PerformanceStatsCard title="Sinais Perdedores" value={performanceData.perdedor.quantidade} percentage={performanceData.perdedor.percentual} type="perdedor" total={performanceData.total} />
-            </div>}
+              <PerformanceBreakdownCard 
+                title="Sinais Perdedores"
+                value={performanceData.perdedor.quantidade}
+                percentage={performanceData.perdedor.percentual}
+                color="#ef4444"
+                icon={<div className="h-4 w-4 rounded-full bg-red-500" />}
+              />
+            </div>
+          )}
           
           {/* Success Rate Card */}
-          {performanceData && <Card className="mb-6">
+          {performanceData && (
+            <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Taxa de Sucesso Total</CardTitle>
                 <CardDescription>
@@ -191,20 +203,30 @@ const PerformanceDashboard = () => {
                       {performanceData.vencedor.quantidade + performanceData.parcial.quantidade} de {performanceData.total} sinais
                     </p>
                   </div>
-                  <div className="w-32 h-32 rounded-full border-8 flex items-center justify-center" style={{
-                borderColor: performanceData.vencedor.percentual + performanceData.parcial.percentual > 50 ? "#10b981" : "#ef4444",
-                opacity: 0.8
-              }}>
+                  <div className="w-32 h-32 rounded-full border-8 flex items-center justify-center"
+                    style={{ 
+                      borderColor: (performanceData.vencedor.percentual + performanceData.parcial.percentual) > 50 ? "#10b981" : "#ef4444",
+                      opacity: 0.8
+                    }}
+                  >
                     <span className="text-2xl">
-                      {performanceData.vencedor.percentual + performanceData.parcial.percentual > 50 ? "✓" : "✗"}
+                      {(performanceData.vencedor.percentual + performanceData.parcial.percentual) > 50 ? "✓" : "✗"}
                     </span>
                   </div>
                 </div>
               </CardContent>
-            </Card>}
+            </Card>
+          )}
           
           {/* Performance Chart */}
-          {performanceData ? <PerformanceChart data={performanceData} isLoading={isLoading} /> : <Card>
+          {performanceData ? (
+            <PerformanceChart 
+              data={performanceData}
+              chartType={chartType}
+              isLoading={isLoadingPerformance} 
+            />
+          ) : (
+            <Card>
               <CardHeader>
                 <CardTitle>Distribuição de Resultados</CardTitle>
               </CardHeader>
@@ -213,15 +235,22 @@ const PerformanceDashboard = () => {
                   Carregando dados de performance...
                 </div>
               </CardContent>
-            </Card>}
+            </Card>
+          )}
         </TabsContent>
         
         <TabsContent value="strategies" className="space-y-4">
           {/* Strategy Performance Table */}
-          <StrategyPerformanceTable strategies={strategies} isLoading={loading} onRefresh={fetchStrategyPerformance} />
+          <StrategyPerformanceTable 
+            strategies={strategies}
+            isLoading={loading}
+            onRefresh={fetchStrategyPerformance}
+          />
           
           {/* Strategy Performance Chart */}
-          {strategies.length > 0 && <StrategyPerformanceChart strategies={strategies} />}
+          {strategies.length > 0 && (
+            <StrategyPerformanceChart strategies={strategies} />
+          )}
         </TabsContent>
         
         <TabsContent value="assets" className="space-y-4">
@@ -238,6 +267,8 @@ const PerformanceDashboard = () => {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>;
+    </div>
+  );
 };
+
 export default PerformanceDashboard;
