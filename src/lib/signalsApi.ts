@@ -3,12 +3,9 @@ import axios from 'axios';
 import { TradingSignal, PerformanceData } from '@/lib/types';
 import { config } from '@/config/env';
 
-// Create multiple backend URLs to try (Adaptive AI API first)
+// Create multiple backend URLs to try
 const BACKEND_URLS = [
-  'https://trade-alerts-ninja.onrender.com',  // IA Adaptativa Principal
-  'http://localhost:5000',    // Monster V2 API Server com IA Adaptativa Local
-  'http://127.0.0.1:5000',
-  config.apiUrl || 'http://localhost:8000',
+  config.apiUrl || 'http://localhost:5000',
   'https://trade-alerts-backend.onrender.com',
   'https://trading-signals-api.herokuapp.com'
 ];
@@ -376,135 +373,46 @@ export const getEvaluationStatus = async () => {
   }
 };
 
-// Generate adaptive AI signals from backend with local fallback
+// Generate monster signals using backend with local fallback
 export const generateMonsterSignals = async (symbols?: string[]) => {
   try {
-    console.log('🚀 Calling adaptive AI backend...');
+    console.log('🚀 Starting monster signal generation...');
     
-    const response = await tryBackendUrls('/generate_adaptive_signal', {
-      method: 'GET'
-    });
-    
-    console.log('✅ Raw backend response:', response.data);
-    
-    // Validate backend response format
-    const backendSignal = response.data;
-    console.log('🔍 Validating backend signal fields:');
-    console.log('- symbol:', backendSignal.symbol);
-    console.log('- direction:', backendSignal.direction);
-    console.log('- entry_price:', backendSignal.entry_price);
-    console.log('- stop_loss:', backendSignal.stop_loss);
-    console.log('- targets:', backendSignal.targets);
-    console.log('- confidence:', backendSignal.confidence);
-    
-    if (!backendSignal || !backendSignal.symbol || !backendSignal.direction || 
-        !backendSignal.entry_price || !backendSignal.stop_loss || 
-        !Array.isArray(backendSignal.targets)) {
-      console.error('❌ Invalid signal format from backend:', backendSignal);
-      throw new Error('Invalid signal format from backend');
+    // Try backend first
+    try {
+      console.log('Attempting backend monster signal generation...');
+      
+      const response = await tryBackendUrls('/api/signals/generate/monster', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        data: {
+          symbols: symbols || [
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+          ]
+        }
+      });
+      
+      console.log(`✅ Backend generated ${response.data.signals.length} monster signals`);
+      return response.data.signals as TradingSignal[];
+      
+    } catch (backendError) {
+      console.warn('Backend monster generation failed, using local generation...');
+      
+      // Use local generation as fallback
+      const localSignals = generateLocalMonsterSignals(symbols);
+      
+      return localSignals;
     }
     
-    // Convert to TradingSignal format with validation
-    const entryPrice = Number(backendSignal.entry_price);
-    const stopLoss = Number(backendSignal.stop_loss);
-    const confidence = Number(backendSignal.confidence);
-    
-    console.log('🔧 Converting backend data:');
-    console.log('- entryPrice (converted):', entryPrice);
-    console.log('- stopLoss (converted):', stopLoss);
-    console.log('- confidence (converted):', confidence);
-    
-    const signal: TradingSignal = {
-      id: `adaptive-ai-${backendSignal.symbol}-${Date.now()}`,
-      symbol: backendSignal.symbol,
-      pair: backendSignal.symbol,
-      direction: backendSignal.direction as 'BUY' | 'SELL',
-      type: backendSignal.direction === 'BUY' ? 'LONG' : 'SHORT',
-      entryPrice: entryPrice,
-      entryMin: entryPrice * 0.999,
-      entryMax: entryPrice * 1.001,
-      entryAvg: entryPrice,
-      stopLoss: stopLoss,
-      status: 'ACTIVE',
-      strategy: backendSignal.strategy || 'adaptive_ai',
-      createdAt: new Date().toISOString(),
-      result: undefined,
-      profit: undefined,
-      success_prob: confidence,
-      currentPrice: entryPrice,
-      targets: backendSignal.targets.map((target: number, index: number) => ({
-        level: index + 1,
-        price: Number(target),
-        hit: false
-      }))
-    };
-    
-    console.log(`✅ Final processed signal:`, signal);
-    console.log(`📊 Signal details:`);
-    console.log(`- Symbol: ${signal.symbol}`);
-    console.log(`- Direction: ${signal.direction} (${signal.type})`);
-    console.log(`- Entry Zone: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})`);
-    console.log(`- Stop Loss: ${signal.stopLoss}`);
-    console.log(`- Targets:`, signal.targets);
-    console.log(`- Confidence: ${signal.success_prob}`);
-    
-    return [signal];
-    
   } catch (error) {
-    console.error('❌ Backend failed, using local fallback:', error);
+    console.error('❌ Error in monster signal generation:', error);
     
-    // Generate local fallback signals with proper values
-    const defaultSymbols = symbols || ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-    const symbol = defaultSymbols[Math.floor(Math.random() * defaultSymbols.length)];
-    const direction = Math.random() > 0.5 ? 'BUY' : 'SELL';
-    
-    // Generate realistic price values
-    const basePrice = symbol === 'BTCUSDT' ? 45000 + Math.random() * 10000 :
-                     symbol === 'ETHUSDT' ? 2500 + Math.random() * 1000 :
-                     100 + Math.random() * 50;
-    
-    const entryPrice = Number(basePrice.toFixed(2));
-    const entryMin = Number((entryPrice * 0.998).toFixed(2));
-    const entryMax = Number((entryPrice * 1.002).toFixed(2));
-    const entryAvg = entryPrice;
-    
-    const stopLoss = direction === 'BUY' ? 
-      Number((entryPrice * 0.97).toFixed(2)) : 
-      Number((entryPrice * 1.03).toFixed(2));
-    
-    const targets = direction === 'BUY' ? [
-      { level: 1, price: Number((entryPrice * 1.02).toFixed(2)), hit: false },
-      { level: 2, price: Number((entryPrice * 1.04).toFixed(2)), hit: false },
-      { level: 3, price: Number((entryPrice * 1.06).toFixed(2)), hit: false }
-    ] : [
-      { level: 1, price: Number((entryPrice * 0.98).toFixed(2)), hit: false },
-      { level: 2, price: Number((entryPrice * 0.96).toFixed(2)), hit: false },
-      { level: 3, price: Number((entryPrice * 0.94).toFixed(2)), hit: false }
-    ];
-    
-    const localSignal: TradingSignal = {
-      id: `local-fallback-${symbol}-${Date.now()}`,
-      symbol,
-      pair: symbol,
-      direction: direction as 'BUY' | 'SELL',
-      type: direction === 'BUY' ? 'LONG' : 'SHORT',
-      entryPrice,
-      entryMin,
-      entryMax,
-      entryAvg,
-      stopLoss,
-      status: 'ACTIVE',
-      strategy: 'local_fallback',
-      createdAt: new Date().toISOString(),
-      result: undefined,
-      profit: undefined,
-      success_prob: 0.65,
-      currentPrice: entryPrice,
-      targets
-    };
-    
-    console.log('🔧 Generated local fallback signal:', localSignal);
-    return [localSignal];
+    // Final fallback to local generation
+    console.log('Using final fallback: local monster signal generation');
+    return generateLocalMonsterSignals(symbols);
   }
 };
 

@@ -1,1 +1,0 @@
-# Adaptive AI module for Monster V2 trading agent

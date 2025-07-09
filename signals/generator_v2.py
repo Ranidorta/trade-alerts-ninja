@@ -22,16 +22,6 @@ from core.risk_management import DynamicRiskManager, detect_market_stress
 from signals.intraday_signal_integrator import generate_intraday_signal
 from utils.quick_intraday_performance_alert import should_halt_intraday_trading
 
-# NOVO: Importa agente adaptativo
-try:
-    from adaptive_ai.adaptive_agent import AdaptiveTradingAgent
-    ADAPTIVE_AI_AVAILABLE = True
-    logger.info("🤖 Agente Adaptativo carregado com sucesso")
-except ImportError as e:
-    ADAPTIVE_AI_AVAILABLE = False
-    logger.warning(f"⚠️ Agente Adaptativo não disponível: {e}")
-    logger.warning("   Execute: pip install stable-baselines3 gym")
-
 logger = logging.getLogger("TradeAgent")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
 
@@ -54,35 +44,9 @@ class TradeAgent:
         self.risk_manager = DynamicRiskManager()
         self.safe_mode = False
         self.safe_mode_until = None
-        
-        # NOVO: Agente Adaptativo (IA baseada em Reinforcement Learning)
-        self.adaptive_agent = None
-        self.adaptive_enabled = config.get("enable_adaptive_ai", True)
-        
-        if ADAPTIVE_AI_AVAILABLE and self.adaptive_enabled:
-            try:
-                self.adaptive_agent = AdaptiveTradingAgent()
-                # Tenta carregar modelo pré-treinado
-                if self.adaptive_agent.load_model():
-                    logger.info("🤖 Agente Adaptativo carregado e pronto!")
-                else:
-                    logger.warning("⚠️ Modelo adaptativo não encontrado. Execute: python adaptive_ai/train_agent.py")
-            except Exception as e:
-                logger.error(f"❌ Erro ao inicializar Agente Adaptativo: {e}")
-                self.adaptive_agent = None
-        else:
-            logger.info("🔧 Agente Adaptativo desabilitado na configuração")
 
     def is_trending(self, df, window_fast=50, window_slow=200):
         """Check if trend is up or down using EMA crossover"""
-        if len(df) < window_slow:
-            return False, False
-        ema_fast = EMAIndicator(close=df['close'], window=window_fast).ema_indicator().iloc[-1]
-        ema_slow = EMAIndicator(close=df['close'], window=window_slow).ema_indicator().iloc[-1]
-        return ema_fast > ema_slow, ema_fast < ema_slow
-    
-    def is_trending_adaptive(self, df, window_fast, window_slow):
-        """NOVO: Check trend with adaptive EMA windows"""
         if len(df) < window_slow:
             return False, False
         ema_fast = EMAIndicator(close=df['close'], window=window_fast).ema_indicator().iloc[-1]
@@ -96,20 +60,6 @@ class TradeAgent:
         vol = df['volume'].iloc[-1]
         mean_vol = df['volume'].rolling(window).mean().iloc[-1]
         return vol > mean_vol
-    
-    def has_high_volume_adaptive(self, df, adaptive_adjustments, window=20):
-        """NOVO: Check volume with adaptive threshold"""
-        if len(df) < window:
-            return False
-        vol = df['volume'].iloc[-1]
-        mean_vol = df['volume'].rolling(window).mean().iloc[-1]
-        
-        # Aplica ajuste adaptativo ao threshold de volume
-        adaptive_threshold = 1.0 + adaptive_adjustments['vol_adj']
-        adaptive_threshold = max(0.8, min(2.5, adaptive_threshold))  # Limita entre 0.8x e 2.5x
-        
-        logger.info(f"🤖 Volume threshold adaptativo: {adaptive_threshold:.2f}x")
-        return vol > (mean_vol * adaptive_threshold)
 
     def is_strong_candle(self, df):
         """Check if last candle has strong body (>70% of total range) - MELHORADO"""
@@ -142,56 +92,11 @@ class TradeAgent:
         else:
             logger.info(f"❌ ATR fora da faixa ({atr_pct:.2%})")
             return False
-    
-    def atr_filter_adaptive(self, df, adaptive_adjustments, base_min_atr=0.002, base_max_atr=0.05):
-        """NOVO: ATR filter with adaptive thresholds"""
-        if len(df) < 14:
-            logger.info(f"Dados insuficientes para ATR (len={len(df)})")
-            return False
-        atr = AverageTrueRange(df['high'], df['low'], df['close'], window=14).average_true_range().iloc[-1]
-        price = df['close'].iloc[-1]
-        if price == 0:
-            logger.warning("Preço zero para cálculo ATR")
-            return False
-        atr_pct = atr / price
-        
-        # Aplica ajustes adaptativos aos limites ATR
-        atr_adjustment = adaptive_adjustments['atr_adj']
-        min_atr = max(0.001, base_min_atr + atr_adjustment)
-        max_atr = min(0.1, base_max_atr + atr_adjustment)
-        
-        logger.info(f"ATR: {atr:.6f}, Preço: {price:.6f}, ATR%: {atr_pct:.2%}")
-        logger.info(f"🤖 Faixa ATR adaptativa: {min_atr:.2%}-{max_atr:.2%} (ajuste: {atr_adjustment:+.3f})")
-        
-        if min_atr < atr_pct < max_atr:
-            logger.info(f"✅ ATR dentro da faixa adaptativa")
-            return True
-        else:
-            logger.info(f"❌ ATR fora da faixa adaptativa ({atr_pct:.2%})")
-            return False
 
     def get_direction(self, df_1h, df_15m):
         """Determine direction based on multi-timeframe trend alignment"""
         trend_up_1h, trend_down_1h = self.is_trending(df_1h)
         trend_up_15, trend_down_15 = self.is_trending(df_15m)
-        
-        if trend_up_1h and trend_up_15:
-            return "BUY"
-        if trend_down_1h and trend_down_15:
-            return "SELL"
-        return None
-    
-    def get_direction_adaptive(self, df_1h, df_15m, adaptive_adjustments):
-        """NOVO: Determine direction with adaptive EMA adjustments"""
-        # Aplica ajustes adaptativos aos períodos EMA
-        ema_fast_period = max(20, int(50 + adaptive_adjustments['ema_adj']))
-        ema_slow_period = max(100, int(200 + adaptive_adjustments['ema_adj'] * 2))
-        
-        logger.info(f"🤖 Períodos EMA adaptativos: Rápida={ema_fast_period}, Lenta={ema_slow_period}")
-        
-        # Calcula tendências com períodos adaptativos
-        trend_up_1h, trend_down_1h = self.is_trending_adaptive(df_1h, ema_fast_period, ema_slow_period)
-        trend_up_15, trend_down_15 = self.is_trending_adaptive(df_15m, ema_fast_period, ema_slow_period)
         
         if trend_up_1h and trend_up_15:
             return "BUY"
@@ -245,64 +150,11 @@ class TradeAgent:
                 None, pickle.dumps(features), 0
             ))
 
-    def get_adaptive_adjustments(self, df_15m):
-        """
-        NOVO: Obtém ajustes adaptativos da IA baseada em Reinforcement Learning
-        """
-        if not self.adaptive_agent:
-            return {
-                "ema_adj": 0.0,
-                "rsi_adj": 0.0, 
-                "vol_adj": 0.0,
-                "atr_adj": 0.0
-            }
-        
-        try:
-            # Prepara observação do mercado para o agente adaptativo
-            latest = df_15m.iloc[-1]
-            
-            # EMA difference
-            ema_fast = EMAIndicator(close=df_15m['close'], window=50).ema_indicator().iloc[-1]
-            ema_slow = EMAIndicator(close=df_15m['close'], window=200).ema_indicator().iloc[-1]
-            ema_diff = (ema_fast - ema_slow) / ema_slow if ema_slow > 0 else 0
-            
-            # RSI
-            rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1] if len(df_15m) >= 14 else 50
-            
-            # Volume ratio
-            volume_ratio = latest['volume'] / df_15m['volume'].rolling(20).mean().iloc[-1] if len(df_15m) >= 20 else 1
-            
-            # ATR ratio  
-            atr = AverageTrueRange(df_15m['high'], df_15m['low'], df_15m['close'], window=14).average_true_range().iloc[-1] if len(df_15m) >= 14 else 0
-            atr_ratio = atr / latest['close'] if latest['close'] > 0 else 0
-            
-            # Observação para o agente
-            market_obs = np.array([ema_diff, rsi, volume_ratio, atr_ratio], dtype=np.float32)
-            
-            # Obtém ajustes adaptativos
-            adjustments = self.adaptive_agent.adapt_parameters(market_obs)
-            
-            logger.info(f"🤖 Ajustes adaptativos: EMA{adjustments['ema_adj']:+.1f}, "
-                       f"RSI{adjustments['rsi_adj']:+.1f}, "
-                       f"Vol{adjustments['vol_adj']:+.2f}, "
-                       f"ATR{adjustments['atr_adj']:+.3f}")
-            
-            return adjustments
-            
-        except Exception as e:
-            logger.error(f"❌ Erro nos ajustes adaptativos: {e}")
-            return {
-                "ema_adj": 0.0,
-                "rsi_adj": 0.0,
-                "vol_adj": 0.0,
-                "atr_adj": 0.0
-            }
-
     def generate_signal_monster(self, symbol):
         """
-        Monster signal generation with ADVANCED filtering, ML validation and ADAPTIVE AI
+        Monster signal generation with ADVANCED filtering and ML validation
         """
-        logger.info(f"🔍 [MONSTER v2 + ADAPTIVE AI] Analisando {symbol} com filtros AVANÇADOS...")
+        logger.info(f"🔍 [MONSTER v2] Analisando {symbol} com filtros AVANÇADOS...")
         
         try:
             # 1. VERIFICAÇÕES PRELIMINARES
@@ -329,16 +181,13 @@ class TradeAgent:
                 logger.warning(f"Dados insuficientes para {symbol}")
                 return None
 
-            # 2.1. NOVO: Obtém ajustes adaptativos da IA
-            adaptive_adjustments = self.get_adaptive_adjustments(df_15m)
-
             # 3. DETECÇÃO DE STRESS DO MERCADO
             market_stress = detect_market_stress(df_15m)
             if market_stress:
                 logger.warning(f"🚨 Stress do mercado detectado para {symbol} - sendo conservador")
 
-            # 4. DETERMINE DIRECTION BASED ON TREND ALIGNMENT (com ajustes adaptativos)
-            direction = self.get_direction_adaptive(df_1h, df_15m, adaptive_adjustments)
+            # 4. DETERMINE DIRECTION BASED ON TREND ALIGNMENT
+            direction = self.get_direction(df_1h, df_15m)
             if direction is None:
                 logger.info(f"🛑 Tendência não alinhada para {symbol}")
                 return None
@@ -354,40 +203,30 @@ class TradeAgent:
             if has_favorable_divergence:
                 logger.info(f"🔄 Divergência RSI favorável detectada para {direction}")
 
-            # 7. RSI FILTER - mais flexível mas com divergência + AJUSTES ADAPTATIVOS
+            # 7. RSI FILTER - mais flexível mas com divergência
             rsi = RSIIndicator(close=df_15m['close'], window=14).rsi().iloc[-1]
+            rsi_min_buy = 40 if has_favorable_divergence else 45  
+            rsi_max_sell = 60 if has_favorable_divergence else 55
             
-            # Aplica ajustes adaptativos aos limites RSI
-            base_rsi_min_buy = 40 if has_favorable_divergence else 45
-            base_rsi_max_sell = 60 if has_favorable_divergence else 55
-            
-            rsi_min_buy = base_rsi_min_buy + adaptive_adjustments['rsi_adj']
-            rsi_max_sell = base_rsi_max_sell + adaptive_adjustments['rsi_adj']
-            
-            # Garante limites sensatos
-            rsi_min_buy = max(25, min(55, rsi_min_buy))
-            rsi_max_sell = max(45, min(75, rsi_max_sell))
-            
-            logger.info(f"📈 RSI atual: {rsi:.2f} (limites adaptativos: {rsi_min_buy:.1f}-{rsi_max_sell:.1f})")
-            logger.info(f"🤖 Ajuste RSI: {adaptive_adjustments['rsi_adj']:+.1f}")
+            logger.info(f"📈 RSI atual: {rsi:.2f} (limites: {rsi_min_buy}-{rsi_max_sell})")
             
             if direction == "BUY" and rsi < rsi_min_buy:
-                logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f} < {rsi_min_buy:.1f}")
+                logger.info(f"🛑 RSI baixo para BUY: {rsi:.2f} < {rsi_min_buy}")
                 return None
             if direction == "SELL" and rsi > rsi_max_sell:
-                logger.info(f"🛑 RSI alto para SELL: {rsi:.2f} > {rsi_max_sell:.1f}")
+                logger.info(f"🛑 RSI alto para SELL: {rsi:.2f} > {rsi_max_sell}")
                 return None
 
-            # 8. ADVANCED FILTERS ON 15M (MAIS RIGOROSOS) + AJUSTES ADAPTATIVOS
-            if not self.has_high_volume_adaptive(df_15m, adaptive_adjustments):
+            # 8. ADVANCED FILTERS ON 15M (MAIS RIGOROSOS)
+            if not self.has_high_volume(df_15m):
                 logger.info(f"🛑 Volume baixo para {symbol}")
                 return None
             
-            if not self.is_strong_candle(df_15m):  # Mantém 70%
+            if not self.is_strong_candle(df_15m):  # Agora 70% em vez de 60%
                 logger.info(f"🛑 Candle fraco para {symbol}")
                 return None
             
-            if not self.atr_filter_adaptive(df_15m, adaptive_adjustments):
+            if not self.atr_filter(df_15m):
                 logger.info(f"🛑 ATR fora da faixa para {symbol}")
                 return None
 
@@ -447,23 +286,21 @@ class TradeAgent:
                 'success_prob': round(ml_confidence, 4),
                 'result': None,
                 'rsi': round(rsi, 2),
-                'strategy': 'monster_v2_adaptive_ai',
+                'strategy': 'monster_v2_advanced',
                 'market_stress': market_stress,
                 'breakout_valid': is_valid_breakout,
                 'rsi_divergence': has_favorable_divergence,
-                'ml_prediction': ml_result,
-                'adaptive_adjustments': adaptive_adjustments
+                'ml_prediction': ml_result
             }
 
             # 13. SAVE TO DATABASE AND STORAGE
             save_signal(signal)
             
-            logger.info(f"✅ SINAL MONSTER V2 + ADAPTIVE AI gerado para {symbol}:")
+            logger.info(f"✅ SINAL MONSTER V2 gerado para {symbol}:")
             logger.info(f"   🎯 {signal['direction']} @ {signal['entry_price']}")
             logger.info(f"   📊 RSI: {rsi:.2f}, ADX: {adx:.2f}, ATR: {atr:.6f}")
             logger.info(f"   🤖 ML: {ml_result} ({ml_confidence:.3f})")
             logger.info(f"   🔄 Divergência: {has_favorable_divergence}, Stress: {market_stress}")
-            logger.info(f"   🧠 Adaptativo: EMA{adaptive_adjustments['ema_adj']:+.1f}, RSI{adaptive_adjustments['rsi_adj']:+.1f}")
             
             return signal
 
