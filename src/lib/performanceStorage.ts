@@ -130,8 +130,8 @@ export const autoValidateSignal = (signal: TradingSignal): 'vencedor' | 'parcial
 // Process signals from history and validate them
 export const processSignalsHistory = () => {
   try {
-    const { getSignalHistory } = require('./signal-storage');
-    const signals = getSignalHistory();
+    // Import dynamically to avoid require in browser
+    const signals = JSON.parse(localStorage.getItem('trade_signal_history') || '[]');
     
     let validatedCount = 0;
     

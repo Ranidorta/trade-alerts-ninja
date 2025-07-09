@@ -280,6 +280,15 @@ const SignalsHistory = () => {
       if (isLocalMode) {
         saveSignalsToHistory(updatedSignals);
       }
+
+      // Sync with performance storage
+      try {
+        const { processSignalsHistory } = await import('@/lib/performanceStorage');
+        processSignalsHistory();
+        console.log('✅ Performance data updated with validated signals');
+      } catch (error) {
+        console.error('❌ Failed to update performance data:', error);
+      }
       
       // Mostrar resultado
       const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
