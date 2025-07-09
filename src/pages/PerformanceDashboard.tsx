@@ -54,7 +54,6 @@ const PerformanceBreakdownCard = ({ title, value, color, percentage, icon }: {
 const PerformanceDashboard = () => {
   const { toast } = useToast();
   const [days, setDays] = useState(30);
-  const [chartType, setChartType] = useState<"pie" | "bar">("pie");
   
   // Fetch performance data from API
   const { data: apiPerformanceData, isLoading: isLoadingPerformance, refetch: refetchPerformance } = usePerformanceMetrics(days);
@@ -136,19 +135,6 @@ const PerformanceDashboard = () => {
               <SelectItem value="30">Últimos 30 dias</SelectItem>
               <SelectItem value="90">Últimos 90 dias</SelectItem>
               <SelectItem value="365">Último ano</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Select 
-            value={chartType} 
-            onValueChange={(value: "pie" | "bar") => setChartType(value)}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Tipo de gráfico" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pie">Gráfico de Pizza</SelectItem>
-              <SelectItem value="bar">Gráfico de Barras</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -246,8 +232,7 @@ const PerformanceDashboard = () => {
           {performanceData ? (
             <PerformanceChart 
               data={performanceData}
-              chartType={chartType}
-              isLoading={isLoadingPerformance} 
+              isLoading={isLoading} 
             />
           ) : (
             <Card>
