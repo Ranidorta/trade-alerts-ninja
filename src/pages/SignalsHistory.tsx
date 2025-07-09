@@ -1,34 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
-import { fetchBybitKlines } from '@/lib/apiServices';
-import { validateMultipleSignalsWithBybit } from '@/lib/signalValidationService';
+import { validateMultipleSignalsFromBackend } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { 
-  RefreshCw,
-  X,
-  Search,
-  Calendar,
-  Play,
-  BarChart3,
-  CheckCircle
-} from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { RefreshCw, X, Search, Calendar, Play, BarChart3, CheckCircle, Target } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
-
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -39,11 +22,9 @@ const formatDate = (dateString: string) => {
     minute: '2-digit'
   });
 };
-
 const getResultClass = (result: string | number | null | undefined) => {
   // Handle different result formats for robustness
   const resultStr = String(result || '').toUpperCase();
-  
   switch (resultStr) {
     case 'WINNER':
     case 'WIN':
@@ -58,15 +39,15 @@ const getResultClass = (result: string | number | null | undefined) => {
     case 'FALSE':
     case 'MISSED':
       return 'bg-gray-500/20 text-gray-600 border-gray-300/30';
+    case 'PENDING':
+      return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
     default:
       return 'bg-blue-500/20 text-blue-600 border-blue-300/30';
   }
 };
-
 const getResultText = (result: string | number | null | undefined) => {
   // Handle different result formats for consistent display
   const resultStr = String(result || '').toUpperCase();
-  
   switch (resultStr) {
     case 'WINNER':
     case 'WIN':
@@ -81,127 +62,97 @@ const getResultText = (result: string | number | null | undefined) => {
     case 'FALSE':
     case 'MISSED':
       return 'FALSO';
+    case 'PENDING':
+      return 'PENDENTE';
     default:
       return 'PENDENTE';
   }
 };
-
-const getDirectionClass = (direction: string) =>
-  direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
-
+const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
   const [isLocalMode, setIsLocalMode] = useState(false);
-  const { toast } = useToast();
-  
+  const {
+    toast
+  } = useToast();
+
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
-  
-  // Calculate performance statistics
+
+  // Calculate performance statistics - INCLUIR PARCIAIS COMO VENCEDORES
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER").length;
+  const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER" || signal.result === "PARTIAL").length;
   const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
-  const pendingTrades = filteredSignals.filter(signal => !signal.result).length;
-  
-  const completedTrades = winningTrades + losingTrades + partialTrades;
-  const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
-  // Taxa de acerto inclui vencedores + parciais como sucessos
-  const successfulTrades = winningTrades + partialTrades;
-  const accuracy = totalSignals > 0 ? (successfulTrades / totalSignals) * 100 : 0;
+  const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
+  const completedTrades = winningTrades + losingTrades;
+  const winRate = completedTrades > 0 ? winningTrades / completedTrades * 100 : 0;
+  const accuracy = totalSignals > 0 ? winningTrades / totalSignals * 100 : 0;
 
-  // Load signals with fallback to local mode
-  const loadSignals = useCallback(async (isRefreshRequest = false) => {
+  // Carrega sinais do backend
+  const loadSignalsFromBackend = useCallback(async (isRefreshRequest = false) => {
     try {
       if (isRefreshRequest) {
         setIsRefreshing(true);
       } else {
         setIsLoading(true);
       }
-      
-      console.log("Trying to load signals from backend API...");
-      
+      console.log("🔄 [SIGNALS_LOAD] Carregando sinais do backend...");
       try {
-        // Try backend first
-        const response = await fetchSignalsHistory();
-        
-        if (response && response.length > 0) {
-          const last100Signals = response.slice(0, 100);
-          console.log(`✅ Loaded ${last100Signals.length} signals from backend`);
-          
-          setSignals(last100Signals);
-          setFilteredSignals(last100Signals);
+        // Tentar carregar do backend primeiro
+        const backendSignals = await fetchSignalsHistory();
+        if (backendSignals && backendSignals.length > 0) {
+          console.log(`✅ [SIGNALS_LOAD] ${backendSignals.length} sinais carregados do backend`);
+          setSignals(backendSignals);
+          setFilteredSignals(backendSignals);
           setIsLocalMode(false);
-          
-          // Save to localStorage for persistence across sessions
-          saveSignalsToHistory(last100Signals);
-          localStorage.setItem('validated_signals_backup', JSON.stringify(last100Signals));
-          
           if (isRefreshRequest) {
             toast({
               title: "Sinais atualizados",
-              description: `${response.length} sinais carregados do backend.`,
+              description: `${backendSignals.length} sinais carregados do backend.`
             });
           }
           return;
         }
       } catch (backendError) {
-        console.warn("Backend failed, switching to local mode:", backendError);
+        console.warn("❌ [SIGNALS_LOAD] Backend falhou, tentando localStorage:", backendError);
       }
-      
-      // Fallback to local mode
-      console.log("🔧 Switching to local evaluation mode...");
+
+      // Fallback para localStorage
+      console.log("🔧 [SIGNALS_LOAD] Usando localStorage como fallback...");
       setIsLocalMode(true);
-      
-      // Check if we have local signals with backup fallback
-      let localSignals = getSignalHistory();
-      
-      // Fallback to backup if main storage is empty
+      const localSignals = getSignalHistory();
       if (!localSignals || localSignals.length === 0) {
-        const backup = localStorage.getItem('validated_signals_backup');
-        if (backup) {
-          try {
-            localSignals = JSON.parse(backup);
-            console.log(`✅ Restored ${localSignals.length} signals from backup storage`);
-          } catch (e) {
-            console.error("Failed to parse backup signals:", e);
-            localSignals = [];
-          }
-        }
-      }
-      
-      if (!localSignals || localSignals.length === 0) {
-        console.log("❌ No real signals found in localStorage. Please load signals from backend first.");
+        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage");
         toast({
           variant: "destructive",
           title: "Nenhum Sinal Encontrado",
-          description: "Não há sinais reais armazenados. Conecte ao backend para carregar sinais.",
+          description: "Não há sinais salvos. Conecte ao backend para carregar sinais."
         });
-        localSignals = [];
+        setSignals([]);
+        setFilteredSignals([]);
       } else {
-        console.log(`✅ Found ${localSignals.length} real signals in localStorage`);
+        console.log(`✅ [SIGNALS_LOAD] ${localSignals.length} sinais carregados do localStorage`);
+        setSignals(localSignals);
+        setFilteredSignals(localSignals);
         toast({
           title: "Modo Local",
-          description: `Carregados ${localSignals.length} sinais reais do localStorage.`,
+          description: `${localSignals.length} sinais carregados do localStorage.`
         });
       }
-      
-      setSignals(localSignals);
-      setFilteredSignals(localSignals);
-      
     } catch (error) {
-      console.error("Failed to load signals:", error);
+      console.error("❌ [SIGNALS_LOAD] Erro ao carregar sinais:", error);
       toast({
         variant: "destructive",
         title: "Erro ao carregar sinais",
-        description: "Não foi possível carregar os sinais. Verifique sua conexão.",
+        description: "Não foi possível carregar os sinais. Verifique sua conexão."
       });
     } finally {
       setIsLoading(false);
@@ -211,251 +162,186 @@ const SignalsHistory = () => {
     }
   }, [toast]);
 
-  // Load evaluation status
+  // Carrega status de avaliação
   const loadEvaluationStatus = useCallback(async () => {
     try {
       const status = await getEvaluationStatus();
       setEvaluationStatus(status);
     } catch (error) {
-      console.error("Failed to load evaluation status:", error);
+      console.error("❌ [EVAL_STATUS] Erro ao carregar status:", error);
     }
   }, []);
-  
-  // Initial load
+
+  // Carregamento inicial
   useEffect(() => {
-    loadSignals();
+    loadSignalsFromBackend();
     loadEvaluationStatus();
-  }, [loadSignals, loadEvaluationStatus]);
-  
-  
-  // Handle refreshing data
+  }, [loadSignalsFromBackend, loadEvaluationStatus]);
+
+  // Refresh manual
   const handleRefresh = () => {
-    loadSignals(true);
+    loadSignalsFromBackend(true);
     loadEvaluationStatus();
   };
 
-  // Trigger signal evaluation following correct flow: fetch → validate → update backend → show results
-  const handleTriggerEvaluation = async () => {
+  // Validação de sinais (fluxo correto)
+  const handleValidateSignals = async () => {
     try {
-      setIsEvaluating(true);
-      
-      console.log("🔧 [EVAL_TRIGGER] Starting signal validation...");
-      
-      // Check if backend is available first
-      if (!isLocalMode) {
-        try {
-          console.log("📊 [EVAL_TRIGGER] Trying backend evaluation...");
-          await triggerSignalEvaluation();
-          
-          toast({
-            title: "Validação iniciada",
-            description: "Backend validando sinais com dados históricos da Bybit...",
-          });
-          
-          // Wait for backend processing then refresh
-          setTimeout(async () => {
-            await loadSignals(true);
-            await loadEvaluationStatus();
-            
-            toast({
-              title: "Validação concluída", 
-              description: "Sinais validados com dados reais da Bybit.",
-            });
-          }, 3000);
-          
-          return;
-        } catch (error) {
-          console.log("❌ [EVAL_TRIGGER] Backend failed, switching to local validation");
-        }
-      }
-      
-      // Local validation using Bybit API directly
-      console.log("🔧 [EVAL_TRIGGER] Starting local validation with Bybit API...");
-      
-      const pendingSignals = signals.filter(signal => 
-        !signal.result || 
-        signal.result === null || 
-        signal.result === undefined ||
-        signal.result === "PENDING"
-      );
-      
+      setIsValidating(true);
+      console.log("🔍 [VALIDATION] Iniciando validação de sinais...");
+
+      // Filtrar sinais que precisam de validação
+      const pendingSignals = signals.filter(signal => !signal.result || signal.result === null || signal.result === undefined || signal.result === "PENDING");
+      console.log(`📊 [VALIDATION] ${pendingSignals.length} sinais precisam de validação`);
       if (pendingSignals.length === 0) {
         toast({
           title: "Nenhum sinal pendente",
-          description: "Todos os sinais já foram validados.",
+          description: "Todos os sinais já foram validados."
         });
         return;
       }
-      
-      console.log(`🔍 [EVAL_TRIGGER] Validating ${pendingSignals.length} pending signals...`);
-      
-      // Use validation service to validate signals with Bybit data
-      const validatedSignals = await validateMultipleSignalsWithBybit(pendingSignals);
-      
-      // Update state with validated results
-      const updatedSignals = signals.map(signal => {
-        const validatedSignal = validatedSignals.find(vs => vs.id === signal.id);
-        return validatedSignal || signal;
+      toast({
+        title: "Validação iniciada",
+        description: `Validando ${pendingSignals.length} sinais com dados da Bybit...`
       });
-      
-      console.log(`🔄 [EVAL_TRIGGER] Updated ${validatedSignals.length} signals with validation results`);
-      console.log("📋 [EVAL_TRIGGER] Sample validated signal:", validatedSignals[0]);
-      
+
+      // Validar sinais usando dados históricos da Bybit
+      const validationResults = await validateMultipleSignalsFromBackend(pendingSignals);
+      console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
+
+      // Atualizar sinais com os resultados
+      const updatedSignals = signals.map(signal => {
+        const validation = validationResults.find(v => v.signalId === signal.id);
+        if (validation) {
+          return {
+            ...signal,
+            result: validation.result,
+            profit: validation.profit,
+            validationDetails: validation.validationDetails,
+            verifiedAt: new Date().toISOString(),
+            completedAt: validation.result !== "PENDING" ? new Date().toISOString() : undefined,
+            // Atualizar targets se existirem
+            targets: signal.targets?.map(target => ({
+              ...target,
+              hit: validation.hitTargets.includes(target.level)
+            }))
+          };
+        }
+        return signal;
+      });
+
+      // Salvar resultados
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
-      
-      // Save to localStorage to persist data across sessions
-      saveSignalsToHistory(updatedSignals);
-      
-      // Also persist the updated signals to ensure data survives page refresh/navigation
-      localStorage.setItem('validated_signals_backup', JSON.stringify(updatedSignals));
-      
+      if (isLocalMode) {
+        saveSignalsToHistory(updatedSignals);
+      }
+
+      // Sync with performance storage
+      try {
+        const {
+          processSignalsHistory
+        } = await import('@/lib/performanceStorage');
+        processSignalsHistory();
+        console.log('✅ Performance data updated with validated signals');
+      } catch (error) {
+        console.error('❌ Failed to update performance data:', error);
+      }
+
+      // Mostrar resultado
+      const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
       toast({
         title: "Validação concluída",
-        description: `${pendingSignals.length} sinais validados com dados reais da Bybit.`,
+        description: `${completedValidations} de ${pendingSignals.length} sinais validados com sucesso.`
       });
-      
     } catch (error) {
-      console.error("❌ [EVAL_TRIGGER] Error in validation:", error);
+      console.error("❌ [VALIDATION] Erro na validação:", error);
       toast({
         variant: "destructive",
         title: "Erro na validação",
-        description: "Não foi possível validar os sinais. Verifique a conexão com a internet.",
+        description: "Não foi possível validar os sinais. Tente novamente."
       });
     } finally {
-      setIsEvaluating(false);
+      setIsValidating(false);
     }
   };
-  
+
+  // Função para renderizar targets com destaque
+  const renderTargets = (signal: TradingSignal) => {
+    return <div className="space-y-1">
+        {signal.tp1 && <div className="flex items-center gap-1">
+            <Badge variant={signal.targets?.find(t => t.level === 1)?.hit ? "default" : "outline"} className={`text-xs ${signal.targets?.find(t => t.level === 1)?.hit ? 'bg-green-500 text-white' : ''}`}>
+              {signal.targets?.find(t => t.level === 1)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP1: ${signal.tp1.toFixed(4)}
+            </Badge>
+          </div>}
+        {signal.tp2 && <div className="flex items-center gap-1">
+            <Badge variant={signal.targets?.find(t => t.level === 2)?.hit ? "default" : "outline"} className={`text-xs ${signal.targets?.find(t => t.level === 2)?.hit ? 'bg-green-500 text-white' : ''}`}>
+              {signal.targets?.find(t => t.level === 2)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP2: ${signal.tp2.toFixed(4)}
+            </Badge>
+          </div>}
+        {signal.tp3 && <div className="flex items-center gap-1">
+            <Badge variant={signal.targets?.find(t => t.level === 3)?.hit ? "default" : "outline"} className={`text-xs ${signal.targets?.find(t => t.level === 3)?.hit ? 'bg-green-500 text-white' : ''}`}>
+              {signal.targets?.find(t => t.level === 3)?.hit && <Target className="h-3 w-3 mr-1" />}
+              TP3: ${signal.tp3.toFixed(4)}
+            </Badge>
+          </div>}
+        {!signal.tp1 && !signal.tp2 && !signal.tp3 && <span className="text-xs text-muted-foreground">-</span>}
+      </div>;
+  };
+
   // Handle search filtering
   useEffect(() => {
     if (!signals.length) return;
-    
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       setFilteredSignals(signals);
       return;
     }
-    
-    const filtered = signals.filter(signal => 
-      signal.symbol.toLowerCase().includes(query) ||
-      (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
-    );
-    
+    const filtered = signals.filter(signal => signal.symbol.toLowerCase().includes(query) || typeof signal.result === 'string' && signal.result.toLowerCase().includes(query));
     setFilteredSignals(filtered);
   }, [signals, searchQuery]);
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <PageHeader
-          title="Histórico de Sinais"
-          description="Carregando sinais do backend..."
-        />
-        <div className="space-y-4">
-          <Skeleton className="h-[100px] w-full" />
-          <Skeleton className="h-[200px] w-full" />
-        </div>
-      </div>
-    );
+    return;
   }
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <PageHeader
-        title="Histórico de Sinais"
-        description={isLocalMode 
-          ? "Sinais de demonstração avaliados localmente usando dados reais da Bybit"
-          : "Últimos 100 sinais gerados, avaliados automaticamente pelo backend usando dados reais da Bybit"}
-      />
+  return <div className="container mx-auto px-4 py-8">
+      <PageHeader title="Histórico de Sinais" description={isLocalMode ? "Sinais carregados do localStorage - validação usando dados reais da Bybit" : "Sinais carregados do backend - validação automática"} />
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
         {/* Search */}
         <div className="relative w-full sm:w-64 flex-shrink-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Pesquisar sinais..."
-            className="pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+          <Input type="search" placeholder="Pesquisar sinais..." className="pl-8" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
         </div>
-
-      {/* Date Filter */}
-      {signals.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">Ordenar por data:</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const sorted = [...signals].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-              setFilteredSignals(sorted);
-            }}
-          >
-            Mais Recentes
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const sorted = [...signals].sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
-              setFilteredSignals(sorted);
-            }}
-          >
-            Mais Antigos
-          </Button>
-        </div>
-      )}
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {/* Trigger evaluation button */}
-          <Button 
-            variant="outline" 
-            className="h-9 gap-1"
-            onClick={handleTriggerEvaluation}
-            disabled={isEvaluating || isLoading}
-          >
-            {isEvaluating ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle className="h-4 w-4" />
-            )}
+          {/* Botão de validação */}
+          <Button variant="outline" className="h-9 gap-1" onClick={handleValidateSignals} disabled={isValidating || isLoading}>
+            {isValidating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
             <span className="hidden sm:inline">
-              {isEvaluating ? 'Validando...' : 'Validar com Histórico'}
+              {isValidating ? 'Validando...' : 'Validar Sinais'}
             </span>
           </Button>
 
-          {/* Refresh button */}
-          <Button 
-            variant="outline" 
-            className="h-9 gap-1"
-            onClick={handleRefresh}
-            disabled={isRefreshing || isLoading}
-          >
+          {/* Botão de refresh */}
+          <Button variant="outline" className="h-9 gap-1" onClick={handleRefresh} disabled={isRefreshing || isLoading}>
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Atualizar</span>
           </Button>
         
-          {/* Clear filters button */}
-          {searchQuery && (
-            <Button 
-              variant="ghost" 
-              className="h-9"
-              onClick={() => setSearchQuery('')}
-            >
+          {/* Limpar filtros */}
+          {searchQuery && <Button variant="ghost" className="h-9" onClick={() => setSearchQuery('')}>
               <X className="h-4 w-4 mr-1" />
               Limpar filtros
-            </Button>
-          )}
+            </Button>}
         </div>
       </div>
 
       {/* Evaluation Status */}
-      {evaluationStatus && (
-        <Card className="mb-6">
+      {evaluationStatus && <Card className="mb-6">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
@@ -482,10 +368,9 @@ const SignalsHistory = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
       
-      {/* Performance statistics */}
+      {/* Performance statistics - PARCIAIS COMO VENCEDORES */}
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4">
@@ -496,6 +381,9 @@ const SignalsHistory = () => {
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Vencedores</span>
               <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
+              <span className="text-xs text-muted-foreground">
+                (inclui {partialTrades} parciais)
+              </span>
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Perdedores</span>
@@ -520,44 +408,31 @@ const SignalsHistory = () => {
       {/* Connection status */}
       <div className={`mb-4 flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
         <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-        {isLocalMode ? 
-          'Modo Local: Avaliação usando dados reais da Bybit' : 
-          'Sinais carregados do backend e avaliados automaticamente'}
+        {isLocalMode ? 'Modo Local: Avaliação usando dados reais da Bybit' : 'Sinais carregados do backend e avaliados automaticamente'}
         <span className="text-xs text-muted-foreground ml-2">
-          {isLocalMode ? '(clique em "Validar com Histórico" para validar)' : '(atualiza a cada 30s)'}
+          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
         </span>
       </div>
       
       {/* No results message */}
-      {filteredSignals.length === 0 && (
-        <Card className="col-span-full">
+      {filteredSignals.length === 0 && <Card className="col-span-full">
           <CardContent className="p-8 text-center">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
               <Calendar className="h-10 w-10 text-muted-foreground" />
             </div>
             <h3 className="mt-4 text-lg font-semibold">Nenhum sinal encontrado</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              {searchQuery ? 
-                'Tente ajustar seus filtros para ver mais resultados.' : 
-                'Nenhum sinal foi encontrado no backend. Verifique se o serviço de avaliação está rodando.'}
+              {searchQuery ? 'Tente ajustar seus filtros para ver mais resultados.' : 'Nenhum sinal foi encontrado no backend. Verifique se o serviço de avaliação está rodando.'}
             </p>
-            {searchQuery && (
-              <Button 
-                variant="outline" 
-                className="mt-4"
-                onClick={() => setSearchQuery('')}
-              >
+            {searchQuery && <Button variant="outline" className="mt-4" onClick={() => setSearchQuery('')}>
                 <X className="h-4 w-4 mr-2" />
                 Limpar filtros
-              </Button>
-            )}
+              </Button>}
           </CardContent>
-        </Card>
-      )}
+        </Card>}
       
       {/* Signals table */}
-      {filteredSignals.length > 0 && (
-        <Card className="overflow-hidden">
+      {filteredSignals.length > 0 && <Card className="overflow-hidden">
           <Table>
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
@@ -565,17 +440,14 @@ const SignalsHistory = () => {
                 <TableHead>Ativo</TableHead>
                 <TableHead>Direção</TableHead>
                 <TableHead>Entrada</TableHead>
-                <TableHead>TP1</TableHead>
-                <TableHead>TP2</TableHead>
-                <TableHead>TP3</TableHead>
+                <TableHead>Targets (TP)</TableHead>
                 <TableHead>SL</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Resultado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSignals.map((signal) => (
-                <TableRow key={signal.id}>
+              {filteredSignals.map(signal => <TableRow key={signal.id}>
                   <TableCell>
                     {formatDate(signal.createdAt)}
                   </TableCell>
@@ -586,9 +458,9 @@ const SignalsHistory = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>${(signal.entryPrice || 0).toFixed(4)}</TableCell>
-                  <TableCell>{(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price) ? `$${(signal.tp1 || signal.targets?.find(t => t.level === 1)?.price || 0).toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price) ? `$${(signal.tp2 || signal.targets?.find(t => t.level === 2)?.price || 0).toFixed(4)}` : '-'}</TableCell>
-                  <TableCell>{(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price) ? `$${(signal.tp3 || signal.targets?.find(t => t.level === 3)?.price || 0).toFixed(4)}` : '-'}</TableCell>
+                  <TableCell>
+                    {renderTargets(signal)}
+                  </TableCell>
                   <TableCell className="text-red-600">${signal.stopLoss.toFixed(4)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
@@ -596,21 +468,14 @@ const SignalsHistory = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge 
-                      variant="outline" 
-                      className={getResultClass(signal.result)}
-                    >
+                    <Badge variant="outline" className={getResultClass(signal.result)}>
                       {getResultText(signal.result)}
                     </Badge>
                   </TableCell>
-                </TableRow>
-              ))}
+                </TableRow>)}
             </TableBody>
           </Table>
-        </Card>
-      )}
-    </div>
-  );
+        </Card>}
+    </div>;
 };
-
 export default SignalsHistory;
