@@ -78,6 +78,7 @@ const SignalsHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
   const [isLocalMode, setIsLocalMode] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const {
     toast
   } = useToast();
@@ -92,9 +93,9 @@ const SignalsHistory = () => {
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
   const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
-  const completedTrades = winningTrades + losingTrades;
-  const winRate = completedTrades > 0 ? winningTrades / completedTrades * 100 : 0;
-  const accuracy = totalSignals > 0 ? winningTrades / totalSignals * 100 : 0;
+  const completedTrades = winningTrades + losingTrades + falseTrades; // Include FALSE in completed trades
+  const winRate = completedTrades > 0 ? (winningTrades / completedTrades * 100) : 0;
+  const accuracy = totalSignals > 0 ? (winningTrades / totalSignals * 100) : 0;
 
   // Carrega sinais do backend
   const loadSignalsFromBackend = useCallback(async (isRefreshRequest = false) => {
@@ -280,17 +281,30 @@ const SignalsHistory = () => {
       </div>;
   };
 
-  // Handle search filtering
+  // Handle search filtering and sorting
   useEffect(() => {
     if (!signals.length) return;
+    
+    let filtered = signals;
+    
+    // Apply search filter
     const query = searchQuery.toLowerCase().trim();
-    if (!query) {
-      setFilteredSignals(signals);
-      return;
+    if (query) {
+      filtered = filtered.filter(signal => 
+        signal.symbol.toLowerCase().includes(query) || 
+        (typeof signal.result === 'string' && signal.result.toLowerCase().includes(query))
+      );
     }
-    const filtered = signals.filter(signal => signal.symbol.toLowerCase().includes(query) || typeof signal.result === 'string' && signal.result.toLowerCase().includes(query));
-    setFilteredSignals(filtered);
-  }, [signals, searchQuery]);
+    
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+    });
+    
+    setFilteredSignals(sorted);
+  }, [signals, searchQuery, sortOrder]);
 
   // Loading state
   if (isLoading) {
@@ -307,6 +321,26 @@ const SignalsHistory = () => {
         </div>
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* Botões de ordenação */}
+          <div className="flex gap-1">
+            <Button 
+              variant={sortOrder === 'newest' ? 'default' : 'outline'} 
+              size="sm" 
+              onClick={() => setSortOrder('newest')}
+              className="h-9"
+            >
+              Mais Recentes
+            </Button>
+            <Button 
+              variant={sortOrder === 'oldest' ? 'default' : 'outline'} 
+              size="sm" 
+              onClick={() => setSortOrder('oldest')}
+              className="h-9"
+            >
+              Mais Antigos
+            </Button>
+          </div>
+
           {/* Botão de validação */}
           <Button variant="outline" className="h-9 gap-1" onClick={handleValidateSignals} disabled={isValidating || isLoading}>
             {isValidating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
