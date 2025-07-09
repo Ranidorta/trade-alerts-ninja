@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
-import { validateMultipleSignalsFromBackend } from '@/lib/signalValidationService';
+import { validateMultipleSignalsWithBybit } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -206,12 +206,12 @@ const SignalsHistory = () => {
       });
 
       // Validar sinais usando dados históricos da Bybit
-      const validationResults = await validateMultipleSignalsFromBackend(pendingSignals);
+      const validationResults = await validateMultipleSignalsWithBybit(pendingSignals);
       console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
 
       // Atualizar sinais com os resultados
       const updatedSignals = signals.map(signal => {
-        const validation = validationResults.find(v => v.signalId === signal.id);
+        const validation = validationResults.find(v => v.id === signal.id);
         if (validation) {
           return {
             ...signal,
@@ -221,10 +221,7 @@ const SignalsHistory = () => {
             verifiedAt: new Date().toISOString(),
             completedAt: validation.result !== "PENDING" ? new Date().toISOString() : undefined,
             // Atualizar targets se existirem
-            targets: signal.targets?.map(target => ({
-              ...target,
-              hit: validation.hitTargets.includes(target.level)
-            }))
+            targets: validation.targets || signal.targets
           };
         }
         return signal;
@@ -237,16 +234,8 @@ const SignalsHistory = () => {
         saveSignalsToHistory(updatedSignals);
       }
 
-      // Sync with performance storage
-      try {
-        const {
-          processSignalsHistory
-        } = await import('@/lib/performanceStorage');
-        processSignalsHistory();
-        console.log('✅ Performance data updated with validated signals');
-      } catch (error) {
-        console.error('❌ Failed to update performance data:', error);
-      }
+      // Performance data will be recalculated on next load
+      console.log('✅ Signals validated and saved to history');
 
       // Mostrar resultado
       const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
