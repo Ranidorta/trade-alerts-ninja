@@ -113,7 +113,9 @@ const SignalsHistory = () => {
   
   const completedTrades = winningTrades + losingTrades + partialTrades;
   const winRate = completedTrades > 0 ? (winningTrades / completedTrades) * 100 : 0;
-  const accuracy = totalSignals > 0 ? (winningTrades / totalSignals) * 100 : 0;
+  // Taxa de acerto inclui vencedores + parciais como sucessos
+  const successfulTrades = winningTrades + partialTrades;
+  const accuracy = totalSignals > 0 ? (successfulTrades / totalSignals) * 100 : 0;
 
   // Load signals with fallback to local mode
   const loadSignals = useCallback(async (isRefreshRequest = false) => {
@@ -138,6 +140,10 @@ const SignalsHistory = () => {
           setFilteredSignals(last100Signals);
           setIsLocalMode(false);
           
+          // Save to localStorage for persistence across sessions
+          saveSignalsToHistory(last100Signals);
+          localStorage.setItem('validated_signals_backup', JSON.stringify(last100Signals));
+          
           if (isRefreshRequest) {
             toast({
               title: "Sinais atualizados",
@@ -154,8 +160,22 @@ const SignalsHistory = () => {
       console.log("🔧 Switching to local evaluation mode...");
       setIsLocalMode(true);
       
-      // Check if we have local signals
+      // Check if we have local signals with backup fallback
       let localSignals = getSignalHistory();
+      
+      // Fallback to backup if main storage is empty
+      if (!localSignals || localSignals.length === 0) {
+        const backup = localStorage.getItem('validated_signals_backup');
+        if (backup) {
+          try {
+            localSignals = JSON.parse(backup);
+            console.log(`✅ Restored ${localSignals.length} signals from backup storage`);
+          } catch (e) {
+            console.error("Failed to parse backup signals:", e);
+            localSignals = [];
+          }
+        }
+      }
       
       if (!localSignals || localSignals.length === 0) {
         console.log("❌ No real signals found in localStorage. Please load signals from backend first.");
@@ -284,8 +304,11 @@ const SignalsHistory = () => {
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
       
-      // Save to localStorage
+      // Save to localStorage to persist data across sessions
       saveSignalsToHistory(updatedSignals);
+      
+      // Also persist the updated signals to ensure data survives page refresh/navigation
+      localStorage.setItem('validated_signals_backup', JSON.stringify(updatedSignals));
       
       toast({
         title: "Validação concluída",
