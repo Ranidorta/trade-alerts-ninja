@@ -18,10 +18,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       </div>
       <div className="flex flex-wrap mt-4 md:mt-0 gap-2">
         <Button variant="outline" asChild className="flex items-center">
-          <Link to="/performance">
-            <LineChart className="mr-2 h-4 w-4" />
-            Ver Dashboard Completo
-          </Link>
+          
         </Button>
         <Card className="shadow-sm">
           
