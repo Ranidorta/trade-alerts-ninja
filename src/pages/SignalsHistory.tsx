@@ -382,6 +382,33 @@ const SignalsHistory = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
+
+      {/* Date Filter */}
+      {signals.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">Ordenar por data:</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const sorted = [...signals].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+              setFilteredSignals(sorted);
+            }}
+          >
+            Mais Recentes
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const sorted = [...signals].sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+              setFilteredSignals(sorted);
+            }}
+          >
+            Mais Antigos
+          </Button>
+        </div>
+      )}
         
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {/* Trigger evaluation button */}
