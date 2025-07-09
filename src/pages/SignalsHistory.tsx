@@ -277,9 +277,8 @@ const SignalsHistory = () => {
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
       
-      if (isLocalMode) {
-        saveSignalsToHistory(updatedSignals);
-      }
+      // SEMPRE salvar no localStorage para persistência, independente do modo
+      saveSignalsToHistory(updatedSignals);
 
       // Sync with performance storage
       try {
