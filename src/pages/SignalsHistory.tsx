@@ -85,6 +85,8 @@ const SignalsHistory = () => {
 
   // Update signals when Firebase signals change
   useEffect(() => {
+    console.log(`🔥 Firebase loading: ${firebaseLoading}, signals: ${firebaseSignals?.length || 0}`);
+    
     if (firebaseSignals && firebaseSignals.length > 0) {
       console.log(`🔥 Firebase: ${firebaseSignals.length} sinais carregados`);
       setSignals(firebaseSignals);
@@ -93,6 +95,7 @@ const SignalsHistory = () => {
       setIsLoading(false);
     } else if (!firebaseLoading) {
       // Se Firebase não tem sinais, usar localStorage como fallback
+      console.log('Firebase vazio, tentando localStorage...');
       loadSignalsFromBackend();
     }
   }, [firebaseSignals, firebaseLoading]);
@@ -147,14 +150,48 @@ const SignalsHistory = () => {
       setIsLocalMode(true);
       const localSignals = getSignalHistory();
       if (!localSignals || localSignals.length === 0) {
-        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage");
+        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage, gerando sinais locais...");
+        
+        // Se não há sinais salvos, vamos gerar alguns sinais de exemplo
+        const exampleSignals: TradingSignal[] = [
+          {
+            id: `local-${Date.now()}-1`,
+            symbol: 'BTCUSDT',
+            direction: 'BUY' as const,
+            entryPrice: 45000,
+            stopLoss: 44000,
+            tp1: 46000,
+            tp2: 47000,
+            tp3: 48000,
+            strategy: 'local_example',
+            createdAt: new Date().toISOString(),
+            status: 'WAITING',
+            result: null,
+            profit: null
+          },
+          {
+            id: `local-${Date.now()}-2`,
+            symbol: 'ETHUSDT',
+            direction: 'SELL' as const,
+            entryPrice: 3000,
+            stopLoss: 3100,
+            tp1: 2900,
+            tp2: 2800,
+            tp3: 2700,
+            strategy: 'local_example',
+            createdAt: new Date().toISOString(),
+            status: 'WAITING',
+            result: null,
+            profit: null
+          }
+        ];
+        
+        setSignals(exampleSignals);
+        setFilteredSignals(exampleSignals);
         toast({
-          variant: "destructive",
-          title: "Nenhum Sinal Encontrado",
-          description: "Não há sinais salvos. Conecte ao backend para carregar sinais."
+          title: "Sinais de exemplo",
+          description: `${exampleSignals.length} sinais de exemplo criados. Conecte ao backend ou Firebase para sinais reais.`
         });
-        setSignals([]);
-        setFilteredSignals([]);
       } else {
         console.log(`✅ [SIGNALS_LOAD] ${localSignals.length} sinais carregados do localStorage`);
         setSignals(localSignals);
@@ -197,9 +234,8 @@ const SignalsHistory = () => {
 
   // Refresh manual
   const handleRefresh = () => {
-    // Limpar localStorage para forçar carregamento completo
-    localStorage.removeItem('trade_signal_history');
-    // Recarregar do Firebase
+    // Não limpar localStorage aqui, deixar ele como fallback
+    // Recarregar do Firebase primeiro
     loadSignals();
     loadSignalsFromBackend(true);
     loadEvaluationStatus();
