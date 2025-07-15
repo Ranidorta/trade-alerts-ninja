@@ -76,7 +76,9 @@ export default function SignalHistorySummary({ signal }: SignalHistorySummaryPro
       s.result === "missed" || s.result === "FALSE"
     ).length;
     
-    const successRate = symbolSignals.length > 0 ? ((wins + partials) / symbolSignals.length) * 100 : 0;
+    // REGRA: WINNER + PARTIAL = acerto na taxa de acerto
+    const validatedSignals = wins + partials + losses + missed;
+    const successRate = validatedSignals > 0 ? ((wins + partials) / validatedSignals) * 100 : 0;
     
     // Calcular lucro médio
     const signalsWithProfit = symbolSignals.filter(s => typeof s.profit === 'number');

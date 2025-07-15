@@ -86,16 +86,18 @@ const SignalsHistory = () => {
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
 
-  // Calculate performance statistics - INCLUIR PARCIAIS COMO VENCEDORES
+  // NOVA LÓGICA: Separar vencedores puros de parciais
   const totalSignals = filteredSignals.length;
-  const winningTrades = filteredSignals.filter(signal => signal.result === "WINNER" || signal.result === "PARTIAL").length;
-  const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
+  const winnerTrades = filteredSignals.filter(signal => signal.result === "WINNER").length;
   const partialTrades = filteredSignals.filter(signal => signal.result === "PARTIAL").length;
+  const losingTrades = filteredSignals.filter(signal => signal.result === "LOSER").length;
   const falseTrades = filteredSignals.filter(signal => signal.result === "FALSE").length;
   const pendingTrades = filteredSignals.filter(signal => !signal.result || signal.result === "PENDING").length;
-  const completedTrades = winningTrades + losingTrades + falseTrades; // Include FALSE in completed trades
-  const winRate = completedTrades > 0 ? (winningTrades / completedTrades * 100) : 0;
-  const accuracy = totalSignals > 0 ? (winningTrades / totalSignals * 100) : 0;
+  
+  // REGRA: WINNER + PARTIAL = acerto na taxa de acerto
+  const successfulTrades = winnerTrades + partialTrades;
+  const validatedTrades = winnerTrades + partialTrades + losingTrades + falseTrades;
+  const accuracyRate = validatedTrades > 0 ? (successfulTrades / validatedTrades * 100) : 0;
 
   // Carrega sinais do backend
   const loadSignalsFromBackend = useCallback(async (isRefreshRequest = false) => {
@@ -402,19 +404,16 @@ const SignalsHistory = () => {
               <span className="text-2xl font-bold">{totalSignals}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Vencedores</span>
-              <span className="text-2xl font-bold text-green-500">{winningTrades}</span>
-              <span className="text-xs text-muted-foreground">
-                (inclui {partialTrades} parciais)
-              </span>
+              <span className="text-sm text-muted-foreground">✅ Vencedores</span>
+              <span className="text-2xl font-bold text-green-500">{winnerTrades}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Perdedores</span>
-              <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">Parciais</span>
+              <span className="text-sm text-muted-foreground">🟡 Parciais</span>
               <span className="text-2xl font-bold text-amber-500">{partialTrades}</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm text-muted-foreground">❌ Perdedores</span>
+              <span className="text-2xl font-bold text-red-500">{losingTrades}</span>
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Pendentes</span>
@@ -422,7 +421,10 @@ const SignalsHistory = () => {
             </div>
             <div className="flex flex-col">
               <span className="text-sm text-muted-foreground">Taxa de Acerto</span>
-              <span className="text-2xl font-bold text-purple-500">{accuracy.toFixed(1)}%</span>
+              <span className="text-2xl font-bold text-primary">{accuracyRate.toFixed(1)}%</span>
+              <span className="text-xs text-muted-foreground">
+                (Vencedor + Parcial) ÷ Total
+              </span>
             </div>
           </div>
         </CardContent>

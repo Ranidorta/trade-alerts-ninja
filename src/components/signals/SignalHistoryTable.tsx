@@ -227,9 +227,16 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   };
   
   const shouldShowVerifyButton = (signal: TradingSignal) => {
-    return signal.result === undefined && 
+    // REGRA: Botão ativo apenas para PENDING ou PARTIAL
+    // WINNER e LOSER não podem ser revalidados
+    return (signal.result === undefined || signal.result === "PENDING" || signal.result === "PARTIAL") && 
            signal.status !== "COMPLETED" && 
            signal.status !== "WAITING";
+  };
+
+  const canRevalidate = (signal: TradingSignal) => {
+    // REGRA: Apenas sinais PARCIAIS podem ser revalidados
+    return signal.result === "PARTIAL";
   };
   
   if (signals.length === 0) {
@@ -377,13 +384,20 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
                     {shouldShowVerifyButton(signal) ? (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant={canRevalidate(signal) ? "default" : "outline"}
                         onClick={() => handleVerifySignal(signal.id)}
-                        disabled={verifyingSignal === signal.id}
+                        disabled={verifyingSignal === signal.id || (signal.result === "WINNER" || signal.result === "LOSER")}
                       >
-                        {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
+                        {verifyingSignal === signal.id ? 'Verificando...' : 
+                         canRevalidate(signal) ? 'Revalidar' : 'Verificar'}
                       </Button>
-                    ) : null}
+                    ) : (
+                      signal.result === "WINNER" || signal.result === "LOSER" ? (
+                        <Badge variant="outline" className="text-xs">
+                          Finalizado
+                        </Badge>
+                      ) : null
+                    )}
                   </TableCell>
                 )}
               </TableRow>

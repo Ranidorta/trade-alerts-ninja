@@ -256,6 +256,66 @@ export const getSignalsPerformanceByDate = (signals: TradingSignal[]) => {
   return Array.from(dailyPerformance.values());
 };
 
+export const revalidatePartialSignal = async (signal: TradingSignal): Promise<string> => {
+  console.log(`🔄 [REVALIDATION] Revalidando sinal parcial: ${signal.symbol}`);
+  
+  // REGRA: Apenas sinais PARCIAIS podem ser revalidados
+  if (signal.result !== "PARTIAL") {
+    console.log(`❌ [REVALIDATION] Sinal não pode ser revalidado, resultado atual: ${signal.result}`);
+    return signal.result as string;
+  }
+
+  try {
+    const klines = await fetchBybitKlines(signal.symbol, '15m', 100);
+    if (!klines || klines.length === 0) {
+      console.log(`❌ [REVALIDATION] Sem dados de velas para ${signal.symbol}`);
+      return "PARTIAL";
+    }
+
+    const prices = klines.map(k => ({
+      time: new Date(k[0]),
+      high: parseFloat(k[2]),
+      low: parseFloat(k[3])
+    }));
+
+    // REGRA: Verificar se atingiu TP3 após primeira validação
+    if (signal.tp3) {
+      const tp3Hit = prices.some(price => {
+        if (signal.direction === 'BUY') {
+          return price.high >= signal.tp3!;
+        } else {
+          return price.low <= signal.tp3!;
+        }
+      });
+
+      if (tp3Hit) {
+        console.log(`✅ [REVALIDATION] TP3 atingido para ${signal.symbol}, mudando para WINNER`);
+        return "WINNER";
+      }
+    }
+
+    // REGRA: Se atingir Stop Loss após ser parcial, MANTER como PARTIAL
+    const stopLossHit = prices.some(price => {
+      if (signal.direction === 'BUY') {
+        return price.low <= signal.stopLoss;
+      } else {
+        return price.high >= signal.stopLoss;
+      }
+    });
+
+    if (stopLossHit) {
+      console.log(`⚠️ [REVALIDATION] Stop Loss atingido para ${signal.symbol}, mantendo PARTIAL (primeira validação prevalece)`);
+      return "PARTIAL"; // REGRA: PARTIAL não vira LOSER
+    }
+
+    console.log(`📊 [REVALIDATION] Sinal ${signal.symbol} permanece PARTIAL`);
+    return "PARTIAL";
+  } catch (error) {
+    console.error(`❌ [REVALIDATION] Erro ao revalidar ${signal.symbol}:`, error);
+    return "PARTIAL";
+  }
+};
+
 export async function validateSignalWithPriceHistory(signal: TradingSignal): Promise<TradingSignal> {
   try {
     console.log(`🔍 [VALIDATION] Starting validation for signal ${signal.id} - ${signal.symbol}`);
