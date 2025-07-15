@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } from '@/lib/signalsApi';
 import { validateMultipleSignalsWithBybit } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
+import { useSignalSync } from '@/hooks/useSignalSync';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, X, Search, Calendar, Play, BarChart3, CheckCircle, Target } from 'lucide-react';
@@ -70,6 +71,7 @@ const getResultText = (result: string | number | null | undefined) => {
 };
 const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
+  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals } = useSignalSync();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,9 +81,21 @@ const SignalsHistory = () => {
   const [evaluationStatus, setEvaluationStatus] = useState<any>(null);
   const [isLocalMode, setIsLocalMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
+
+  // Update signals when Firebase signals change
+  useEffect(() => {
+    if (firebaseSignals && firebaseSignals.length > 0) {
+      console.log(`🔥 Firebase: ${firebaseSignals.length} sinais carregados`);
+      setSignals(firebaseSignals);
+      setFilteredSignals(firebaseSignals);
+      setIsLocalMode(false);
+      setIsLoading(false);
+    } else if (!firebaseLoading) {
+      // Se Firebase não tem sinais, usar localStorage como fallback
+      loadSignalsFromBackend();
+    }
+  }, [firebaseSignals, firebaseLoading]);
 
   // List of unique symbols for filtering
   const uniqueSymbols = [...new Set(signals.map(signal => signal.symbol))].sort();
@@ -183,6 +197,10 @@ const SignalsHistory = () => {
 
   // Refresh manual
   const handleRefresh = () => {
+    // Limpar localStorage para forçar carregamento completo
+    localStorage.removeItem('trade_signal_history');
+    // Recarregar do Firebase
+    loadSignals();
     loadSignalsFromBackend(true);
     loadEvaluationStatus();
   };
