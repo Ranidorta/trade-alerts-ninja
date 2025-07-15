@@ -18,7 +18,7 @@ const ProtectedPremiumRoute = ({ children, requireAdmin = false }: ProtectedPrem
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // For now, allow all authenticated users access to premium features

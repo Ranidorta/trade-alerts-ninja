@@ -18,7 +18,7 @@ import UserProfile from "./pages/UserProfile";
 import Checkout from "./pages/Checkout";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { useAuth } from "./hooks/useAuth";
-import Auth from "./pages/Auth";
+
 import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
 import "./App.css";
 
@@ -48,7 +48,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
-      <Route path="/auth" element={<Auth />} />
+      
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       

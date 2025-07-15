@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './useAuth';
-import { syncSignals, saveSignalToSupabase, updateSignalInSupabase } from '@/lib/supabase-signal-storage';
+import { db } from '@/lib/firebase';
+import { 
+  collection, 
+  doc, 
+  addDoc, 
+  updateDoc, 
+  getDocs, 
+  query, 
+  where, 
+  orderBy,
+  onSnapshot
+} from 'firebase/firestore';
 import { getSignalHistory, saveSignalToHistory } from '@/lib/signal-storage';
 import { TradingSignal } from '@/lib/types';
 
@@ -13,6 +24,23 @@ export const useSignalSync = () => {
   useEffect(() => {
     if (user) {
       loadSignals();
+      // Set up real-time listener for user's signals
+      const signalsRef = collection(db, 'user_signals');
+      const q = query(
+        signalsRef, 
+        where('userId', '==', user.uid),
+        orderBy('timestamp', 'desc')
+      );
+      
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const userSignals = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as TradingSignal[];
+        setSignals(userSignals);
+      });
+
+      return () => unsubscribe();
     } else {
       // Load from localStorage if not authenticated
       setSignals(getSignalHistory());
@@ -24,8 +52,19 @@ export const useSignalSync = () => {
     
     setIsLoading(true);
     try {
-      const syncedSignals = await syncSignals();
-      setSignals(syncedSignals);
+      const signalsRef = collection(db, 'user_signals');
+      const q = query(
+        signalsRef, 
+        where('userId', '==', user.uid),
+        orderBy('timestamp', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const userSignals = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as TradingSignal[];
+      
+      setSignals(userSignals);
     } catch (error) {
       console.error('Error loading signals:', error);
       // Fallback to localStorage
@@ -38,9 +77,15 @@ export const useSignalSync = () => {
   const saveSignal = async (signal: TradingSignal) => {
     try {
       if (user) {
-        // Save to Supabase if authenticated
-        await saveSignalToSupabase(signal);
-        await loadSignals(); // Reload to get updated data
+        // Save to Firestore if authenticated
+        const signalWithUserId = {
+          ...signal,
+          userId: user.uid,
+          userEmail: user.email
+        };
+        
+        await addDoc(collection(db, 'user_signals'), signalWithUserId);
+        // Signals will be updated automatically via the real-time listener
       } else {
         // Save to localStorage if not authenticated
         saveSignalToHistory(signal);
@@ -57,9 +102,10 @@ export const useSignalSync = () => {
   const updateSignal = async (signalId: string, updates: Partial<TradingSignal>) => {
     try {
       if (user) {
-        // Update in Supabase if authenticated
-        await updateSignalInSupabase(signalId, updates);
-        await loadSignals(); // Reload to get updated data
+        // Update in Firestore if authenticated
+        const signalRef = doc(db, 'user_signals', signalId);
+        await updateDoc(signalRef, updates);
+        // Signals will be updated automatically via the real-time listener
       } else {
         // Update in localStorage if not authenticated
         const localSignals = getSignalHistory();
