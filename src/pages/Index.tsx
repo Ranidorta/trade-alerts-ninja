@@ -1,5 +1,6 @@
 
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import Hero from "@/components/Hero";
 import FeatureCard from "@/components/FeatureCard";
 import SignalCard from "@/components/SignalCard";
@@ -54,6 +55,8 @@ const features: Feature[] = [
 ];
 
 const Index = () => {
+  const { user } = useAuth();
+  
   // Get the three most recent signals
   const recentSignals = mockSignals.slice(0, 3);
   
@@ -94,11 +97,19 @@ const Index = () => {
                 Stay updated with our latest market opportunities
               </p>
             </div>
-            <Button asChild className="mt-4 md:mt-0">
-              <Link to="/signals">
-                View All Signals <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            {user ? (
+              <Button asChild className="mt-4 md:mt-0">
+                <Link to="/signals">
+                  View All Signals <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild className="mt-4 md:mt-0">
+                <Link to="/auth">
+                  Login to View Signals <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -154,11 +165,19 @@ const Index = () => {
                 </div>
               </div>
               
-              <Button asChild className="mt-8">
-                <Link to="/history">
-                  View Performance History <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
+              {user ? (
+                <Button asChild className="mt-8">
+                  <Link to="/history">
+                    View Performance History <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : (
+                <Button asChild className="mt-8">
+                  <Link to="/auth">
+                    Login to View History <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              )}
             </div>
             
             <div className="relative">
@@ -223,11 +242,19 @@ const Index = () => {
           <p className="text-xl opacity-90 max-w-2xl mx-auto mb-8">
             Join thousands of traders who are already profiting from our signals.
           </p>
-          <Button asChild size="lg" variant="default" className="bg-white text-crypto-purple hover:bg-white/90">
-            <Link to="/signals">
-              Get Started Today <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+          {user ? (
+            <Button asChild size="lg" variant="default" className="bg-white text-crypto-purple hover:bg-white/90">
+              <Link to="/signals">
+                Get Started Today <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="lg" variant="default" className="bg-white text-crypto-purple hover:bg-white/90">
+              <Link to="/auth">
+                Get Started Today <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
         </div>
       </section>
     </div>

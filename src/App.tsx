@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
@@ -17,7 +17,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import UserProfile from "./pages/UserProfile";
 import Checkout from "./pages/Checkout";
 import { ThemeProvider } from "./components/ThemeProvider";
-import { AuthProvider, useAuth } from "./hooks/useAuth";
+import { useAuth } from "./hooks/useAuth";
+import Auth from "./pages/Auth";
 import ProtectedPremiumRoute from "./components/ProtectedPremiumRoute";
 import "./App.css";
 
@@ -46,7 +47,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/market" replace />} />
+      <Route path="/" element={<Index />} />
+      <Route path="/auth" element={<Auth />} />
       <Route path="/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       
@@ -97,26 +99,30 @@ const AppRoutes = () => {
 };
 
 const App = () => {
-  // Move the QueryClient initialization inside the component
   const [queryClient] = useState(() => new QueryClient());
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark">
-        <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <div className="gamer-theme font-rajdhani">
-                <Navbar />
-                <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
-                  <AppRoutes />
-                </div>
-              </div>
-            </BrowserRouter>
-          </TooltipProvider>
-        </AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <div className="gamer-theme font-rajdhani">
+            <Navbar />
+            <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
+              <AppRoutes />
+            </div>
+          </div>
+        </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -14,7 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      trading_signals: {
+        Row: {
+          completed_at: string | null
+          confidence_score: number | null
+          created_at: string
+          direction: string
+          entry_price: number | null
+          id: string
+          leverage: number | null
+          profit: number | null
+          result: number | null
+          risk_reward_ratio: number | null
+          signal_id: string
+          status: string | null
+          stop_loss: number | null
+          strategy_name: string | null
+          symbol: string
+          targets: Json | null
+          timeframe: string | null
+          updated_at: string
+          user_id: string
+          verified_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          id?: string
+          leverage?: number | null
+          profit?: number | null
+          result?: number | null
+          risk_reward_ratio?: number | null
+          signal_id: string
+          status?: string | null
+          stop_loss?: number | null
+          strategy_name?: string | null
+          symbol: string
+          targets?: Json | null
+          timeframe?: string | null
+          updated_at?: string
+          user_id: string
+          verified_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          confidence_score?: number | null
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          id?: string
+          leverage?: number | null
+          profit?: number | null
+          result?: number | null
+          risk_reward_ratio?: number | null
+          signal_id?: string
+          status?: string | null
+          stop_loss?: number | null
+          strategy_name?: string | null
+          symbol?: string
+          targets?: Json | null
+          timeframe?: string | null
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

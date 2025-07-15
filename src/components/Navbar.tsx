@@ -15,7 +15,7 @@ import {
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import AuthButton from "@/components/AuthButton";
+import UserMenuButton from "@/components/UserMenuButton";
 import { useAuth } from "@/hooks/useAuth";
 
 const Navbar = () => {
@@ -23,7 +23,7 @@ const Navbar = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, hasActiveSubscription } = useAuth();
+  const { user } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -93,22 +93,22 @@ const Navbar = () => {
                     ))}
                     
                     {/* Botão de assinatura premium para mobile */}
-                    {user && !hasActiveSubscription() && (
+                    {user && (
                       <Button 
                         onClick={() => {
                           navigate("/checkout");
                           setIsMenuOpen(false);
                         }}
-                        variant="success" 
+                        variant="default" 
                         className="w-full mt-2 flex items-center justify-center gap-2"
                       >
                         <Crown size={16} />
-                        <span>Assinar Plano Premium</span>
+                        <span>Upgrade Premium</span>
                       </Button>
                     )}
                     
                     <div className="pt-2 flex justify-between items-center border-t border-border">
-                      <AuthButton />
+                      <UserMenuButton />
                       <ThemeToggle />
                     </div>
                   </div>
@@ -134,22 +134,22 @@ const Navbar = () => {
               ))}
               
               {/* Botão de assinatura premium para desktop */}
-              {user && !hasActiveSubscription() && (
+              {user && (
                 <Button 
                   onClick={() => navigate("/checkout")}
-                  variant="success"
+                  variant="default"
                   size="sm"
                   className="ml-1 flex items-center gap-1"
                 >
                   <Crown size={14} />
-                  <span>Assinar Premium</span>
+                  <span>Upgrade</span>
                 </Button>
               )}
             </div>
           )}
 
           <div className="hidden md:flex items-center space-x-2">
-            <AuthButton />
+            <UserMenuButton />
             <ThemeToggle />
           </div>
         </div>
