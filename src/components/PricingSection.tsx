@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const PricingSection = () => {
   const navigate = useNavigate();
-  const { user, hasActiveSubscription } = useAuth();
+  const { user } = useAuth();
 
   const handleSubscribe = () => {
     if (!user) {
@@ -113,7 +113,7 @@ const PricingSection = () => {
               className="w-full font-semibold"
               onClick={handleSubscribe}
             >
-              {hasActiveSubscription() ? "Já Assinado" : "Assinar Agora"}
+              {user ? "Assinar Premium" : "Assinar Agora"}
             </Button>
           </div>
         </div>
