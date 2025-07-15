@@ -211,7 +211,7 @@ const UserProfile = () => {
                       onChange={handleInputChange}
                     />
                   ) : (
-                    <p className="text-lg py-2">{userData?.displayName || user?.name || "Não definido"}</p>
+                    <p className="text-lg py-2">{userData?.displayName || user?.email || "Não definido"}</p>
                   )}
                 </div>
                 <div className="space-y-2">
