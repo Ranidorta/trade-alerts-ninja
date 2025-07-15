@@ -29,7 +29,7 @@ export const useSignalSync = () => {
       const q = query(
         signalsRef, 
         where('userId', '==', user.uid),
-        orderBy('timestamp', 'desc')
+        orderBy('createdAt', 'desc')
       );
       
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -56,7 +56,7 @@ export const useSignalSync = () => {
       const q = query(
         signalsRef, 
         where('userId', '==', user.uid),
-        orderBy('timestamp', 'desc')
+        orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
       const userSignals = snapshot.docs.map(doc => ({
