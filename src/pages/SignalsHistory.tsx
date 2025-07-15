@@ -71,7 +71,7 @@ const getResultText = (result: string | number | null | undefined) => {
 };
 const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
-  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals } = useSignalSync();
+  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals, updateSignal } = useSignalSync();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -266,30 +266,24 @@ const SignalsHistory = () => {
       const validationResults = await validateMultipleSignalsWithBybit(pendingSignals);
       console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
 
-      // Atualizar sinais com os resultados
-      const updatedSignals = signals.map(signal => {
-        const validation = validationResults.find(v => v.id === signal.id);
+      // Atualizar sinais com os resultados usando useSignalSync
+      for (const validation of validationResults) {
         if (validation) {
-          return {
-            ...signal,
+          const updates = {
             result: validation.result,
             profit: validation.profit,
             validationDetails: validation.validationDetails,
             verifiedAt: new Date().toISOString(),
             completedAt: validation.result !== "PENDING" ? new Date().toISOString() : undefined,
-            // Atualizar targets se existirem
-            targets: validation.targets || signal.targets
+            targets: validation.targets
           };
+          
+          // Usar updateSignal do useSignalSync para persistir no Firebase/localStorage
+          await updateSignal(validation.id, updates);
         }
-        return signal;
-      });
-
-      // Salvar resultados
-      setSignals(updatedSignals);
-      setFilteredSignals(updatedSignals);
-      if (isLocalMode) {
-        saveSignalsToHistory(updatedSignals);
       }
+
+      // Os sinais serão atualizados automaticamente via Firebase listener ou setSignals
 
       // Performance data will be recalculated on next load
       console.log('✅ Signals validated and saved to history');
