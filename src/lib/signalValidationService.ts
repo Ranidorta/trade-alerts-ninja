@@ -503,7 +503,15 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
  * Validates multiple signals in batches to respect API rate limits
  */
 export async function validateMultipleSignalsWithBybit(signals: TradingSignal[]): Promise<TradingSignal[]> {
+  console.log(`🚀 [BATCH_VALIDATION] validateMultipleSignalsWithBybit chamada com ${signals.length} sinais`);
   console.log(`🚀 [BATCH_VALIDATION] Starting batch validation of ${signals.length} signals using Bybit API`);
+  console.log('🚀 [BATCH_VALIDATION] Signals details:', signals.map(s => ({ 
+    id: s.id, 
+    symbol: s.symbol, 
+    direction: s.direction,
+    entryPrice: s.entryPrice,
+    createdAt: s.createdAt 
+  })));
   
   if (!signals || signals.length === 0) {
     console.warn('⚠️ [BATCH_VALIDATION] No signals provided for validation');

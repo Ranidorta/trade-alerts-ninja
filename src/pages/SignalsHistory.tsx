@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
+import TestValidation from '../test-validation';
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -250,6 +251,7 @@ const SignalsHistory = () => {
 
   // Validação de sinais com progresso e fallback offline
   const handleValidateSignals = async () => {
+    console.log("🚀 [VALIDATION_FUNCTION_CALLED] handleValidateSignals foi chamada!");
     let processedCount = 0;
     let failedUpdates: string[] = [];
     
@@ -490,6 +492,11 @@ const SignalsHistory = () => {
   }
   return <div className="container mx-auto px-4 py-8">
       <PageHeader title="Histórico de Sinais" description={isLocalMode ? "Sinais carregados do localStorage - validação usando dados reais da Bybit" : "Sinais carregados do backend - validação automática"} />
+      
+      {/* Componente de teste temporário */}
+      <div className="mb-4">
+        <TestValidation />
+      </div>
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
         {/* Search */}
