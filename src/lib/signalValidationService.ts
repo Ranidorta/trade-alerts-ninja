@@ -458,6 +458,11 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
 export async function validateMultipleSignalsWithBybit(signals: TradingSignal[]): Promise<TradingSignal[]> {
   console.log(`🚀 [BATCH_VALIDATION] Starting batch validation of ${signals.length} signals using Bybit API`);
   
+  if (!signals || signals.length === 0) {
+    console.warn('⚠️ [BATCH_VALIDATION] No signals provided for validation');
+    return [];
+  }
+  
   const results: TradingSignal[] = [];
   
   // Process signals in small batches to avoid overwhelming the API
@@ -479,5 +484,6 @@ export async function validateMultipleSignalsWithBybit(signals: TradingSignal[])
   }
   
   console.log(`✅ [BATCH_VALIDATION] Completed batch validation of ${results.length} signals`);
+  console.log(`🔍 [BATCH_VALIDATION] Final results summary:`, results.map(r => ({ id: r.id, symbol: r.symbol, result: r.result, error: r.error })));
   return results;
 }

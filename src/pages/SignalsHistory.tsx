@@ -258,6 +258,7 @@ const SignalsHistory = () => {
           title: "Nenhum sinal pendente",
           description: "Todos os sinais já foram validados."
         });
+        setIsValidating(false);
         return;
       }
       
@@ -280,6 +281,7 @@ const SignalsHistory = () => {
           description: "Nenhum resultado foi retornado pela validação.",
           variant: "destructive"
         });
+        setIsValidating(false);
         return;
       }
 
@@ -331,18 +333,17 @@ const SignalsHistory = () => {
       // Performance data will be recalculated on next load
       console.log('✅ Signals validated and saved to history');
 
-      // Mostrar resultado
-      const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
       toast({
         title: "Validação concluída",
-        description: `${completedValidations} de ${pendingSignals.length} sinais validados com sucesso.`
+        description: `${validationResults.length} sinais foram processados com sucesso.`
       });
+
     } catch (error) {
-      console.error("❌ [VALIDATION] Erro na validação:", error);
+      console.error('❌ [VALIDATION] Erro durante validação:', error);
       toast({
-        variant: "destructive",
         title: "Erro na validação",
-        description: "Não foi possível validar os sinais. Tente novamente."
+        description: error instanceof Error ? error.message : "Ocorreu um erro durante a validação",
+        variant: "destructive"
       });
     } finally {
       setIsValidating(false);

@@ -33,10 +33,12 @@ export const useSignalSync = () => {
       );
       
       const unsubscribe = onSnapshot(q, (snapshot) => {
+        console.log(`🔥 [FIREBASE_LISTENER] Recebidos ${snapshot.docs.length} documentos do Firebase`);
         const userSignals = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as TradingSignal[];
+        console.log(`🔥 [FIREBASE_LISTENER] Sinais processados:`, userSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result })));
         setSignals(userSignals);
       });
 
