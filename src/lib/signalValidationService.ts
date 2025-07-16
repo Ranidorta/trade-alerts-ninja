@@ -1,5 +1,10 @@
 import { TradingSignal, SignalResult } from "./types";
 
+// Constants for retry logic and timeouts
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second delay between retries
+const REQUEST_TIMEOUT = 10000; // 10 seconds timeout
+
 interface BybitKlineData {
   start_time: string;
   open: string;
@@ -21,7 +26,46 @@ interface BybitApiResponse {
 }
 
 /**
- * Fetches historical price data from Bybit API for signal validation
+ * Creates a fetch request with timeout
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Retries a function with exponential backoff
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = MAX_RETRIES,
+  delay: number = RETRY_DELAY
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries <= 0) {
+      throw error;
+    }
+    
+    console.warn(`🔄 [RETRY] Attempt failed, retrying in ${delay}ms... (${retries} retries left)`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return withRetry(fn, retries - 1, delay * 2); // Exponential backoff
+  }
+}
+
+/**
+ * Fetches historical price data from Bybit API for signal validation with retry logic
  */
 async function fetchBybitHistoricalData(
   symbol: string,
@@ -39,47 +83,50 @@ async function fetchBybitHistoricalData(
 
   console.log(`📊 [BYBIT_API] Fetching historical data: ${url}?${params}`);
 
-  try {
-    const response = await fetch(`${url}?${params}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+  return withRetry(async () => {
+    try {
+      const response = await fetchWithTimeout(`${url}?${params}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data: BybitApiResponse = await response.json();
+
+      if (data.retCode !== 0 || data.retMsg !== 'OK') {
+        throw new Error(`Bybit API error: ${data.retMsg} (Code: ${data.retCode})`);
+      }
+
+      if (!data.result?.list || data.result.list.length === 0) {
+        console.warn(`⚠️ [BYBIT_API] No data returned for ${symbol}`);
+        return [];
+      }
+
+      // Convert Bybit response format to structured data
+      const klineData: BybitKlineData[] = data.result.list.map(candle => ({
+        start_time: candle[0],
+        open: candle[1],
+        high: candle[2],
+        low: candle[3],
+        close: candle[4],
+        volume: candle[5],
+        turnover: candle[6]
+      }));
+
+      console.log(`✅ [BYBIT_API] Retrieved ${klineData.length} candles for ${symbol}`);
+      return klineData;
+
+    } catch (error) {
+      console.error(`❌ [BYBIT_API] Error fetching data for ${symbol}:`, error);
+      throw error;
     }
-
-    const data: BybitApiResponse = await response.json();
-
-    if (data.retCode !== 0 || data.retMsg !== 'OK') {
-      throw new Error(`Bybit API error: ${data.retMsg}`);
-    }
-
-    if (!data.result?.list || data.result.list.length === 0) {
-      console.warn(`⚠️ [BYBIT_API] No data returned for ${symbol}`);
-      return [];
-    }
-
-    // Convert Bybit response format to structured data
-    const klineData: BybitKlineData[] = data.result.list.map(candle => ({
-      start_time: candle[0],
-      open: candle[1],
-      high: candle[2],
-      low: candle[3],
-      close: candle[4],
-      volume: candle[5],
-      turnover: candle[6]
-    }));
-
-    console.log(`✅ [BYBIT_API] Retrieved ${klineData.length} candles for ${symbol}`);
-    return klineData;
-
-  } catch (error) {
-    console.error(`❌ [BYBIT_API] Error fetching data for ${symbol}:`, error);
-    throw error;
-  }
+  });
 }
 
 /**

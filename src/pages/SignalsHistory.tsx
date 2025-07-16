@@ -71,7 +71,14 @@ const getResultText = (result: string | number | null | undefined) => {
 };
 const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
-  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals, updateSignal } = useSignalSync();
+  const { 
+    signals: firebaseSignals, 
+    isLoading: firebaseLoading, 
+    loadSignals, 
+    updateSignal,
+    isOnline,
+    isFirebaseConnected 
+  } = useSignalSync();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,24 +248,46 @@ const SignalsHistory = () => {
     loadEvaluationStatus();
   };
 
-  // Validação de sinais (fluxo correto)
+  // Validação de sinais com progresso e fallback offline
   const handleValidateSignals = async () => {
+    let processedCount = 0;
+    let failedUpdates: string[] = [];
+    
     try {
       setIsValidating(true);
       console.log("🔍 [VALIDATION] Iniciando validação de sinais...");
       console.log(`🔍 [DEBUG] Total de sinais: ${signals.length}`);
 
       // Filtrar sinais que precisam de validação
-      const pendingSignals = signals.filter(signal => !signal.result || signal.result === null || signal.result === undefined || signal.result === "PENDING");
+      const pendingSignals = signals.filter(signal => 
+        !signal.result || 
+        signal.result === null || 
+        signal.result === undefined || 
+        signal.result === "PENDING"
+      );
+      
       console.log(`📊 [VALIDATION] ${pendingSignals.length} sinais precisam de validação`);
-      console.log('📊 [DEBUG] Sinais pendentes:', pendingSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result })));
+      console.log('📊 [DEBUG] Sinais pendentes:', pendingSignals.map(s => ({ 
+        id: s.id, 
+        symbol: s.symbol, 
+        result: s.result 
+      })));
       
       if (pendingSignals.length === 0) {
         toast({
           title: "Nenhum sinal pendente",
           description: "Todos os sinais já foram validados."
         });
-        setIsValidating(false);
+        return;
+      }
+      
+      // Verificar conectividade
+      if (!isOnline) {
+        toast({
+          title: "Sem conexão",
+          description: "Validação requer conexão com a internet. Conecte-se e tente novamente.",
+          variant: "destructive"
+        });
         return;
       }
       
@@ -281,17 +310,17 @@ const SignalsHistory = () => {
           description: "Nenhum resultado foi retornado pela validação.",
           variant: "destructive"
         });
-        setIsValidating(false);
         return;
       }
 
-      // Atualizar sinais com os resultados usando useSignalSync
+      // Atualizar sinais progressivamente
       const updatedSignals = [...signals];
       console.log('🔄 [DEBUG] Atualizando sinais...');
       
       for (const validation of validationResults) {
         if (validation) {
-          console.log(`🔄 [DEBUG] Atualizando sinal ${validation.id} com resultado: ${validation.result}`);
+          processedCount++;
+          console.log(`🔄 [DEBUG] Processando ${processedCount}/${validationResults.length}: Atualizando sinal ${validation.id} com resultado: ${validation.result}`);
           
           const updates = {
             result: validation.result,
@@ -304,15 +333,7 @@ const SignalsHistory = () => {
           
           console.log('🔄 [DEBUG] Updates:', updates);
           
-          // Usar updateSignal do useSignalSync para persistir no Firebase/localStorage
-          try {
-            await updateSignal(validation.id, updates);
-            console.log(`✅ [DEBUG] updateSignal chamado para ${validation.id}`);
-          } catch (error) {
-            console.error(`❌ [DEBUG] Erro ao chamar updateSignal para ${validation.id}:`, error);
-          }
-          
-          // Atualizar também o estado local imediatamente
+          // Atualizar estado local imediatamente
           const signalIndex = updatedSignals.findIndex(s => s.id === validation.id);
           if (signalIndex !== -1) {
             updatedSignals[signalIndex] = { ...updatedSignals[signalIndex], ...updates };
@@ -320,29 +341,92 @@ const SignalsHistory = () => {
           } else {
             console.warn(`⚠️ [DEBUG] Sinal ${validation.id} não encontrado no estado local`);
           }
+          
+          // Tentar persistir no Firebase/localStorage
+          try {
+            await updateSignal(validation.id, updates);
+            console.log(`✅ [DEBUG] updateSignal chamado para ${validation.id}`);
+          } catch (error) {
+            console.error(`❌ [DEBUG] Erro ao chamar updateSignal para ${validation.id}:`, error);
+            failedUpdates.push(validation.id);
+            
+            // Fallback: salvar no localStorage
+            try {
+              const localSignals = getSignalHistory();
+              const updatedLocalSignals = localSignals.map(signal =>
+                signal.id === validation.id ? { ...signal, ...updates } : signal
+              );
+              localStorage.setItem('trade_signal_history', JSON.stringify(updatedLocalSignals));
+              console.log(`💾 [FALLBACK] Sinal ${validation.id} salvo no localStorage`);
+            } catch (localError) {
+              console.error(`❌ [FALLBACK] Erro ao salvar no localStorage:`, localError);
+            }
+          }
+          
+          // Mostrar progresso a cada 3 sinais processados
+          if (processedCount % 3 === 0 || processedCount === validationResults.length) {
+            toast({
+              title: `Progresso: ${processedCount}/${validationResults.length}`,
+              description: `${Math.round((processedCount / validationResults.length) * 100)}% concluído`,
+            });
+          }
         }
       }
 
       console.log('🔄 [DEBUG] Definindo novos estados...');
-      console.log('🔄 [DEBUG] updatedSignals:', updatedSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result })));
+      console.log('🔄 [DEBUG] updatedSignals:', updatedSignals.map(s => ({ 
+        id: s.id, 
+        symbol: s.symbol, 
+        result: s.result 
+      })));
 
-      // Atualizar estado local imediatamente para mostrar os resultados
+      // Atualizar estado local para mostrar os resultados
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
 
-      // Performance data will be recalculated on next load
+      // Salvar backup no localStorage
+      try {
+        saveSignalsToHistory(updatedSignals);
+        console.log('💾 [BACKUP] Sinais salvos no localStorage como backup');
+      } catch (backupError) {
+        console.error('❌ [BACKUP] Erro ao salvar backup:', backupError);
+      }
+
       console.log('✅ Signals validated and saved to history');
 
-      toast({
-        title: "Validação concluída",
-        description: `${validationResults.length} sinais foram processados com sucesso.`
-      });
+      // Mostrar resultado final
+      const successCount = validationResults.length - failedUpdates.length;
+      if (failedUpdates.length > 0) {
+        toast({
+          title: "Validação concluída com avisos",
+          description: `${successCount} sinais validados com sucesso. ${failedUpdates.length} falharam na sincronização mas foram salvos localmente.`,
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Validação concluída",
+          description: `${successCount} sinais foram processados e sincronizados com sucesso.`
+        });
+      }
 
     } catch (error) {
       console.error('❌ [VALIDATION] Erro durante validação:', error);
+      
+      // Mostrar erro detalhado
+      let errorMessage = "Ocorreu um erro durante a validação";
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          errorMessage = "Erro de conectividade. Verifique sua conexão e tente novamente.";
+        } else if (error.message.includes('timeout')) {
+          errorMessage = "Timeout na validação. Tente validar poucos sinais por vez.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Erro na validação",
-        description: error instanceof Error ? error.message : "Ocorreu um erro durante a validação",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -523,12 +607,27 @@ const SignalsHistory = () => {
       </Card>
       
       {/* Connection status */}
-      <div className={`mb-4 flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
-        <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-        {isLocalMode ? 'Modo Local: Avaliação usando dados reais da Bybit' : 'Sinais carregados do backend e avaliados automaticamente'}
-        <span className="text-xs text-muted-foreground ml-2">
-          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
-        </span>
+      <div className="mb-4 space-y-2">
+        <div className={`flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
+          <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+          {isLocalMode ? 'Modo Local: Avaliação usando dados reais da Bybit' : 'Sinais carregados do backend e avaliados automaticamente'}
+          <span className="text-xs text-muted-foreground ml-2">
+            {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
+          </span>
+        </div>
+        
+        {/* Connectivity indicators */}
+        <div className="flex items-center gap-4 text-xs">
+          <div className={`flex items-center gap-1 ${isOnline ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            {isOnline ? 'Online' : 'Offline'}
+          </div>
+          
+          <div className={`flex items-center gap-1 ${isFirebaseConnected ? 'text-green-600' : 'text-amber-600'}`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${isFirebaseConnected ? 'bg-green-500' : 'bg-amber-500'}`}></div>
+            Firebase: {isFirebaseConnected ? 'Conectado' : 'Reconectando...'}
+          </div>
+        </div>
       </div>
       
       {/* No results message */}
