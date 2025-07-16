@@ -104,7 +104,12 @@ export const useSignalSync = () => {
       if (user) {
         // Update in Firestore if authenticated
         const signalRef = doc(db, 'user_signals', signalId);
-        await updateDoc(signalRef, updates);
+        console.log(`🔥 [FIREBASE] Atualizando sinal ${signalId} no Firebase:`, updates);
+        await updateDoc(signalRef, {
+          ...updates,
+          updatedAt: new Date().toISOString()
+        });
+        console.log(`✅ [FIREBASE] Sinal ${signalId} atualizado no Firebase com sucesso`);
         // Signals will be updated automatically via the real-time listener
       } else {
         // Update in localStorage if not authenticated
