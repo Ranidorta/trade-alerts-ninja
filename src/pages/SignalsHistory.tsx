@@ -246,10 +246,13 @@ const SignalsHistory = () => {
     try {
       setIsValidating(true);
       console.log("🔍 [VALIDATION] Iniciando validação de sinais...");
+      console.log(`🔍 [DEBUG] Total de sinais: ${signals.length}`);
 
       // Filtrar sinais que precisam de validação
       const pendingSignals = signals.filter(signal => !signal.result || signal.result === null || signal.result === undefined || signal.result === "PENDING");
       console.log(`📊 [VALIDATION] ${pendingSignals.length} sinais precisam de validação`);
+      console.log('📊 [DEBUG] Sinais pendentes:', pendingSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result })));
+      
       if (pendingSignals.length === 0) {
         toast({
           title: "Nenhum sinal pendente",
@@ -257,20 +260,37 @@ const SignalsHistory = () => {
         });
         return;
       }
+      
       toast({
         title: "Validação iniciada",
         description: `Validando ${pendingSignals.length} sinais com dados da Bybit...`
       });
 
+      console.log('🔍 [DEBUG] Chamando validateMultipleSignalsWithBybit...');
+      
       // Validar sinais usando dados históricos da Bybit
       const validationResults = await validateMultipleSignalsWithBybit(pendingSignals);
       console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
+      console.log('✅ [DEBUG] Resultados da validação:', validationResults);
+
+      if (!validationResults || validationResults.length === 0) {
+        console.warn('⚠️ [DEBUG] Nenhum resultado de validação retornado');
+        toast({
+          title: "Erro na validação",
+          description: "Nenhum resultado foi retornado pela validação.",
+          variant: "destructive"
+        });
+        return;
+      }
 
       // Atualizar sinais com os resultados usando useSignalSync
       const updatedSignals = [...signals];
+      console.log('🔄 [DEBUG] Atualizando sinais...');
       
       for (const validation of validationResults) {
         if (validation) {
+          console.log(`🔄 [DEBUG] Atualizando sinal ${validation.id} com resultado: ${validation.result}`);
+          
           const updates = {
             result: validation.result,
             profit: validation.profit,
@@ -280,16 +300,29 @@ const SignalsHistory = () => {
             targets: validation.targets
           };
           
+          console.log('🔄 [DEBUG] Updates:', updates);
+          
           // Usar updateSignal do useSignalSync para persistir no Firebase/localStorage
-          await updateSignal(validation.id, updates);
+          try {
+            await updateSignal(validation.id, updates);
+            console.log(`✅ [DEBUG] updateSignal chamado para ${validation.id}`);
+          } catch (error) {
+            console.error(`❌ [DEBUG] Erro ao chamar updateSignal para ${validation.id}:`, error);
+          }
           
           // Atualizar também o estado local imediatamente
           const signalIndex = updatedSignals.findIndex(s => s.id === validation.id);
           if (signalIndex !== -1) {
             updatedSignals[signalIndex] = { ...updatedSignals[signalIndex], ...updates };
+            console.log(`✅ [DEBUG] Sinal ${validation.id} atualizado no estado local`);
+          } else {
+            console.warn(`⚠️ [DEBUG] Sinal ${validation.id} não encontrado no estado local`);
           }
         }
       }
+
+      console.log('🔄 [DEBUG] Definindo novos estados...');
+      console.log('🔄 [DEBUG] updatedSignals:', updatedSignals.map(s => ({ id: s.id, symbol: s.symbol, result: s.result })));
 
       // Atualizar estado local imediatamente para mostrar os resultados
       setSignals(updatedSignals);
