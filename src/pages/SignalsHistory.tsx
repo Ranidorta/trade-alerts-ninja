@@ -267,6 +267,8 @@ const SignalsHistory = () => {
       console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
 
       // Atualizar sinais com os resultados usando useSignalSync
+      const updatedSignals = [...signals];
+      
       for (const validation of validationResults) {
         if (validation) {
           const updates = {
@@ -280,10 +282,18 @@ const SignalsHistory = () => {
           
           // Usar updateSignal do useSignalSync para persistir no Firebase/localStorage
           await updateSignal(validation.id, updates);
+          
+          // Atualizar também o estado local imediatamente
+          const signalIndex = updatedSignals.findIndex(s => s.id === validation.id);
+          if (signalIndex !== -1) {
+            updatedSignals[signalIndex] = { ...updatedSignals[signalIndex], ...updates };
+          }
         }
       }
 
-      // Os sinais serão atualizados automaticamente via Firebase listener ou setSignals
+      // Atualizar estado local imediatamente para mostrar os resultados
+      setSignals(updatedSignals);
+      setFilteredSignals(updatedSignals);
 
       // Performance data will be recalculated on next load
       console.log('✅ Signals validated and saved to history');
