@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
-import TestValidation from '../test-validation';
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -72,14 +71,7 @@ const getResultText = (result: string | number | null | undefined) => {
 };
 const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
-  const { 
-    signals: firebaseSignals, 
-    isLoading: firebaseLoading, 
-    loadSignals, 
-    updateSignal,
-    isOnline,
-    isFirebaseConnected 
-  } = useSignalSync();
+  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals } = useSignalSync();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -93,8 +85,6 @@ const SignalsHistory = () => {
 
   // Update signals when Firebase signals change
   useEffect(() => {
-    console.log(`🔥 Firebase loading: ${firebaseLoading}, signals: ${firebaseSignals?.length || 0}`);
-    
     if (firebaseSignals && firebaseSignals.length > 0) {
       console.log(`🔥 Firebase: ${firebaseSignals.length} sinais carregados`);
       setSignals(firebaseSignals);
@@ -103,7 +93,6 @@ const SignalsHistory = () => {
       setIsLoading(false);
     } else if (!firebaseLoading) {
       // Se Firebase não tem sinais, usar localStorage como fallback
-      console.log('Firebase vazio, tentando localStorage...');
       loadSignalsFromBackend();
     }
   }, [firebaseSignals, firebaseLoading]);
@@ -158,48 +147,14 @@ const SignalsHistory = () => {
       setIsLocalMode(true);
       const localSignals = getSignalHistory();
       if (!localSignals || localSignals.length === 0) {
-        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage, gerando sinais locais...");
-        
-        // Se não há sinais salvos, vamos gerar alguns sinais de exemplo
-        const exampleSignals: TradingSignal[] = [
-          {
-            id: `local-${Date.now()}-1`,
-            symbol: 'BTCUSDT',
-            direction: 'BUY' as const,
-            entryPrice: 45000,
-            stopLoss: 44000,
-            tp1: 46000,
-            tp2: 47000,
-            tp3: 48000,
-            strategy: 'local_example',
-            createdAt: new Date().toISOString(),
-            status: 'WAITING',
-            result: null,
-            profit: null
-          },
-          {
-            id: `local-${Date.now()}-2`,
-            symbol: 'ETHUSDT',
-            direction: 'SELL' as const,
-            entryPrice: 3000,
-            stopLoss: 3100,
-            tp1: 2900,
-            tp2: 2800,
-            tp3: 2700,
-            strategy: 'local_example',
-            createdAt: new Date().toISOString(),
-            status: 'WAITING',
-            result: null,
-            profit: null
-          }
-        ];
-        
-        setSignals(exampleSignals);
-        setFilteredSignals(exampleSignals);
+        console.log("❌ [SIGNALS_LOAD] Nenhum sinal encontrado no localStorage");
         toast({
-          title: "Sinais de exemplo",
-          description: `${exampleSignals.length} sinais de exemplo criados. Conecte ao backend ou Firebase para sinais reais.`
+          variant: "destructive",
+          title: "Nenhum Sinal Encontrado",
+          description: "Não há sinais salvos. Conecte ao backend para carregar sinais."
         });
+        setSignals([]);
+        setFilteredSignals([]);
       } else {
         console.log(`✅ [SIGNALS_LOAD] ${localSignals.length} sinais carregados do localStorage`);
         setSignals(localSignals);
@@ -242,39 +197,23 @@ const SignalsHistory = () => {
 
   // Refresh manual
   const handleRefresh = () => {
-    // Não limpar localStorage aqui, deixar ele como fallback
-    // Recarregar do Firebase primeiro
+    // Limpar localStorage para forçar carregamento completo
+    localStorage.removeItem('trade_signal_history');
+    // Recarregar do Firebase
     loadSignals();
     loadSignalsFromBackend(true);
     loadEvaluationStatus();
   };
 
-  // Validação de sinais com progresso e fallback offline
+  // Validação de sinais (fluxo correto)
   const handleValidateSignals = async () => {
-    console.log("🚀 [VALIDATION_FUNCTION_CALLED] handleValidateSignals foi chamada!");
-    let processedCount = 0;
-    let failedUpdates: string[] = [];
-    
     try {
       setIsValidating(true);
       console.log("🔍 [VALIDATION] Iniciando validação de sinais...");
-      console.log(`🔍 [DEBUG] Total de sinais: ${signals.length}`);
 
       // Filtrar sinais que precisam de validação
-      const pendingSignals = signals.filter(signal => 
-        !signal.result || 
-        signal.result === null || 
-        signal.result === undefined || 
-        signal.result === "PENDING"
-      );
-      
+      const pendingSignals = signals.filter(signal => !signal.result || signal.result === null || signal.result === undefined || signal.result === "PENDING");
       console.log(`📊 [VALIDATION] ${pendingSignals.length} sinais precisam de validação`);
-      console.log('📊 [DEBUG] Sinais pendentes:', pendingSignals.map(s => ({ 
-        id: s.id, 
-        symbol: s.symbol, 
-        result: s.result 
-      })));
-      
       if (pendingSignals.length === 0) {
         toast({
           title: "Nenhum sinal pendente",
@@ -282,154 +221,55 @@ const SignalsHistory = () => {
         });
         return;
       }
-      
-      // Verificar conectividade
-      if (!isOnline) {
-        toast({
-          title: "Sem conexão",
-          description: "Validação requer conexão com a internet. Conecte-se e tente novamente.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
       toast({
         title: "Validação iniciada",
         description: `Validando ${pendingSignals.length} sinais com dados da Bybit...`
       });
 
-      console.log('🔍 [DEBUG] Chamando validateMultipleSignalsWithBybit...');
-      
       // Validar sinais usando dados históricos da Bybit
       const validationResults = await validateMultipleSignalsWithBybit(pendingSignals);
       console.log(`✅ [VALIDATION] ${validationResults.length} sinais validados`);
-      console.log('✅ [DEBUG] Resultados da validação:', validationResults);
 
-      if (!validationResults || validationResults.length === 0) {
-        console.warn('⚠️ [DEBUG] Nenhum resultado de validação retornado');
-        toast({
-          title: "Erro na validação",
-          description: "Nenhum resultado foi retornado pela validação.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Atualizar sinais progressivamente
-      const updatedSignals = [...signals];
-      console.log('🔄 [DEBUG] Atualizando sinais...');
-      
-      for (const validation of validationResults) {
+      // Atualizar sinais com os resultados
+      const updatedSignals = signals.map(signal => {
+        const validation = validationResults.find(v => v.id === signal.id);
         if (validation) {
-          processedCount++;
-          console.log(`🔄 [DEBUG] Processando ${processedCount}/${validationResults.length}: Atualizando sinal ${validation.id} com resultado: ${validation.result}`);
-          
-          const updates = {
+          return {
+            ...signal,
             result: validation.result,
             profit: validation.profit,
             validationDetails: validation.validationDetails,
             verifiedAt: new Date().toISOString(),
             completedAt: validation.result !== "PENDING" ? new Date().toISOString() : undefined,
-            targets: validation.targets
+            // Atualizar targets se existirem
+            targets: validation.targets || signal.targets
           };
-          
-          console.log('🔄 [DEBUG] Updates:', updates);
-          
-          // Atualizar estado local imediatamente
-          const signalIndex = updatedSignals.findIndex(s => s.id === validation.id);
-          if (signalIndex !== -1) {
-            updatedSignals[signalIndex] = { ...updatedSignals[signalIndex], ...updates };
-            console.log(`✅ [DEBUG] Sinal ${validation.id} atualizado no estado local`);
-          } else {
-            console.warn(`⚠️ [DEBUG] Sinal ${validation.id} não encontrado no estado local`);
-          }
-          
-          // Tentar persistir no Firebase/localStorage
-          try {
-            await updateSignal(validation.id, updates);
-            console.log(`✅ [DEBUG] updateSignal chamado para ${validation.id}`);
-          } catch (error) {
-            console.error(`❌ [DEBUG] Erro ao chamar updateSignal para ${validation.id}:`, error);
-            failedUpdates.push(validation.id);
-            
-            // Fallback: salvar no localStorage
-            try {
-              const localSignals = getSignalHistory();
-              const updatedLocalSignals = localSignals.map(signal =>
-                signal.id === validation.id ? { ...signal, ...updates } : signal
-              );
-              localStorage.setItem('trade_signal_history', JSON.stringify(updatedLocalSignals));
-              console.log(`💾 [FALLBACK] Sinal ${validation.id} salvo no localStorage`);
-            } catch (localError) {
-              console.error(`❌ [FALLBACK] Erro ao salvar no localStorage:`, localError);
-            }
-          }
-          
-          // Mostrar progresso a cada 3 sinais processados
-          if (processedCount % 3 === 0 || processedCount === validationResults.length) {
-            toast({
-              title: `Progresso: ${processedCount}/${validationResults.length}`,
-              description: `${Math.round((processedCount / validationResults.length) * 100)}% concluído`,
-            });
-          }
         }
-      }
+        return signal;
+      });
 
-      console.log('🔄 [DEBUG] Definindo novos estados...');
-      console.log('🔄 [DEBUG] updatedSignals:', updatedSignals.map(s => ({ 
-        id: s.id, 
-        symbol: s.symbol, 
-        result: s.result 
-      })));
-
-      // Atualizar estado local para mostrar os resultados
+      // Salvar resultados
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
-
-      // Salvar backup no localStorage
-      try {
+      if (isLocalMode) {
         saveSignalsToHistory(updatedSignals);
-        console.log('💾 [BACKUP] Sinais salvos no localStorage como backup');
-      } catch (backupError) {
-        console.error('❌ [BACKUP] Erro ao salvar backup:', backupError);
       }
 
+      // Performance data will be recalculated on next load
       console.log('✅ Signals validated and saved to history');
 
-      // Mostrar resultado final
-      const successCount = validationResults.length - failedUpdates.length;
-      if (failedUpdates.length > 0) {
-        toast({
-          title: "Validação concluída com avisos",
-          description: `${successCount} sinais validados com sucesso. ${failedUpdates.length} falharam na sincronização mas foram salvos localmente.`,
-          variant: "default"
-        });
-      } else {
-        toast({
-          title: "Validação concluída",
-          description: `${successCount} sinais foram processados e sincronizados com sucesso.`
-        });
-      }
-
-    } catch (error) {
-      console.error('❌ [VALIDATION] Erro durante validação:', error);
-      
-      // Mostrar erro detalhado
-      let errorMessage = "Ocorreu um erro durante a validação";
-      if (error instanceof Error) {
-        if (error.message.includes('fetch')) {
-          errorMessage = "Erro de conectividade. Verifique sua conexão e tente novamente.";
-        } else if (error.message.includes('timeout')) {
-          errorMessage = "Timeout na validação. Tente validar poucos sinais por vez.";
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
+      // Mostrar resultado
+      const completedValidations = validationResults.filter(v => v.result !== "PENDING").length;
       toast({
+        title: "Validação concluída",
+        description: `${completedValidations} de ${pendingSignals.length} sinais validados com sucesso.`
+      });
+    } catch (error) {
+      console.error("❌ [VALIDATION] Erro na validação:", error);
+      toast({
+        variant: "destructive",
         title: "Erro na validação",
-        description: errorMessage,
-        variant: "destructive"
+        description: "Não foi possível validar os sinais. Tente novamente."
       });
     } finally {
       setIsValidating(false);
@@ -492,11 +332,6 @@ const SignalsHistory = () => {
   }
   return <div className="container mx-auto px-4 py-8">
       <PageHeader title="Histórico de Sinais" description={isLocalMode ? "Sinais carregados do localStorage - validação usando dados reais da Bybit" : "Sinais carregados do backend - validação automática"} />
-      
-      {/* Componente de teste temporário */}
-      <div className="mb-4">
-        <TestValidation />
-      </div>
       
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
         {/* Search */}
@@ -614,27 +449,12 @@ const SignalsHistory = () => {
       </Card>
       
       {/* Connection status */}
-      <div className="mb-4 space-y-2">
-        <div className={`flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
-          <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-          {isLocalMode ? 'Modo Local: Avaliação usando dados reais da Bybit' : 'Sinais carregados do backend e avaliados automaticamente'}
-          <span className="text-xs text-muted-foreground ml-2">
-            {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
-          </span>
-        </div>
-        
-        {/* Connectivity indicators */}
-        <div className="flex items-center gap-4 text-xs">
-          <div className={`flex items-center gap-1 ${isOnline ? 'text-green-600' : 'text-red-600'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            {isOnline ? 'Online' : 'Offline'}
-          </div>
-          
-          <div className={`flex items-center gap-1 ${isFirebaseConnected ? 'text-green-600' : 'text-amber-600'}`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${isFirebaseConnected ? 'bg-green-500' : 'bg-amber-500'}`}></div>
-            Firebase: {isFirebaseConnected ? 'Conectado' : 'Reconectando...'}
-          </div>
-        </div>
+      <div className={`mb-4 flex items-center gap-2 text-sm ${isLocalMode ? 'text-amber-600' : 'text-green-600'}`}>
+        <div className={`w-2 h-2 rounded-full ${isLocalMode ? 'bg-amber-500' : 'bg-green-500'}`}></div>
+        {isLocalMode ? 'Modo Local: Avaliação usando dados reais da Bybit' : 'Sinais carregados do backend e avaliados automaticamente'}
+        <span className="text-xs text-muted-foreground ml-2">
+          {isLocalMode ? '(clique em "Validar Sinais" para validar)' : ''}
+        </span>
       </div>
       
       {/* No results message */}
