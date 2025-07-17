@@ -3,6 +3,7 @@ import { fetchSignalsHistory, triggerSignalEvaluation, getEvaluationStatus } fro
 import { validateMultipleSignalsWithBybit } from '@/lib/signalValidationService';
 import { getSignalHistory, saveSignalsToHistory } from '@/lib/signal-storage';
 import { useSignalSync } from '@/hooks/useSignalSync';
+import { useSignalPersistence } from '@/hooks/useSignalPersistence';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, X, Search, Calendar, Play, BarChart3, CheckCircle, Target } from 'lucide-react';
@@ -71,7 +72,7 @@ const getResultText = (result: string | number | null | undefined) => {
 };
 const getDirectionClass = (direction: string) => direction.toUpperCase() === 'BUY' ? 'default' : 'destructive';
 const SignalsHistory = () => {
-  const { signals: firebaseSignals, isLoading: firebaseLoading, loadSignals } = useSignalSync();
+  const { signals: firebaseSignals, isLoading: firebaseLoading, updateMultipleSignals, loadSignals } = useSignalSync();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +83,9 @@ const SignalsHistory = () => {
   const [isLocalMode, setIsLocalMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const { toast } = useToast();
+
+  // Garantir persistência automática dos sinais
+  useSignalPersistence(signals);
 
   // Update signals when Firebase signals change
   useEffect(() => {
@@ -248,11 +252,23 @@ const SignalsHistory = () => {
         return signal;
       });
 
-      // Salvar resultados
+      // GARANTIR SALVAMENTO IMEDIATO E PERSISTENTE
+      console.log('💾 [SAVE] Salvando sinais validados...');
+      
+      // 1. Atualizar estado local imediatamente
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
-      if (isLocalMode) {
-        saveSignalsToHistory(updatedSignals);
+      
+      // 2. Salvar no localStorage como backup imediato
+      saveSignalsToHistory(updatedSignals);
+      console.log('✅ [SAVE] Sinais salvos no localStorage');
+      
+      // 3. Salvar no Firebase/backend se possível
+      try {
+        await updateMultipleSignals(updatedSignals);
+        console.log('✅ [SAVE] Sinais salvos no Firebase/backend');
+      } catch (saveError) {
+        console.warn('⚠️ [SAVE] Erro ao salvar no Firebase, mantendo localStorage:', saveError);
       }
 
       // Performance data will be recalculated on next load

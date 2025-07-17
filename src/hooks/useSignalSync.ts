@@ -127,11 +127,49 @@ export const useSignalSync = () => {
     }
   };
 
+  const updateMultipleSignals = async (updatedSignals: TradingSignal[]) => {
+    try {
+      if (user) {
+        // Update each signal in Firestore if authenticated
+        const updatePromises = updatedSignals.map(signal => {
+          const signalRef = doc(db, 'user_signals', signal.id);
+          // Prepare signal data for Firestore (remove undefined values and non-serializable fields)
+          const signalData = {
+            ...signal,
+            userId: user.uid,
+            userEmail: user.email
+          };
+          // Remove undefined values that could cause issues
+          Object.keys(signalData).forEach(key => {
+            if ((signalData as any)[key] === undefined) {
+              delete (signalData as any)[key];
+            }
+          });
+          return updateDoc(signalRef, signalData as any);
+        });
+        await Promise.all(updatePromises);
+        console.log('✅ Multiple signals updated in Firestore');
+      } else {
+        // Update localStorage if not authenticated
+        localStorage.setItem('trade_signal_history', JSON.stringify(updatedSignals));
+        setSignals(updatedSignals);
+        console.log('✅ Multiple signals updated in localStorage');
+      }
+    } catch (error) {
+      console.error('Error updating multiple signals:', error);
+      // Fallback to localStorage update
+      localStorage.setItem('trade_signal_history', JSON.stringify(updatedSignals));
+      setSignals(updatedSignals);
+      console.log('⚠️ Fallback: Multiple signals saved to localStorage');
+    }
+  };
+
   return {
     signals,
     isLoading,
     saveSignal,
     updateSignal,
+    updateMultipleSignals,
     loadSignals,
   };
 };
