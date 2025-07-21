@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { RefreshCw, Search, Filter } from "lucide-react";
@@ -16,19 +17,9 @@ const ClassicSignalsTab = () => {
   const [directionFilter, setDirectionFilter] = useState<"ALL" | "BUY" | "SELL">("ALL");
   const [confidenceFilter, setConfidenceFilter] = useState<"ALL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
   const [isLoading, setIsLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isMobile = useIsMobile();
   const { toast } = useToast();
-
-  // Auto-refresh interval (60 seconds)
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      console.log("Auto-refreshing classic signals...");
-      loadClassicSignals();
-    }, 60000);
-
-    return () => clearInterval(intervalId);
-  }, []);
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
@@ -77,10 +68,10 @@ const ClassicSignalsTab = () => {
     setFilteredSignals(result);
   }, [signals, directionFilter, confidenceFilter, searchQuery]);
 
-  const loadClassicSignals = async () => {
+  const generateClassicSignals = async () => {
     setIsLoading(true);
     try {
-      console.log("🔄 Loading classic signals...");
+      console.log("🔄 Generating classic signals...");
       const classicSignals = await fetchClassicSignals();
       console.log("📊 Received signals:", classicSignals);
       
@@ -88,21 +79,21 @@ const ClassicSignalsTab = () => {
         console.log("✅ Setting signals state with:", classicSignals.length, "signals");
         setSignals(classicSignals);
         toast({
-          title: "Sinais Classic atualizados",
-          description: `${classicSignals.length} sinais carregados com sucesso`
+          title: "Sinais Classic gerados",
+          description: `${classicSignals.length} novos sinais foram gerados com sucesso`
         });
       } else {
         console.log("⚠️ No signals received");
         toast({
-          title: "Nenhum sinal classic encontrado",
-          description: "Tente novamente em alguns minutos"
+          title: "Nenhum sinal classic gerado",
+          description: "Não foi possível gerar sinais no momento. Tente novamente."
         });
       }
     } catch (error) {
-      console.error("❌ Error loading classic signals:", error);
+      console.error("❌ Error generating classic signals:", error);
       toast({
-        title: "Erro ao carregar sinais classic",
-        description: "Falha na conexão com o servidor",
+        title: "Erro ao gerar sinais classic",
+        description: "Falha na geração dos sinais",
         variant: "destructive"
       });
     } finally {
@@ -110,11 +101,6 @@ const ClassicSignalsTab = () => {
       setLastUpdated(new Date());
     }
   };
-
-  // Initial load
-  useEffect(() => {
-    loadClassicSignals();
-  }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -129,6 +115,7 @@ const ClassicSignalsTab = () => {
   };
 
   const formatLastUpdated = () => {
+    if (!lastUpdated) return "Nunca";
     return lastUpdated.toLocaleTimeString();
   };
 
@@ -145,22 +132,22 @@ const ClassicSignalsTab = () => {
             <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
               Classic AI Strategy
             </span>
-            {signals.length > 0 && (
+            {lastUpdated && (
               <span className="text-xs text-slate-500">
-                Última atualização: {formatLastUpdated()}
+                Última geração: {formatLastUpdated()}
               </span>
             )}
           </div>
         </div>
 
         <Button 
-          onClick={loadClassicSignals} 
-          variant="outline"
+          onClick={generateClassicSignals} 
+          variant="default"
           disabled={isLoading}
           className="w-full md:w-auto"
         >
           <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? 'Carregando...' : 'Atualizar Sinais'}
+          {isLoading ? 'Gerando Sinais...' : 'Gerar Sinais Classic'}
         </Button>
       </div>
 
@@ -337,6 +324,16 @@ const ClassicSignalsTab = () => {
         <div className="flex justify-center items-center py-8">
           <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
         </div>
+      ) : signals.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-slate-500 dark:text-slate-400 mb-4">
+            Nenhum sinal classic foi gerado ainda
+          </p>
+          <Button onClick={generateClassicSignals} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Gerar Primeiros Sinais
+          </Button>
+        </div>
       ) : filteredSignals.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
           {filteredSignals.map((signal) => (
@@ -349,9 +346,7 @@ const ClassicSignalsTab = () => {
       ) : (
         <div className="text-center py-8">
           <p className="text-slate-500 dark:text-slate-400">
-            {signals.length === 0 
-              ? "Nenhum sinal classic disponível no momento"
-              : "Nenhum sinal encontrado com os filtros aplicados"}
+            Nenhum sinal encontrado com os filtros aplicados
           </p>
         </div>
       )}
