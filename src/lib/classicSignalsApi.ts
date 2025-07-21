@@ -1,12 +1,15 @@
 import axios from 'axios';
 import { TradingSignal } from '@/lib/types';
 
-// Classic signals endpoint
-const CLASSIC_SIGNALS_ENDPOINT = 'https://trade-alerts-ninja.onrender.com/generate_classic_signal';
+// Try multiple endpoints for classic signals (localhost first for development)
+const CLASSIC_SIGNALS_ENDPOINTS = [
+  'http://localhost:5000/generate_classic_signal',
+  'https://trade-alerts-ninja.onrender.com/generate_classic_signal'
+];
 
 // Create axios instance for classic signals
 const classicApi = axios.create({
-  timeout: 15000,
+  timeout: 10000,
 });
 
 // Transform classic signal response to TradingSignal interface
@@ -43,53 +46,67 @@ const transformClassicSignal = (classicData: any): TradingSignal => {
   };
 };
 
+// Try multiple endpoints with fallback
+const tryEndpoint = async (endpoint: string): Promise<TradingSignal | null> => {
+  try {
+    const response = await classicApi.get(endpoint);
+    if (response.data && response.data.symbol) {
+      console.log(`✅ Got classic signal from ${endpoint}:`, response.data);
+      return transformClassicSignal(response.data);
+    }
+    return null;
+  } catch (error) {
+    console.warn(`⚠️ Failed to get classic signal from ${endpoint}:`, error.message);
+    return null;
+  }
+};
+
 // Fetch classic signals from the endpoint
 export const fetchClassicSignals = async (): Promise<TradingSignal[]> => {
   try {
-    console.log('🔥 Fetching classic signals from:', CLASSIC_SIGNALS_ENDPOINT);
-    
-    // Generate multiple signals by calling the endpoint multiple times
-    const signalPromises = [];
-    const symbolsToTry = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT', 'BNBUSDT', 'XRPUSDT', 'MATICUSDT'];
-    
-    // Call the endpoint for multiple symbols to get diverse signals
-    for (let i = 0; i < 5; i++) { // Generate up to 5 signals
-      signalPromises.push(
-        classicApi.get(CLASSIC_SIGNALS_ENDPOINT)
-          .then(response => {
-            console.log(`✅ Classic signal ${i + 1} response:`, response.data);
-            return transformClassicSignal(response.data);
-          })
-          .catch(error => {
-            console.warn(`⚠️ Failed to get classic signal ${i + 1}:`, error.message);
-            return null;
-          })
-      );
+    // Try each endpoint until one works
+    for (const endpoint of CLASSIC_SIGNALS_ENDPOINTS) {
+      console.log('🔥 Trying classic signals endpoint:', endpoint);
+      
+      // Generate multiple signals by calling the endpoint multiple times
+      const signalPromises = [];
+      
+      // Call the endpoint multiple times to get diverse signals
+      for (let i = 0; i < 5; i++) {
+        signalPromises.push(tryEndpoint(endpoint));
+      }
+      
+      // Wait for all promises to resolve
+      const results = await Promise.allSettled(signalPromises);
+      
+      // Filter out failed requests and null results
+      const validSignals = results
+        .filter((result): result is PromiseFulfilledResult<TradingSignal> => 
+          result.status === 'fulfilled' && result.value !== null
+        )
+        .map(result => result.value);
+      
+      // If we got any signals from this endpoint, use them
+      if (validSignals.length > 0) {
+        console.log(`✅ Successfully fetched ${validSignals.length} classic signals from ${endpoint}`);
+        
+        // Remove duplicates by symbol (keep the one with highest confidence)
+        const uniqueSignals = validSignals.reduce((acc, signal) => {
+          const existing = acc.find(s => s.symbol === signal.symbol);
+          if (!existing || (signal.confidence || 0) > (existing.confidence || 0)) {
+            return [...acc.filter(s => s.symbol !== signal.symbol), signal];
+          }
+          return acc;
+        }, [] as TradingSignal[]);
+        
+        console.log(`📊 Returning ${uniqueSignals.length} unique classic signals`);
+        return uniqueSignals;
+      }
     }
     
-    // Wait for all promises to resolve
-    const results = await Promise.allSettled(signalPromises);
-    
-    // Filter out failed requests and null results
-    const validSignals = results
-      .filter((result): result is PromiseFulfilledResult<TradingSignal> => 
-        result.status === 'fulfilled' && result.value !== null
-      )
-      .map(result => result.value);
-    
-    console.log(`✅ Successfully fetched ${validSignals.length} classic signals`);
-    
-    // Remove duplicates by symbol (keep the one with highest confidence)
-    const uniqueSignals = validSignals.reduce((acc, signal) => {
-      const existing = acc.find(s => s.symbol === signal.symbol);
-      if (!existing || (signal.confidence || 0) > (existing.confidence || 0)) {
-        return [...acc.filter(s => s.symbol !== signal.symbol), signal];
-      }
-      return acc;
-    }, [] as TradingSignal[]);
-    
-    console.log(`📊 Returning ${uniqueSignals.length} unique classic signals`);
-    return uniqueSignals;
+    // If no endpoint worked, return empty array
+    console.log('❌ All classic signals endpoints failed');
+    return [];
     
   } catch (error) {
     console.error('❌ Error fetching classic signals:', error);
