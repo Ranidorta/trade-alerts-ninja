@@ -32,6 +32,7 @@ const Navbar = () => {
   const navLinks = [
     { path: "/signals", name: "Sinais", icon: <BarChart4 size={18} /> },
     { path: "/history", name: "Histórico", icon: <Clock size={18} /> },
+    { path: "/classic-history", name: "Classic", icon: <Clock size={18} /> },
     { 
       path: "/performance", 
       name: "Performance", 

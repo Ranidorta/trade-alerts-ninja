@@ -8,6 +8,7 @@ import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
 import SignalsHistory from "./pages/SignalsHistory";
+import ClassicSignalsHistory from "./pages/ClassicSignalsHistory";
 import CryptoMarket from "./pages/CryptoMarket";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
@@ -61,6 +62,11 @@ const AppRoutes = () => {
       <Route path="/history" element={
         <ProtectedRoute>
           <SignalsHistory />
+        </ProtectedRoute>
+      } />
+      <Route path="/classic-history" element={
+        <ProtectedRoute>
+          <ClassicSignalsHistory />
         </ProtectedRoute>
       } />
       <Route path="/market" element={

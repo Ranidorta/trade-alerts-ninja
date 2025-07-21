@@ -20,6 +20,7 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
+import ClassicSignalsTab from "@/components/signals/ClassicSignalsTab";
 
 // Key for storing whether signals have been generated before
 const SIGNALS_GENERATED_KEY = "signals_generated_before";
@@ -37,7 +38,7 @@ const SignalsDashboard = () => {
   const [activeSignal, setActiveSignal] = useState<TradingSignal | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [signalsGeneratedBefore, setSignalsGeneratedBefore] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("classic");
+  const [activeTab, setActiveTab] = useState<string>("normal");
   const isMobile = useIsMobile();
   
   const {
@@ -320,7 +321,7 @@ const SignalsDashboard = () => {
   };
   
   // Show empty state based on whether signals have been generated before
-  const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0 && activeTab === "classic");
+  const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0 && activeTab === "normal");
   
   return (
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
@@ -364,17 +365,20 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      <Tabs defaultValue="classic" className="w-full" onValueChange={setActiveTab}>
+      <Tabs defaultValue="normal" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-4">
+          <TabsTrigger value="normal">
+            💲 Sinais Normal
+          </TabsTrigger>
           <TabsTrigger value="classic">
-            💲 Trade Ninja Classic
+            🎯 Sinais Classic
           </TabsTrigger>
           <TabsTrigger value="hybrid">
             🧠 Trade Ninja Híbrido
           </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="classic">
+        <TabsContent value="normal">
           {isMobile ? (
             <div className="flex items-center justify-between mb-4">
               <Button
@@ -591,6 +595,10 @@ const SignalsDashboard = () => {
               </>
             )
           )}
+        </TabsContent>
+        
+        <TabsContent value="classic">
+          <ClassicSignalsTab />
         </TabsContent>
         
         <TabsContent value="hybrid">
