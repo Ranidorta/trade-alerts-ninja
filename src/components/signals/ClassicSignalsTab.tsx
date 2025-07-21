@@ -32,10 +32,14 @@ const ClassicSignalsTab = () => {
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
+    console.log("🔍 Filtering signals. Raw signals count:", signals.length);
+    console.log("🔍 Current filters - Direction:", directionFilter, "Confidence:", confidenceFilter, "Search:", searchQuery);
+    
     let result = [...signals];
     
     if (directionFilter !== "ALL") {
       result = result.filter(signal => signal.direction === directionFilter);
+      console.log("🔍 After direction filter:", result.length);
     }
     
     if (confidenceFilter !== "ALL") {
@@ -53,6 +57,7 @@ const ClassicSignalsTab = () => {
             return true;
         }
       });
+      console.log("🔍 After confidence filter:", result.length);
     }
     
     if (searchQuery) {
@@ -60,6 +65,7 @@ const ClassicSignalsTab = () => {
       result = result.filter(signal => 
         signal.symbol?.toLowerCase().includes(query)
       );
+      console.log("🔍 After search filter:", result.length);
     }
 
     // Sort by newest first
@@ -67,28 +73,33 @@ const ClassicSignalsTab = () => {
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
+    console.log("📋 Final filtered signals:", result.length);
     setFilteredSignals(result);
   }, [signals, directionFilter, confidenceFilter, searchQuery]);
 
   const loadClassicSignals = async () => {
     setIsLoading(true);
     try {
+      console.log("🔄 Loading classic signals...");
       const classicSignals = await fetchClassicSignals();
+      console.log("📊 Received signals:", classicSignals);
       
       if (classicSignals.length > 0) {
+        console.log("✅ Setting signals state with:", classicSignals.length, "signals");
         setSignals(classicSignals);
         toast({
           title: "Sinais Classic atualizados",
           description: `${classicSignals.length} sinais carregados com sucesso`
         });
       } else {
+        console.log("⚠️ No signals received");
         toast({
           title: "Nenhum sinal classic encontrado",
           description: "Tente novamente em alguns minutos"
         });
       }
     } catch (error) {
-      console.error("Error loading classic signals:", error);
+      console.error("❌ Error loading classic signals:", error);
       toast({
         title: "Erro ao carregar sinais classic",
         description: "Falha na conexão com o servidor",
