@@ -110,10 +110,7 @@ export const fetchClassicSignals = async (): Promise<TradingSignal[]> => {
     
   } catch (error) {
     console.error('❌ Error fetching classic signals:', error);
-    
-    // Return mock classic signals if the endpoint fails
-    console.log('🔄 Generating mock classic signals as fallback...');
-    return generateMockClassicSignals();
+    return [];
   }
 };
 
