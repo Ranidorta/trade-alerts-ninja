@@ -100,7 +100,7 @@ const TradingEsportivo = () => {
           gameId: selectedMatch.id,
           market: selectedMarket,
           signalType: selectedSignalType,
-          line: selectedMarketOption.toLowerCase().replace(' ', '_')
+          line: selectedMarketOption.toLowerCase().replace(' ', '_').replace('.', '_')
         }),
       });
 
