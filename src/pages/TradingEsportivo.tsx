@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, TrendingUp, Target, AlertCircle, Trophy, Calendar, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TradingEsportivoSignal {
   sinal: string;
@@ -42,25 +43,29 @@ const signalTypes = [
 
 // Mock data for matches
 const mockMatches: Record<string, Match[]> = {
-  "brasileirao-a": [
+  "Brasileirão Série A": [
     { id: "1", homeTeam: "Flamengo", awayTeam: "Palmeiras", date: "2025-01-25", time: "16:00" },
     { id: "2", homeTeam: "São Paulo", awayTeam: "Corinthians", date: "2025-01-25", time: "18:30" },
     { id: "3", homeTeam: "Santos", awayTeam: "Grêmio", date: "2025-01-26", time: "11:00" },
     { id: "4", homeTeam: "Internacional", awayTeam: "Atlético-MG", date: "2025-01-26", time: "16:00" },
   ],
-  "brasileirao-b": [
-    { id: "5", homeTeam: "Sport", awayTeam: "Náutico", date: "2025-01-25", time: "19:00" },
-    { id: "6", homeTeam: "Ceará", awayTeam: "Vila Nova", date: "2025-01-26", time: "16:30" },
-  ],
-  "premier-league": [
+  "Premier League": [
     { id: "7", homeTeam: "Manchester City", awayTeam: "Arsenal", date: "2025-01-25", time: "12:30" },
     { id: "8", homeTeam: "Liverpool", awayTeam: "Chelsea", date: "2025-01-25", time: "15:00" },
   ],
-  "bundesliga": [
+  "Bundesliga": [
     { id: "9", homeTeam: "Bayern Munich", awayTeam: "Borussia Dortmund", date: "2025-01-25", time: "15:30" },
     { id: "10", homeTeam: "RB Leipzig", awayTeam: "Bayer Leverkusen", date: "2025-01-26", time: "17:30" },
   ],
-  "ligue-1": [
+  "La Liga": [
+    { id: "13", homeTeam: "Real Madrid", awayTeam: "Barcelona", date: "2025-01-25", time: "16:00" },
+    { id: "14", homeTeam: "Atletico Madrid", awayTeam: "Sevilla", date: "2025-01-26", time: "18:30" },
+  ],
+  "Serie A": [
+    { id: "15", homeTeam: "Juventus", awayTeam: "Inter Milan", date: "2025-01-25", time: "20:45" },
+    { id: "16", homeTeam: "AC Milan", awayTeam: "Napoli", date: "2025-01-26", time: "17:00" },
+  ],
+  "Ligue 1": [
     { id: "11", homeTeam: "PSG", awayTeam: "Marseille", date: "2025-01-25", time: "20:45" },
     { id: "12", homeTeam: "Lyon", awayTeam: "Monaco", date: "2025-01-26", time: "17:00" },
   ],
@@ -82,21 +87,18 @@ const TradingEsportivo = () => {
   const fetchMatches = async (league: string) => {
     setIsLoadingMatches(true);
     try {
-      const response = await fetch('https://itdihklxnfycbouotuad.supabase.co/functions/v1/sports-games', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZGloa2x4bmZ5Y2JvdW90dWFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MTkzMTksImV4cCI6MjA2ODE5NTMxOX0.v1jk7nCtgihpYM6E7B9mnB5Qkybal-xdCYLTy-TQ0M0`
-        },
-        body: JSON.stringify({ league }),
+      console.log(`Buscando jogos para a liga: ${league}`);
+      
+      const { data, error } = await supabase.functions.invoke('sports-games', {
+        body: { league }
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro na API: ${response.status}`);
+      if (error) {
+        throw new Error(`Erro na API: ${error.message}`);
       }
 
-      const data = await response.json();
-      if (data.games) {
+      if (data && data.games) {
+        console.log(`Recebidos ${data.games.length} jogos da API`);
         setMatches(data.games.map((game: any) => ({
           id: game.id,
           homeTeam: game.homeTeam,
@@ -104,6 +106,13 @@ const TradingEsportivo = () => {
           date: game.date,
           time: game.time
         })));
+        
+        toast({
+          title: "Jogos carregados",
+          description: `${data.games.length} jogos encontrados para ${league}.`
+        });
+      } else {
+        throw new Error('Nenhum jogo encontrado');
       }
     } catch (error) {
       console.error('Erro ao buscar jogos:', error);
@@ -133,27 +142,23 @@ const TradingEsportivo = () => {
     setError(null);
     
     try {
-      const response = await fetch('https://itdihklxnfycbouotuad.supabase.co/functions/v1/generate-sports-signal', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZGloa2x4bmZ5Y2JvdW90dWFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MTkzMTksImV4cCI6MjA2ODE5NTMxOX0.v1jk7nCtgihpYM6E7B9mnB5Qkybal-xdCYLTy-TQ0M0`
-        },
-        body: JSON.stringify({
+      console.log(`Gerando sinal para jogo ${selectedMatch.id}`);
+      
+      const { data, error } = await supabase.functions.invoke('generate-sports-signal', {
+        body: {
           gameId: selectedMatch.id,
           market: selectedMarket,
           signalType: selectedSignalType,
           line: selectedMarketOption.toLowerCase().replace(' ', '_').replace('.', '_')
-        }),
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Erro na API: ${response.status}`);
+      if (error) {
+        throw new Error(`Erro na API: ${error.message}`);
       }
-
-      const data = await response.json();
       
       if (data && data.signal) {
+        console.log(`Sinal gerado: ${data.signal} com probabilidade ${data.probability}`);
         setSignals([{
           sinal: data.signal,
           probabilidade: data.probability
