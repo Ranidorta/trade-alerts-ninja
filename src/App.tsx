@@ -4,7 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route, Navigate } from "react-router-dom";
-import Navbar from "./components/Navbar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
 import SignalsHistory from "./pages/SignalsHistory";
@@ -128,12 +129,21 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <div className="gamer-theme font-rajdhani">
-            <Navbar />
-            <div className="pt-16 min-h-screen gamer-background overflow-x-hidden">
-              <AppRoutes />
+          <SidebarProvider>
+            <div className="min-h-screen flex w-full gamer-theme font-rajdhani">
+              <AppSidebar />
+              
+              <div className="flex-1 flex flex-col">
+                <header className="h-12 flex items-center border-b border-border bg-background/95 backdrop-blur">
+                  <SidebarTrigger className="ml-2" />
+                </header>
+                
+                <main className="flex-1 gamer-background overflow-x-hidden">
+                  <AppRoutes />
+                </main>
+              </div>
             </div>
-          </div>
+          </SidebarProvider>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
