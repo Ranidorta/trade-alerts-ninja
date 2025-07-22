@@ -11,7 +11,6 @@ import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
 import { fetchSignals } from "@/lib/signalsApi";
 import SignalCard from "@/components/SignalCard";
-import SignalsSummary from "@/components/signals/SignalsSummary";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,8 +41,7 @@ const SignalsDashboard = () => {
     signals: cachedSignals,
     addSignals,
     getLastActiveSignal,
-    setLastActiveSignal,
-    updateSignalStatuses
+    setLastActiveSignal
   } = useTradingSignals();
 
   // Check if signals have been generated before
@@ -141,30 +139,6 @@ const SignalsDashboard = () => {
     }, DEFAULT_REFRESH_INTERVAL);
     return () => clearInterval(intervalId);
   }, [autoRefresh, loadSignalsData]);
-
-  // Set up automatic signal validation for completed signals
-  useEffect(() => {
-    const validateSignals = async () => {
-      try {
-        if (updateSignalStatuses) {
-          await updateSignalStatuses();
-        }
-      } catch (error) {
-        console.error("Auto-validation error:", error);
-      }
-    };
-
-    // Run validation every 5 minutes
-    const validationInterval = setInterval(validateSignals, 5 * 60 * 1000);
-    
-    // Run initial validation after 30 seconds
-    const initialTimeout = setTimeout(validateSignals, 30000);
-
-    return () => {
-      clearInterval(validationInterval);
-      clearTimeout(initialTimeout);
-    };
-  }, [updateSignalStatuses]);
 
   // Apply filters and sort whenever signals, filters, or sort order changes
   useEffect(() => {
@@ -317,31 +291,6 @@ const SignalsDashboard = () => {
     });
     loadSignalsData();
   };
-
-  const handleValidateSignals = async () => {
-    try {
-      toast({
-        title: "Validando sinais",
-        description: "Verificando resultados dos sinais com dados históricos..."
-      });
-      
-      if (updateSignalStatuses) {
-        await updateSignalStatuses();
-        
-        toast({
-          title: "Validação concluída",
-          description: "Sinais foram validados e resultados atualizados"
-        });
-      }
-    } catch (error) {
-      console.error("Validation error:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro na validação",
-        description: "Falha ao validar sinais"
-      });
-    }
-  };
   const formatLastUpdated = () => {
     return lastUpdated.toLocaleTimeString();
   };
@@ -422,9 +371,7 @@ const SignalsDashboard = () => {
                         <Button variant={statusFilter === "ACTIVE" ? "default" : "outline"} size="sm" onClick={() => handleStatusFilter("ACTIVE")} className="w-full">
                           Ativos
                         </Button>
-                        <Button variant={statusFilter === "WAITING" ? "default" : "outline"} size="sm" onClick={() => handleStatusFilter("WAITING")} className="w-full">
-                          Aguardando
-                        </Button>
+                        
                         <Button variant={statusFilter === "COMPLETED" ? "default" : "outline"} size="sm" onClick={() => handleStatusFilter("COMPLETED")} className="w-full">
                           Completados
                         </Button>
@@ -460,11 +407,6 @@ const SignalsDashboard = () => {
                 <Button onClick={handleManualRefresh} variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""} title="Atualizar sinais agora">
                   <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
                   {!isMobile && "Atualizar"}
-                </Button>
-                
-                <Button onClick={handleValidateSignals} variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""} title="Validar sinais">
-                  <Zap className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile && "Validar"}
                 </Button>
                 
                 <DropdownMenu>
@@ -531,14 +473,9 @@ const SignalsDashboard = () => {
               </Button>
             </div>}
           
-           {isLoading ? <div className="flex justify-center items-center h-64">
+          {isLoading ? <div className="flex justify-center items-center h-64">
               <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full"></div>
             </div> : filteredSignals.length > 0 && <>
-                {/* Performance Summary */}
-                <div className="mb-6">
-                  <SignalsSummary signals={signals} showDetails={false} />
-                </div>
-                
                 <div className="mb-4">
                   <h2 className="text-xl font-semibold">Sinais ({filteredSignals.length})</h2>
                 </div>

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { RefreshCw, Search, Filter } from "lucide-react";
@@ -11,7 +10,6 @@ import ClassicSignalCard from "./ClassicSignalCard";
 import { fetchClassicSignals } from "@/lib/classicSignalsApi";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 import { verifyAllSignals } from "@/lib/signalVerification";
-
 const ClassicSignalsTab = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -21,25 +19,26 @@ const ClassicSignalsTab = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isMobile = useIsMobile();
-  const { toast } = useToast();
-  const { saveSignalsToSupabase, updateSignalInSupabase } = useSupabaseSignals();
+  const {
+    toast
+  } = useToast();
+  const {
+    saveSignalsToSupabase,
+    updateSignalInSupabase
+  } = useSupabaseSignals();
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
     console.log("🔍 Filtering signals. Raw signals count:", signals.length);
     console.log("🔍 Current filters - Direction:", directionFilter, "Confidence:", confidenceFilter, "Search:", searchQuery);
-    
     let result = [...signals];
-    
     if (directionFilter !== "ALL") {
       result = result.filter(signal => signal.direction === directionFilter);
       console.log("🔍 After direction filter:", result.length);
     }
-    
     if (confidenceFilter !== "ALL") {
       result = result.filter(signal => {
         if (!signal.confidence) return false;
-        
         switch (confidenceFilter) {
           case "HIGH":
             return signal.confidence >= 0.75;
@@ -53,57 +52,47 @@ const ClassicSignalsTab = () => {
       });
       console.log("🔍 After confidence filter:", result.length);
     }
-    
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(signal => 
-        signal.symbol?.toLowerCase().includes(query)
-      );
+      result = result.filter(signal => signal.symbol?.toLowerCase().includes(query));
       console.log("🔍 After search filter:", result.length);
     }
 
     // Sort by newest first
-    result.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-
+    result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     console.log("📋 Final filtered signals:", result.length);
     setFilteredSignals(result);
   }, [signals, directionFilter, confidenceFilter, searchQuery]);
-
   const generateClassicSignals = async () => {
     setIsLoading(true);
     try {
       console.log("🔄 Generating classic signals...");
       const classicSignals = await fetchClassicSignals();
       console.log("📊 Received signals:", classicSignals);
-      
       if (classicSignals.length > 0) {
         console.log("✅ Setting signals state with:", classicSignals.length, "signals");
         setSignals(classicSignals);
-        
+
         // Save signals to Supabase
         const savedCount = await saveSignalsToSupabase(classicSignals);
         console.log(`💾 Saved ${savedCount} signals to Supabase`);
-        
+
         // Start validation process
         console.log("🔍 Starting signal validation...");
         try {
           const validatedSignals = await verifyAllSignals(classicSignals);
           setSignals(validatedSignals);
-          
+
           // Update validated signals in Supabase
           for (const validatedSignal of validatedSignals) {
             if (validatedSignal.result || validatedSignal.verifiedAt) {
               await updateSignalInSupabase(validatedSignal);
             }
           }
-          
           console.log("✅ Signal validation completed");
         } catch (validationError) {
           console.error("⚠️ Signal validation failed:", validationError);
         }
-        
         toast({
           title: "Sinais Classic gerados",
           description: `${classicSignals.length} novos sinais foram gerados e salvos com sucesso`
@@ -127,26 +116,20 @@ const ClassicSignalsTab = () => {
       setLastUpdated(new Date());
     }
   };
-
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
-
   const handleDirectionFilter = (direction: "ALL" | "BUY" | "SELL") => {
     setDirectionFilter(direction);
   };
-
   const handleConfidenceFilter = (confidence: "ALL" | "HIGH" | "MEDIUM" | "LOW") => {
     setConfidenceFilter(confidence);
   };
-
   const formatLastUpdated = () => {
     if (!lastUpdated) return "Nunca";
     return lastUpdated.toLocaleTimeString();
   };
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -158,28 +141,18 @@ const ClassicSignalsTab = () => {
             <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
               Classic AI Strategy
             </span>
-            {lastUpdated && (
-              <span className="text-xs text-slate-500">
-                Última geração: {formatLastUpdated()}
-              </span>
-            )}
+            {lastUpdated}
           </div>
         </div>
 
-        <Button 
-          onClick={generateClassicSignals} 
-          variant="default"
-          disabled={isLoading}
-          className="w-full md:w-auto"
-        >
+        <Button onClick={generateClassicSignals} variant="default" disabled={isLoading} className="w-full md:w-auto">
           <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           {isLoading ? 'Gerando Sinais...' : 'Gerar Sinais Classic'}
         </Button>
       </div>
 
       {/* Filters */}
-      {isMobile ? (
-        <div className="flex items-center justify-between">
+      {isMobile ? <div className="flex items-center justify-between">
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 p-2">
@@ -194,40 +167,20 @@ const ClassicSignalsTab = () => {
                   <h4 className="text-sm font-medium mb-2">Buscar</h4>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-                    <Input 
-                      placeholder="Buscar por símbolo..." 
-                      className="pl-10" 
-                      value={searchQuery} 
-                      onChange={handleSearchChange} 
-                    />
+                    <Input placeholder="Buscar por símbolo..." className="pl-10" value={searchQuery} onChange={handleSearchChange} />
                   </div>
                 </div>
                 
                 <div>
                   <h4 className="text-sm font-medium mb-2">Direção</h4>
                   <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant={directionFilter === "ALL" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleDirectionFilter("ALL")}
-                      className="w-full"
-                    >
+                    <Button variant={directionFilter === "ALL" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("ALL")} className="w-full">
                       Todos
                     </Button>
-                    <Button 
-                      variant={directionFilter === "BUY" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleDirectionFilter("BUY")}
-                      className="w-full"
-                    >
+                    <Button variant={directionFilter === "BUY" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("BUY")} className="w-full">
                       BUY
                     </Button>
-                    <Button 
-                      variant={directionFilter === "SELL" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleDirectionFilter("SELL")}
-                      className="w-full"
-                    >
+                    <Button variant={directionFilter === "SELL" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("SELL")} className="w-full">
                       SELL
                     </Button>
                   </div>
@@ -236,36 +189,16 @@ const ClassicSignalsTab = () => {
                 <div>
                   <h4 className="text-sm font-medium mb-2">Confiança</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button 
-                      variant={confidenceFilter === "ALL" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleConfidenceFilter("ALL")}
-                      className="w-full"
-                    >
+                    <Button variant={confidenceFilter === "ALL" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("ALL")} className="w-full">
                       Todos
                     </Button>
-                    <Button 
-                      variant={confidenceFilter === "HIGH" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleConfidenceFilter("HIGH")}
-                      className="w-full"
-                    >
+                    <Button variant={confidenceFilter === "HIGH" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("HIGH")} className="w-full">
                       Alta (≥75%)
                     </Button>
-                    <Button 
-                      variant={confidenceFilter === "MEDIUM" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleConfidenceFilter("MEDIUM")}
-                      className="w-full"
-                    >
+                    <Button variant={confidenceFilter === "MEDIUM" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("MEDIUM")} className="w-full">
                       Média
                     </Button>
-                    <Button 
-                      variant={confidenceFilter === "LOW" ? "default" : "outline"} 
-                      size="sm" 
-                      onClick={() => handleConfidenceFilter("LOW")}
-                      className="w-full"
-                    >
+                    <Button variant={confidenceFilter === "LOW" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("LOW")} className="w-full">
                       Baixa
                     </Button>
                   </div>
@@ -273,85 +206,46 @@ const ClassicSignalsTab = () => {
               </div>
             </SheetContent>
           </Sheet>
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-4 items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+        </div> : <div className="flex flex-wrap gap-4 items-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
           <div className="flex-1 min-w-[200px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
-              <Input 
-                placeholder="Buscar por símbolo..." 
-                className="pl-10" 
-                value={searchQuery} 
-                onChange={handleSearchChange} 
-              />
+              <Input placeholder="Buscar por símbolo..." className="pl-10" value={searchQuery} onChange={handleSearchChange} />
             </div>
           </div>
           
           <div className="flex gap-2">
-            <Button 
-              variant={directionFilter === "ALL" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleDirectionFilter("ALL")}
-            >
+            <Button variant={directionFilter === "ALL" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("ALL")}>
               Todos
             </Button>
-            <Button 
-              variant={directionFilter === "BUY" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleDirectionFilter("BUY")}
-            >
+            <Button variant={directionFilter === "BUY" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("BUY")}>
               BUY
             </Button>
-            <Button 
-              variant={directionFilter === "SELL" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleDirectionFilter("SELL")}
-            >
+            <Button variant={directionFilter === "SELL" ? "default" : "outline"} size="sm" onClick={() => handleDirectionFilter("SELL")}>
               SELL
             </Button>
           </div>
 
           <div className="flex gap-2">
-            <Button 
-              variant={confidenceFilter === "ALL" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleConfidenceFilter("ALL")}
-            >
+            <Button variant={confidenceFilter === "ALL" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("ALL")}>
               Todas
             </Button>
-            <Button 
-              variant={confidenceFilter === "HIGH" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleConfidenceFilter("HIGH")}
-            >
+            <Button variant={confidenceFilter === "HIGH" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("HIGH")}>
               Alta
             </Button>
-            <Button 
-              variant={confidenceFilter === "MEDIUM" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleConfidenceFilter("MEDIUM")}
-            >
+            <Button variant={confidenceFilter === "MEDIUM" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("MEDIUM")}>
               Média
             </Button>
-            <Button 
-              variant={confidenceFilter === "LOW" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => handleConfidenceFilter("LOW")}
-            >
+            <Button variant={confidenceFilter === "LOW" ? "default" : "outline"} size="sm" onClick={() => handleConfidenceFilter("LOW")}>
               Baixa
             </Button>
           </div>
-        </div>
-      )}
+        </div>}
 
       {/* Signals Grid */}
-      {isLoading ? (
-        <div className="flex justify-center items-center py-8">
+      {isLoading ? <div className="flex justify-center items-center py-8">
           <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
-        </div>
-      ) : signals.length === 0 ? (
-        <div className="text-center py-8">
+        </div> : signals.length === 0 ? <div className="text-center py-8">
           <p className="text-slate-500 dark:text-slate-400 mb-4">
             Nenhum sinal classic foi gerado ainda
           </p>
@@ -359,25 +253,13 @@ const ClassicSignalsTab = () => {
             <RefreshCw className="mr-2 h-4 w-4" />
             Gerar Primeiros Sinais
           </Button>
-        </div>
-      ) : filteredSignals.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-          {filteredSignals.map((signal) => (
-            <ClassicSignalCard 
-              key={signal.id} 
-              signal={signal}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
+        </div> : filteredSignals.length > 0 ? <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+          {filteredSignals.map(signal => <ClassicSignalCard key={signal.id} signal={signal} />)}
+        </div> : <div className="text-center py-8">
           <p className="text-slate-500 dark:text-slate-400">
             Nenhum sinal encontrado com os filtros aplicados
           </p>
-        </div>
-      )}
-    </div>
-  );
+        </div>}
+    </div>;
 };
-
 export default ClassicSignalsTab;
