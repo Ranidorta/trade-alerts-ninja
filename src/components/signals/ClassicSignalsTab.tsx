@@ -141,7 +141,9 @@ const ClassicSignalsTab = () => {
             <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
               Classic AI Strategy
             </span>
-            {lastUpdated}
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Última atualização: {formatLastUpdated()}
+            </span>
           </div>
         </div>
 
