@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { 
+  Home,
   BarChart4, 
   Clock, 
   LineChart, 
@@ -31,6 +32,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import NinjaLogo from "@/components/NinjaLogo";
 
 const mainItems = [
+  { title: "Home", url: "/home", icon: Home },
   { title: "Sinais", url: "/signals", icon: BarChart4 },
   { title: "Histórico", url: "/history", icon: Clock },
   { title: "Classic", url: "/classic-history", icon: Clock },

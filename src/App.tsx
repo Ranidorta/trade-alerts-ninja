@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import Home from "./pages/Home";
 import Index from "./pages/Index";
 import SignalsDashboard from "./pages/SignalsDashboard";
 import SignalsHistory from "./pages/SignalsHistory";
@@ -56,6 +57,11 @@ const AppRoutes = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       
       {/* Protected routes - require authentication only */}
+      <Route path="/home" element={
+        <ProtectedRoute>
+          <Home />
+        </ProtectedRoute>
+      } />
       <Route path="/signals" element={
         <ProtectedRoute>
           <SignalsDashboard />
