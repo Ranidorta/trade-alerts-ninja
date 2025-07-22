@@ -246,8 +246,48 @@ export const useTradingSignals = () => {
 
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
+      // First update statuses based on current prices
       const updatedSignals = await updateAllSignalsStatus(currentPrices);
       setSignals(updatedSignals);
+      
+      // Then validate signals against historical data for completed ones
+      const { validateSignalWithBybitData } = await import("@/lib/signalValidationService");
+      const { useSupabaseSignals } = await import("@/hooks/useSupabaseSignals");
+      const { updateSignalInSupabase } = useSupabaseSignals();
+      
+      // Find signals that need validation (completed but no result)
+      const signalsToValidate = updatedSignals.filter(signal => 
+        signal.status === "COMPLETED" && 
+        (!signal.result || signal.result === "PENDING")
+      );
+
+      if (signalsToValidate.length > 0) {
+        console.log(`🔍 Validating ${signalsToValidate.length} completed signals...`);
+        
+        // Validate each signal
+        for (const signal of signalsToValidate) {
+          try {
+            const validatedSignal = await validateSignalWithBybitData(signal);
+            
+            if (validatedSignal.result && validatedSignal.result !== "PENDING") {
+              // Update in local storage
+              const localSignals = JSON.parse(localStorage.getItem("archived_trading_signals") || "[]");
+              const signalIndex = localSignals.findIndex((s: any) => s.id === validatedSignal.id);
+              if (signalIndex !== -1) {
+                localSignals[signalIndex] = validatedSignal;
+                localStorage.setItem("archived_trading_signals", JSON.stringify(localSignals));
+              }
+              
+              // Save to Supabase
+              await updateSignalInSupabase(validatedSignal);
+              console.log(`✅ Signal ${validatedSignal.id} validated with result: ${validatedSignal.result}`);
+            }
+          } catch (error) {
+            console.error(`❌ Error validating signal ${signal.id}:`, error);
+          }
+        }
+      }
+      
       toast({
         title: "Signals updated",
         description: `Updated ${updatedSignals.length} signals with current status`,
