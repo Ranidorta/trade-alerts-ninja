@@ -9,6 +9,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ClassicSignalCard from "./ClassicSignalCard";
 import { fetchClassicSignals } from "@/lib/classicSignalsApi";
+import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
+import { verifyAllSignals } from "@/lib/signalVerification";
 
 const ClassicSignalsTab = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
@@ -20,6 +22,7 @@ const ClassicSignalsTab = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const { saveSignalsToSupabase, updateSignalInSupabase } = useSupabaseSignals();
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
@@ -78,9 +81,32 @@ const ClassicSignalsTab = () => {
       if (classicSignals.length > 0) {
         console.log("✅ Setting signals state with:", classicSignals.length, "signals");
         setSignals(classicSignals);
+        
+        // Save signals to Supabase
+        const savedCount = await saveSignalsToSupabase(classicSignals);
+        console.log(`💾 Saved ${savedCount} signals to Supabase`);
+        
+        // Start validation process
+        console.log("🔍 Starting signal validation...");
+        try {
+          const validatedSignals = await verifyAllSignals(classicSignals);
+          setSignals(validatedSignals);
+          
+          // Update validated signals in Supabase
+          for (const validatedSignal of validatedSignals) {
+            if (validatedSignal.result || validatedSignal.verifiedAt) {
+              await updateSignalInSupabase(validatedSignal);
+            }
+          }
+          
+          console.log("✅ Signal validation completed");
+        } catch (validationError) {
+          console.error("⚠️ Signal validation failed:", validationError);
+        }
+        
         toast({
           title: "Sinais Classic gerados",
-          description: `${classicSignals.length} novos sinais foram gerados com sucesso`
+          description: `${classicSignals.length} novos sinais foram gerados e salvos com sucesso`
         });
       } else {
         console.log("⚠️ No signals received");
