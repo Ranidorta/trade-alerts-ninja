@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import UserProfile from "./pages/UserProfile";
 import Checkout from "./pages/Checkout";
+import TradingEsportivo from "./pages/TradingEsportivo";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { useAuth } from "./hooks/useAuth";
 
@@ -72,6 +73,11 @@ const AppRoutes = () => {
       <Route path="/market" element={
         <ProtectedRoute>
           <CryptoMarket />
+        </ProtectedRoute>
+      } />
+      <Route path="/trading-esportivo" element={
+        <ProtectedRoute>
+          <TradingEsportivo />
         </ProtectedRoute>
       } />
       <Route path="/profile" element={

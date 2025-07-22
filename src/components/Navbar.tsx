@@ -42,6 +42,11 @@ const Navbar = () => {
       path: "/market", 
       name: "Mercado", 
       icon: <Presentation size={18} /> 
+    },
+    { 
+      path: "/trading-esportivo", 
+      name: "Trading Esportivo", 
+      icon: <Crown size={18} /> 
     }
   ];
 
