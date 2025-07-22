@@ -67,31 +67,39 @@ export function AppSidebar() {
     <Sidebar
       collapsible="icon"
     >
-      <SidebarHeader className="border-b border-border">
-        <div className="flex items-center gap-2 p-2">
+      <SidebarHeader className="border-b border-border pb-4">
+        <div className="flex items-center gap-3 px-4 pt-4">
           <NinjaLogo className="w-8 h-8 text-primary" />
           {!isCollapsed && (
-            <span className="font-bold text-lg">Trading Ninja</span>
+            <span className="font-bold text-xl">Trading Ninja</span>
           )}
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navegação</SidebarGroupLabel>
+      <SidebarContent className="px-2 py-6">
+        <SidebarGroup className="mb-8">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">
+            OVERVIEW
+          </SidebarGroupLabel>
           
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1">
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild className="h-11">
                     <NavLink 
                       to={item.url} 
                       end 
-                      className={({ isActive }) => getNavCls({ isActive })}
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
+                        ${isActive 
+                          ? "bg-primary/10 text-primary font-medium border-r-2 border-primary" 
+                          : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                        }
+                      `}
                     >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      {!isCollapsed && <span className="text-sm">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -100,8 +108,10 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Upgrade</SidebarGroupLabel>
+        <SidebarGroup className="mb-8">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">
+            UPGRADE
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -109,10 +119,10 @@ export function AppSidebar() {
                   onClick={() => navigate("/checkout")}
                   variant="default"
                   size="sm"
-                  className={`w-full justify-start ${isCollapsed ? 'px-2' : ''}`}
+                  className={`w-full h-11 justify-start gap-3 ${isCollapsed ? 'px-3' : 'px-3'}`}
                 >
-                  <Crown className="h-4 w-4" />
-                  {!isCollapsed && <span className="ml-2">Premium</span>}
+                  <Crown className="h-5 w-5" />
+                  {!isCollapsed && <span className="text-sm">Premium</span>}
                 </Button>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -120,45 +130,56 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border">
-        <SidebarMenu>
-          {user && (
-            <>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild>
-                  <NavLink 
-                    to="/profile" 
-                    className={({ isActive }) => getNavCls({ isActive })}
-                  >
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-xs">
-                        {user.email?.charAt(0).toUpperCase() || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    {!isCollapsed && <span>Perfil</span>}
-                  </NavLink>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              <SidebarMenuItem>
-                <div className="flex items-center gap-2 px-2 py-1">
-                  <ThemeToggle />
-                  {!isCollapsed && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleLogout}
-                      className="flex-1 justify-start"
+      <SidebarFooter className="border-t border-border pt-4 pb-4">
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-3">
+            SETTINGS
+          </SidebarGroupLabel>
+          <SidebarMenu className="space-y-1">
+            {user && (
+              <>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild className="h-11">
+                    <NavLink 
+                      to="/profile" 
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
+                        ${isActive 
+                          ? "bg-primary/10 text-primary font-medium" 
+                          : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
+                        }
+                      `}
                     >
-                      <LogOut className="h-4 w-4" />
-                      <span className="ml-2">Sair</span>
-                    </Button>
-                  )}
-                </div>
-              </SidebarMenuItem>
-            </>
-          )}
-        </SidebarMenu>
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-xs">
+                          {user.email?.charAt(0).toUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      {!isCollapsed && <span className="text-sm">Perfil</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                
+                <SidebarMenuItem>
+                  <div className="flex items-center gap-3 px-3 py-3">
+                    <ThemeToggle />
+                    {!isCollapsed && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleLogout}
+                        className="flex-1 justify-start h-auto p-0 hover:bg-transparent text-muted-foreground hover:text-foreground"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        <span className="text-sm">Sair</span>
+                      </Button>
+                    )}
+                  </div>
+                </SidebarMenuItem>
+              </>
+            )}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarFooter>
     </Sidebar>
   );
