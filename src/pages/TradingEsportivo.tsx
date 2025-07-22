@@ -90,18 +90,17 @@ const TradingEsportivo = () => {
     setError(null);
     
     try {
-      const response = await fetch('/signals/gols', {
+      const response = await fetch('https://itdihklxnfycbouotuad.supabase.co/functions/v1/generate-sports-signal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZGloa2x4bmZ5Y2JvdW90dWFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MTkzMTksImV4cCI6MjA2ODE5NTMxOX0.v1jk7nCtgihpYM6E7B9mnB5Qkybal-xdCYLTy-TQ0M0`
         },
         body: JSON.stringify({
-          match_id: selectedMatch.id,
+          gameId: selectedMatch.id,
           market: selectedMarket,
-          market_option: selectedMarketOption,
-          signal_type: selectedSignalType,
-          home_team: selectedMatch.homeTeam,
-          away_team: selectedMatch.awayTeam
+          signalType: selectedSignalType,
+          line: selectedMarketOption.toLowerCase().replace(' ', '_')
         }),
       });
 
@@ -111,8 +110,11 @@ const TradingEsportivo = () => {
 
       const data = await response.json();
       
-      if (Array.isArray(data) && data.length > 0) {
-        setSignals(data);
+      if (data && data.signal) {
+        setSignals([{
+          sinal: data.signal,
+          probabilidade: data.probability
+        }]);
         toast({
           title: "Sinal gerado com sucesso!",
           description: `Sinal de trading esportivo gerado para ${selectedMatch.homeTeam} vs ${selectedMatch.awayTeam}.`
