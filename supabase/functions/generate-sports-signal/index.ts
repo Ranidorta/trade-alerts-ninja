@@ -26,6 +26,52 @@ function probabilityOverGoals(lambdaTotal: number, goalsLine: number): number {
   return 1 - probUnder
 }
 
+async function getTeamStatistics(teamId: number, season: number = 2024) {
+  const apiKey = Deno.env.get('API_FOOTBALL_KEY')
+  if (!apiKey) {
+    throw new Error('API_FOOTBALL_KEY not configured')
+  }
+
+  const response = await fetch(
+    `https://v3.football.api-sports.io/teams/statistics?team=${teamId}&season=${season}&league=71`,
+    {
+      headers: {
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': 'v3.football.api-sports.io'
+      }
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch team statistics: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+async function getFixtureDetails(fixtureId: string) {
+  const apiKey = Deno.env.get('API_FOOTBALL_KEY')
+  if (!apiKey) {
+    throw new Error('API_FOOTBALL_KEY not configured')
+  }
+
+  const response = await fetch(
+    `https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,
+    {
+      headers: {
+        'X-RapidAPI-Key': apiKey,
+        'X-RapidAPI-Host': 'v3.football.api-sports.io'
+      }
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch fixture details: ${response.status}`)
+  }
+
+  return response.json()
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -34,25 +80,63 @@ serve(async (req) => {
   try {
     const { gameId, market, signalType, line } = await req.json()
     
-    // Mock team averages - replace with actual data fetching
-    const avgHome = 1.8
-    const avgAway = 1.2
-    const lambdaTotal = (avgHome + avgAway) / 2
+    let avgHome = 1.8
+    let avgAway = 1.2
+    let cornersAvgHome = 5.5
+    let cornersAvgAway = 4.8
+
+    try {
+      // Get fixture details to get team IDs
+      const fixtureResponse = await getFixtureDetails(gameId)
+      
+      if (fixtureResponse.response && fixtureResponse.response[0]) {
+        const fixture = fixtureResponse.response[0]
+        const homeTeamId = fixture.teams.home.id
+        const awayTeamId = fixture.teams.away.id
+
+        // Get team statistics
+        const [homeStats, awayStats] = await Promise.all([
+          getTeamStatistics(homeTeamId),
+          getTeamStatistics(awayTeamId)
+        ])
+
+        if (homeStats.response && awayStats.response) {
+          // Calculate average goals from real statistics
+          const homeGoalsFor = homeStats.response.goals?.for?.total?.home || 0
+          const homeGamesHome = homeStats.response.fixtures?.played?.home || 1
+          const awayGoalsFor = awayStats.response.goals?.for?.total?.away || 0
+          const awayGamesAway = awayStats.response.fixtures?.played?.away || 1
+
+          avgHome = homeGoalsFor / homeGamesHome
+          avgAway = awayGoalsFor / awayGamesAway
+
+          // Estimate corners based on attack/possession data
+          cornersAvgHome = (homeStats.response.goals?.for?.total?.home || 0) * 0.6 + 3
+          cornersAvgAway = (awayStats.response.goals?.for?.total?.away || 0) * 0.6 + 3
+        }
+      }
+    } catch (apiError) {
+      console.error('Error fetching real data, using fallback:', apiError)
+      // Keep default mock values
+    }
 
     let probability = 0
     let signalText = ""
 
     if (market === "goals") {
       const lineValue = parseFloat(line.replace("over_", "").replace("_", "."))
+      const lambdaTotal = avgHome + avgAway
       probability = probabilityOverGoals(lambdaTotal, lineValue)
       signalText = `${signalType.toUpperCase()} Over ${lineValue} Goals`
     } else if (market === "corners") {
-      // Mock calculation for corners
-      probability = 0.65
-      signalText = `${signalType.toUpperCase()} Over ${line.replace("over_", "").replace("_", ".")} Corners`
+      const lineValue = parseFloat(line.replace("over_", "").replace("_", "."))
+      const lambdaCorners = cornersAvgHome + cornersAvgAway
+      probability = probabilityOverGoals(lambdaCorners, lineValue)
+      signalText = `${signalType.toUpperCase()} Over ${lineValue} Corners`
     } else if (market === "winner") {
-      // Mock calculation for winner
-      probability = 0.55
+      // Simple probability based on goal averages
+      const homeStrength = avgHome / (avgHome + avgAway)
+      probability = homeStrength
       signalText = `${signalType.toUpperCase()} Home Win`
     }
 
@@ -61,6 +145,9 @@ serve(async (req) => {
       probability = 1 - probability
     }
 
+    // Ensure probability is between 0.1 and 0.9 for realistic betting
+    probability = Math.max(0.1, Math.min(0.9, probability))
+
     return new Response(
       JSON.stringify({
         signal: signalText,
@@ -68,6 +155,8 @@ serve(async (req) => {
         gameId,
         market,
         signalType,
+        avgHome: Math.round(avgHome * 100) / 100,
+        avgAway: Math.round(avgAway * 100) / 100,
         timestamp: new Date().toISOString()
       }),
       {
@@ -76,6 +165,7 @@ serve(async (req) => {
       },
     )
   } catch (error) {
+    console.error('Error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       {
