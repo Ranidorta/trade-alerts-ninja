@@ -52,7 +52,7 @@ serve(async (req) => {
   }
 
   try {
-    const { league, season = 2024 } = await req.json()
+    const { league, season = 2025 } = await req.json()
     
     let games = []
 
