@@ -41,35 +41,7 @@ const signalTypes = [
   { id: "lay", name: "Lay", description: "Apostar contra" },
 ];
 
-// Mock data for matches
-const mockMatches: Record<string, Match[]> = {
-  "Brasileirão Série A": [
-    { id: "1", homeTeam: "Flamengo", awayTeam: "Palmeiras", date: "2025-01-25", time: "16:00" },
-    { id: "2", homeTeam: "São Paulo", awayTeam: "Corinthians", date: "2025-01-25", time: "18:30" },
-    { id: "3", homeTeam: "Santos", awayTeam: "Grêmio", date: "2025-01-26", time: "11:00" },
-    { id: "4", homeTeam: "Internacional", awayTeam: "Atlético-MG", date: "2025-01-26", time: "16:00" },
-  ],
-  "Premier League": [
-    { id: "7", homeTeam: "Manchester City", awayTeam: "Arsenal", date: "2025-01-25", time: "12:30" },
-    { id: "8", homeTeam: "Liverpool", awayTeam: "Chelsea", date: "2025-01-25", time: "15:00" },
-  ],
-  "Bundesliga": [
-    { id: "9", homeTeam: "Bayern Munich", awayTeam: "Borussia Dortmund", date: "2025-01-25", time: "15:30" },
-    { id: "10", homeTeam: "RB Leipzig", awayTeam: "Bayer Leverkusen", date: "2025-01-26", time: "17:30" },
-  ],
-  "La Liga": [
-    { id: "13", homeTeam: "Real Madrid", awayTeam: "Barcelona", date: "2025-01-25", time: "16:00" },
-    { id: "14", homeTeam: "Atletico Madrid", awayTeam: "Sevilla", date: "2025-01-26", time: "18:30" },
-  ],
-  "Serie A": [
-    { id: "15", homeTeam: "Juventus", awayTeam: "Inter Milan", date: "2025-01-25", time: "20:45" },
-    { id: "16", homeTeam: "AC Milan", awayTeam: "Napoli", date: "2025-01-26", time: "17:00" },
-  ],
-  "Ligue 1": [
-    { id: "11", homeTeam: "PSG", awayTeam: "Marseille", date: "2025-01-25", time: "20:45" },
-    { id: "12", homeTeam: "Lyon", awayTeam: "Monaco", date: "2025-01-26", time: "17:00" },
-  ],
-};
+// Remove mock data - only use real API
 
 const TradingEsportivo = () => {
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
@@ -86,19 +58,23 @@ const TradingEsportivo = () => {
 
   const fetchMatches = async (league: string) => {
     setIsLoadingMatches(true);
+    setError(null);
     try {
-      console.log(`Buscando jogos para a liga: ${league}`);
+      console.log(`🏈 Buscando jogos para a liga: ${league}`);
       
       const { data, error } = await supabase.functions.invoke('sports-games', {
-        body: { league }
+        body: { league, season: 2025 }
       });
 
       if (error) {
+        console.error('❌ Erro na edge function:', error);
         throw new Error(`Erro na API: ${error.message}`);
       }
 
-      if (data && data.games) {
-        console.log(`Recebidos ${data.games.length} jogos da API`);
+      console.log('📡 Resposta da edge function:', data);
+
+      if (data && data.games && data.games.length > 0) {
+        console.log(`✅ Recebidos ${data.games.length} jogos da API`);
         setMatches(data.games.map((game: any) => ({
           id: game.id,
           homeTeam: game.homeTeam,
@@ -112,17 +88,24 @@ const TradingEsportivo = () => {
           description: `${data.games.length} jogos encontrados para ${league}.`
         });
       } else {
-        throw new Error('Nenhum jogo encontrado');
+        console.warn('⚠️ Nenhum jogo encontrado na resposta');
+        setError('Nenhum jogo encontrado para esta liga');
+        setMatches([]);
+        toast({
+          title: "Nenhum jogo encontrado",
+          description: `Não há jogos programados para ${league} nos próximos 7 dias.`,
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('Erro ao buscar jogos:', error);
+      console.error('❌ Erro ao buscar jogos:', error);
+      setError(error instanceof Error ? error.message : 'Erro desconhecido');
+      setMatches([]);
       toast({
         title: "Erro ao carregar jogos",
-        description: "Falha na comunicação com o servidor. Usando dados de exemplo.",
+        description: "Verifique se a API está configurada corretamente.",
         variant: "destructive"
       });
-      // Fallback to mock data
-      setMatches(mockMatches[league] || []);
     } finally {
       setIsLoadingMatches(false);
     }
