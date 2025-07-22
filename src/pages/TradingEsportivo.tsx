@@ -21,17 +21,18 @@ interface Match {
 }
 
 const leagues = [
-  { id: "brasileirao-a", name: "Brasileirão Série A", flag: "🇧🇷" },
-  { id: "brasileirao-b", name: "Brasileirão Série B", flag: "🇧🇷" },
-  { id: "premier-league", name: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
-  { id: "bundesliga", name: "Bundesliga", flag: "🇩🇪" },
-  { id: "ligue-1", name: "Ligue 1", flag: "🇫🇷" },
+  { id: "Brasileirão Série A", name: "Brasileirão Série A", flag: "🇧🇷" },
+  { id: "Premier League", name: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "Bundesliga", name: "Bundesliga", flag: "🇩🇪" },
+  { id: "La Liga", name: "La Liga", flag: "🇪🇸" },
+  { id: "Serie A", name: "Serie A", flag: "🇮🇹" },
+  { id: "Ligue 1", name: "Ligue 1", flag: "🇫🇷" },
 ];
 
 const markets = [
-  { id: "gols", name: "Mercado de Gols", options: ["Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"] },
-  { id: "escanteios", name: "Mercado de Escanteios", options: ["Over 8.5", "Over 10.5", "Over 12.5"] },
-  { id: "vencedor", name: "Mercado de Vencedor", options: ["Time Mandante", "Empate", "Time Visitante"] },
+  { id: "goals", name: "Mercado de Gols", options: ["Over 0.5", "Over 1.5", "Over 2.5", "Over 3.5"] },
+  { id: "corners", name: "Mercado de Escanteios", options: ["Over 8.5", "Over 10.5", "Over 12.5"] },
+  { id: "winner", name: "Mercado de Vencedor", options: ["Time Mandante", "Empate", "Time Visitante"] },
 ];
 
 const signalTypes = [
@@ -72,9 +73,51 @@ const TradingEsportivo = () => {
   const [selectedMarketOption, setSelectedMarketOption] = useState<string>("");
   const [selectedSignalType, setSelectedSignalType] = useState<string>("");
   const [signals, setSignals] = useState<TradingEsportivoSignal[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMatches, setIsLoadingMatches] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const fetchMatches = async (league: string) => {
+    setIsLoadingMatches(true);
+    try {
+      const response = await fetch('https://itdihklxnfycbouotuad.supabase.co/functions/v1/sports-games', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0ZGloa2x4bmZ5Y2JvdW90dWFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI2MTkzMTksImV4cCI6MjA2ODE5NTMxOX0.v1jk7nCtgihpYM6E7B9mnB5Qkybal-xdCYLTy-TQ0M0`
+        },
+        body: JSON.stringify({ league }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.games) {
+        setMatches(data.games.map((game: any) => ({
+          id: game.id,
+          homeTeam: game.homeTeam,
+          awayTeam: game.awayTeam,
+          date: game.date,
+          time: game.time
+        })));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar jogos:', error);
+      toast({
+        title: "Erro ao carregar jogos",
+        description: "Falha na comunicação com o servidor. Usando dados de exemplo.",
+        variant: "destructive"
+      });
+      // Fallback to mock data
+      setMatches(mockMatches[league] || []);
+    } finally {
+      setIsLoadingMatches(false);
+    }
+  };
 
   const handleGenerateSignal = async () => {
     if (!selectedMatch || !selectedMarket || !selectedMarketOption || !selectedSignalType) {
@@ -147,6 +190,7 @@ const TradingEsportivo = () => {
     setSelectedMarketOption("");
     setSelectedSignalType("");
     setSignals([]);
+    setMatches([]);
     setError(null);
   };
 
@@ -191,7 +235,10 @@ const TradingEsportivo = () => {
                     key={league.id}
                     variant="outline"
                     className="h-auto p-4 justify-start"
-                    onClick={() => setSelectedLeague(league.id)}
+                    onClick={() => {
+                      setSelectedLeague(league.id);
+                      fetchMatches(league.id);
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{league.flag}</span>
@@ -228,8 +275,14 @@ const TradingEsportivo = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {mockMatches[selectedLeague]?.map((match) => (
+              {isLoadingMatches ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 text-primary mx-auto mb-4 animate-spin" />
+                  <p className="text-muted-foreground">Carregando jogos...</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {matches.map((match) => (
                   <Button
                     key={match.id}
                     variant="outline"
@@ -250,8 +303,9 @@ const TradingEsportivo = () => {
                       </div>
                     </div>
                   </Button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
