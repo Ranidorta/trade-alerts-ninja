@@ -255,10 +255,18 @@ export const useTradingSignals = () => {
       const { useSupabaseSignals } = await import("@/hooks/useSupabaseSignals");
       const { updateSignalInSupabase } = useSupabaseSignals();
       
-      // Find signals that need validation (completed but no result)
+      // Find signals that need validation:
+      // - Completed signals without final result
+      // - Signals with PARTIAL result (for re-evaluation)
       const signalsToValidate = updatedSignals.filter(signal => 
-        signal.status === "COMPLETED" && 
-        (!signal.result || signal.result === "PENDING")
+        (signal.status === "COMPLETED" && (!signal.result || signal.result === "PENDING")) ||
+        signal.result === "PARTIAL"
+      ).filter(signal => 
+        // Skip signals that already have final results
+        signal.result !== "WINNER" && 
+        signal.result !== "LOSER" && 
+        signal.result !== 1 && 
+        signal.result !== 0
       );
 
       if (signalsToValidate.length > 0) {

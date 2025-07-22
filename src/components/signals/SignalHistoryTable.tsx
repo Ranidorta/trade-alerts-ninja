@@ -229,9 +229,12 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   const shouldShowVerifyButton = (signal: TradingSignal) => {
     // REGRA: Botão ativo apenas para PENDING ou PARTIAL
     // WINNER e LOSER não podem ser revalidados
-    return (signal.result === undefined || signal.result === "PENDING" || signal.result === "PARTIAL") && 
-           signal.status !== "COMPLETED" && 
-           signal.status !== "WAITING";
+    const hasUndefinedResult = signal.result === undefined || signal.result === "PENDING";
+    const hasPartialResult = signal.result === "PARTIAL";
+    const hasFinalResult = signal.result === "WINNER" || signal.result === "LOSER" || signal.result === 1 || signal.result === 0;
+    
+    // Só mostrar botão se não tiver resultado final
+    return (hasUndefinedResult || hasPartialResult) && !hasFinalResult;
   };
 
   const canRevalidate = (signal: TradingSignal) => {
@@ -386,7 +389,7 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
                         size="sm"
                         variant={canRevalidate(signal) ? "default" : "outline"}
                         onClick={() => handleVerifySignal(signal.id)}
-                        disabled={verifyingSignal === signal.id || (signal.result === "WINNER" || signal.result === "LOSER")}
+                        disabled={verifyingSignal === signal.id}
                       >
                         {verifyingSignal === signal.id ? 'Verificando...' : 
                          canRevalidate(signal) ? 'Revalidar' : 'Verificar'}
