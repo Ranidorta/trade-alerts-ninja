@@ -253,7 +253,7 @@ export const useTradingSignals = () => {
       // Then validate signals against historical data for completed ones
       const { validateSignalWithBybitData } = await import("@/lib/signalValidationService");
       const { useSupabaseSignals } = await import("@/hooks/useSupabaseSignals");
-      const { updateSignalInSupabase } = useSupabaseSignals();
+      const { updateSignalInSupabase, saveSignalToSupabase } = useSupabaseSignals();
       
       // Find signals that need validation:
       // - Completed signals without final result
@@ -290,8 +290,13 @@ export const useTradingSignals = () => {
               // Update in local storage (signal-storage key)
               saveSignalToHistory(validatedSignal);
               
-              // Save to Supabase
-              const supabaseSuccess = await updateSignalInSupabase(validatedSignal);
+              // Save to Supabase - try to save first, then update
+              let supabaseSuccess = await saveSignalToSupabase(validatedSignal);
+              if (!supabaseSuccess) {
+                // If save failed (signal might already exist), try to update
+                supabaseSuccess = await updateSignalInSupabase(validatedSignal);
+              }
+              
               if (supabaseSuccess) {
                 console.log(`✅ Signal ${validatedSignal.id} saved to Supabase with result: ${validatedSignal.result}`);
               } else {
