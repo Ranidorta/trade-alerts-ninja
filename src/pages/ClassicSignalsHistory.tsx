@@ -5,10 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 
 const ClassicSignalsHistory = () => {
   const [classicHistory, setClassicHistory] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { getSignalsFromSupabase } = useSupabaseSignals();
 
   // Performance metrics for classic signals only
   const [metrics, setMetrics] = useState({
@@ -26,18 +28,33 @@ const ClassicSignalsHistory = () => {
   const loadClassicHistory = async () => {
     setIsLoading(true);
     try {
-      // Load classic signals from localStorage
-      const storedHistory = localStorage.getItem('classic_signals_history');
-      if (storedHistory) {
-        const history: TradingSignal[] = JSON.parse(storedHistory);
-        
-        // Filter only classic strategy signals
-        const classicSignals = history.filter(signal => 
-          signal.strategy?.includes('classic') || signal.strategy === 'classic_ai'
-        );
-        
-        setClassicHistory(classicSignals);
-        calculateMetrics(classicSignals);
+      // Load classic signals from Supabase
+      const allSignals = await getSignalsFromSupabase();
+      
+      // Filter only classic strategy signals
+      const classicSignals = allSignals.filter(signal => 
+        signal.strategy?.includes('classic') || signal.strategy === 'classic_ai'
+      );
+      
+      console.log(`📊 Loaded ${classicSignals.length} classic signals from Supabase`);
+      setClassicHistory(classicSignals);
+      calculateMetrics(classicSignals);
+      
+      // Also try to load from localStorage as fallback
+      if (classicSignals.length === 0) {
+        const storedHistory = localStorage.getItem('classic_signals_history');
+        if (storedHistory) {
+          const history: TradingSignal[] = JSON.parse(storedHistory);
+          const localClassicSignals = history.filter(signal => 
+            signal.strategy?.includes('classic') || signal.strategy === 'classic_ai'
+          );
+          
+          if (localClassicSignals.length > 0) {
+            console.log(`📁 Fallback: Loaded ${localClassicSignals.length} classic signals from localStorage`);
+            setClassicHistory(localClassicSignals);
+            calculateMetrics(localClassicSignals);
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading classic history:', error);
@@ -58,9 +75,15 @@ const ClassicSignalsHistory = () => {
       return;
     }
 
-    const completedSignals = signals.filter(s => s.result === 'WINNER' || s.result === 'LOSER');
-    const winningSignals = signals.filter(s => s.result === 'WINNER').length;
-    const losingSignals = signals.filter(s => s.result === 'LOSER').length;
+    const completedSignals = signals.filter(s => 
+      s.result === 'WINNER' || s.result === 'LOSER' || s.result === 'win' || s.result === 'loss' || s.result === 1 || s.result === 0
+    );
+    const winningSignals = signals.filter(s => 
+      s.result === 'WINNER' || s.result === 'win' || s.result === 1
+    ).length;
+    const losingSignals = signals.filter(s => 
+      s.result === 'LOSER' || s.result === 'loss' || s.result === 0
+    ).length;
     const winRate = completedSignals.length > 0 ? (winningSignals / completedSignals.length) * 100 : 0;
     
     const totalConfidence = signals.reduce((sum, signal) => sum + (signal.confidence || 0), 0);
@@ -76,20 +99,35 @@ const ClassicSignalsHistory = () => {
   };
 
   const getSignalStatusColor = (signal: TradingSignal) => {
-    if (signal.result === 'WINNER') return 'text-green-600 bg-green-50 border-green-200';
-    if (signal.result === 'LOSER') return 'text-red-600 bg-red-50 border-red-200';
+    if (signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1) {
+      return 'text-green-600 bg-green-50 border-green-200';
+    }
+    if (signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0) {
+      return 'text-red-600 bg-red-50 border-red-200';
+    }
     return 'text-yellow-600 bg-yellow-50 border-yellow-200';
   };
 
   const getSignalStatusIcon = (signal: TradingSignal) => {
-    if (signal.result === 'WINNER') return <TrendingUp className="h-4 w-4" />;
-    if (signal.result === 'LOSER') return <TrendingDown className="h-4 w-4" />;
+    if (signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1) {
+      return <TrendingUp className="h-4 w-4" />;
+    }
+    if (signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0) {
+      return <TrendingDown className="h-4 w-4" />;
+    }
     return <Target className="h-4 w-4" />;
   };
 
   const getSignalStatusText = (signal: TradingSignal) => {
-    if (signal.result === 'WINNER') return 'Vencedor';
-    if (signal.result === 'LOSER') return 'Perdedor';
+    if (signal.result === 'WINNER' || signal.result === 'win' || signal.result === 1) {
+      return 'Vencedor';
+    }
+    if (signal.result === 'LOSER' || signal.result === 'loss' || signal.result === 0) {
+      return 'Perdedor';
+    }
+    if (signal.verifiedAt) {
+      return 'Validado';
+    }
     return 'Pendente';
   };
 
@@ -185,7 +223,8 @@ const ClassicSignalsHistory = () => {
                 Nenhum sinal classic encontrado
               </h3>
               <p className="text-slate-500 dark:text-slate-400">
-                Gere alguns sinais classic para ver o histórico aqui
+                Gere alguns sinais classic na aba "Sinais" para ver o histórico aqui.<br/>
+                Os resultados das validações aparecerão automaticamente.
               </p>
             </div>
           ) : (
@@ -245,7 +284,7 @@ const ClassicSignalsHistory = () => {
                     <div>
                       <span className="text-slate-500 dark:text-slate-400">TP1:</span>
                       <div className="font-medium text-green-600">
-                        {signal.tp1 || 'N/A'}
+                        {signal.targets && signal.targets.length > 0 ? signal.targets[0].price : 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -259,7 +298,20 @@ const ClassicSignalsHistory = () => {
                   {signal.analysis && (
                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                       <p className="text-sm text-slate-600 dark:text-slate-400">
-                        {signal.analysis}
+                        📊 {signal.analysis}
+                      </p>
+                    </div>
+                  )}
+
+                  {signal.verifiedAt && (
+                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        ✅ Validado em: {formatDistanceToNow(new Date(signal.verifiedAt), { addSuffix: true })}
+                        {signal.profit && (
+                          <span className={`ml-2 font-medium ${signal.profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            Lucro: {signal.profit > 0 ? '+' : ''}{signal.profit?.toFixed(2)}%
+                          </span>
+                        )}
                       </p>
                     </div>
                   )}
