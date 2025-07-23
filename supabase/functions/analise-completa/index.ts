@@ -101,24 +101,40 @@ serve(async (req) => {
       );
     }
 
-    // Gerar dados dinâmicos baseados no fixture_id
-    const teamPairs = [
-      { home: "Palmeiras", away: "Fluminense" },
-      { home: "Flamengo", away: "Corinthians" },
-      { home: "São Paulo", away: "Santos" },
-      { home: "Grêmio", away: "Internacional" },
-      { home: "Atlético-MG", away: "Cruzeiro" },
-      { home: "Vasco", away: "Botafogo" },
-      { home: "Bahia", away: "Vitória" },
-      { home: "Fortaleza", away: "Ceará" }
-    ];
+    console.log(`🔍 Analisando fixture_id: ${fixture_id}`);
 
-    // Usar fixture_id como seed para gerar dados consistentes mas diferentes
-    const seed = parseInt(fixture_id) || 1;
-    const teamIndex = seed % teamPairs.length;
-    const selectedTeams = teamPairs[teamIndex];
+    // Mapeamento dos jogos reais baseado no fixture_id
+    const gamesMapping: Record<string, { home: string, away: string }> = {
+      "1351193": { home: "Fluminense", away: "Palmeiras" },
+      "1351201": { home: "Ceara", away: "Mirassol" },
+      "1351195": { home: "Corinthians", away: "Cruzeiro" },
+      "1351196": { home: "Santos", away: "Internacional" },
+      "1351200": { home: "Vitoria", away: "Sport Recife" },
+      "1351197": { home: "RB Bragantino", away: "Flamengo" },
+      "1351199": { home: "Gremio", away: "Botafogo" },
+      "1351194": { home: "Vasco DA Gama", away: "Bahia" },
+      "1351198": { home: "Atletico-MG", away: "Fortaleza EC" },
+      "1351202": { home: "Juventude", away: "Sao Paulo" },
+      "1351204": { home: "Botafogo", away: "Corinthians" },
+      "1351212": { home: "Sport Recife", away: "Santos" },
+      "1351211": { home: "Fortaleza EC", away: "RB Bragantino" },
+      "1351207": { home: "Mirassol", away: "Vitoria" },
+      "1351205": { home: "Palmeiras", away: "Gremio" },
+      "1351206": { home: "Sao Paulo", away: "Fluminense" },
+      "1351208": { home: "Cruzeiro", away: "Ceara" },
+      "1351210": { home: "Bahia", away: "Juventude" },
+      "1351209": { home: "Internacional", away: "Vasco DA Gama" },
+      "1351203": { home: "Flamengo", away: "Atletico-MG" },
+      "1351179": { home: "Gremio", away: "Fortaleza EC" }
+    };
+
+    // Buscar o jogo específico ou usar um padrão
+    const selectedTeams = gamesMapping[fixture_id] || { home: "Time A", away: "Time B" };
+    
+    console.log(`🔍 Times selecionados para ${fixture_id}: ${selectedTeams.home} vs ${selectedTeams.away}`);
 
     // Gerar probabilidades e médias baseadas no seed
+    const seed = parseInt(fixture_id) || 1;
     const random1 = ((seed * 9301 + 49297) % 233280) / 233280;
     const random2 = ((seed * 1103 + 7919) % 211111) / 211111;
     const random3 = ((seed * 2203 + 3331) % 188888) / 188888;
