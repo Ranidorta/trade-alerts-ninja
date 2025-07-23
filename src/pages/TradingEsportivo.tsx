@@ -13,6 +13,18 @@ interface TradingEsportivoSignal {
   probabilidade: number;
 }
 
+interface OddsAnalysis {
+  jogo: string;
+  horario: string;
+  mercado: string;
+  analises: {
+    aposta: string;
+    odd: string;
+    probabilidade: string;
+    valor_esperado: string;
+  }[];
+}
+
 interface Match {
   id: string;
   homeTeam: string;
@@ -51,8 +63,10 @@ const TradingEsportivo = () => {
   const [selectedSignalType, setSelectedSignalType] = useState<string>("");
   const [signals, setSignals] = useState<TradingEsportivoSignal[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [oddsAnalyses, setOddsAnalyses] = useState<OddsAnalysis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
+  const [isLoadingOdds, setIsLoadingOdds] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -108,6 +122,44 @@ const TradingEsportivo = () => {
       });
     } finally {
       setIsLoadingMatches(false);
+    }
+  };
+
+  const fetchOddsAnalysis = async (league: string) => {
+    setIsLoadingOdds(true);
+    try {
+      console.log(`📊 Buscando análises de odds para: ${league}`);
+      
+      const { data, error } = await supabase.functions.invoke('get-odds', {
+        body: { league, page: 1 }
+      });
+
+      if (error) {
+        console.error('❌ Erro na edge function de odds:', error);
+        throw new Error(`Erro na API de odds: ${error.message}`);
+      }
+
+      console.log('📊 Resposta da edge function de odds:', data);
+
+      if (data && data.analises) {
+        setOddsAnalyses(data.analises);
+        toast({
+          title: "Análises de odds carregadas",
+          description: `${data.analises.length} análises encontradas para ${league}.`
+        });
+      } else {
+        setOddsAnalyses([]);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar análises de odds:', error);
+      toast({
+        title: "Erro ao carregar odds",
+        description: "Não foi possível carregar as análises de odds.",
+        variant: "destructive"
+      });
+      setOddsAnalyses([]);
+    } finally {
+      setIsLoadingOdds(false);
     }
   };
 
@@ -179,6 +231,7 @@ const TradingEsportivo = () => {
     setSelectedSignalType("");
     setSignals([]);
     setMatches([]);
+    setOddsAnalyses([]);
     setError(null);
   };
 
@@ -226,6 +279,7 @@ const TradingEsportivo = () => {
                     onClick={() => {
                       setSelectedLeague(league.id);
                       fetchMatches(league.id);
+                      fetchOddsAnalysis(league.id);
                     }}
                   >
                     <div className="flex items-center gap-3">
@@ -292,6 +346,94 @@ const TradingEsportivo = () => {
                     </div>
                   </Button>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Odds Analysis Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Análises de Odds
+              </CardTitle>
+              <CardDescription>
+                Análises de apostas com odds e probabilidades calculadas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOdds ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 text-primary mx-auto mb-4 animate-spin" />
+                  <p className="text-muted-foreground">Carregando análises de odds...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {oddsAnalyses.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                        Nenhuma análise encontrada
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Não há análises de odds disponíveis para esta liga no momento
+                      </p>
+                    </div>
+                  ) : (
+                    oddsAnalyses.map((analysis, index) => (
+                      <Card key={index} className="border">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Match Info */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold">{analysis.jogo}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {new Date(analysis.horario).toLocaleDateString('pt-BR')} às{' '}
+                                  {new Date(analysis.horario).toLocaleTimeString('pt-BR', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
+                                </p>
+                              </div>
+                              <Badge variant="outline">{analysis.mercado}</Badge>
+                            </div>
+
+                            {/* Odds Analysis */}
+                            <div className="grid gap-2">
+                              {analysis.analises.map((bet, betIndex) => (
+                                <div 
+                                  key={betIndex} 
+                                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-medium">{bet.aposta}</span>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={
+                                        bet.valor_esperado === "Positivo" 
+                                          ? "border-green-500 text-green-700" 
+                                          : bet.valor_esperado === "Negativo"
+                                          ? "border-red-500 text-red-700"
+                                          : "border-yellow-500 text-yellow-700"
+                                      }
+                                    >
+                                      {bet.valor_esperado}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-bold text-lg">{bet.odd}</div>
+                                    <div className="text-sm text-muted-foreground">{bet.probabilidade}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
                 </div>
               )}
             </CardContent>
