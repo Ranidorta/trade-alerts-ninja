@@ -71,19 +71,30 @@ serve(async (req) => {
         const apiResponse = await fetchFixtures(leagueMapping[league], season)
         
         if (apiResponse.response && Array.isArray(apiResponse.response)) {
-          games = apiResponse.response.map((fixture: any) => ({
-            id: fixture.fixture.id.toString(),
-            homeTeam: fixture.teams.home.name,
-            awayTeam: fixture.teams.away.name,
-            date: fixture.fixture.date.split('T')[0],
-            time: new Date(fixture.fixture.date).toLocaleTimeString('pt-BR', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            }),
-            league: league,
-            status: fixture.fixture.status.short,
-            venue: fixture.fixture.venue?.name || 'TBD'
-          }))
+          games = apiResponse.response.map((fixture: any) => {
+            const fixtureDate = new Date(fixture.fixture.date);
+            
+            // Convert to Brasília timezone (UTC-3)
+            const brasiliaDate = new Date(fixtureDate.getTime() - (3 * 60 * 60 * 1000));
+            
+            return {
+              id: fixture.fixture.id.toString(),
+              homeTeam: fixture.teams.home.name,
+              awayTeam: fixture.teams.away.name,
+              date: brasiliaDate.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit', 
+                year: 'numeric'
+              }),
+              time: brasiliaDate.toLocaleTimeString('pt-BR', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              }),
+              league: league,
+              status: fixture.fixture.status.short,
+              venue: fixture.fixture.venue?.name || 'TBD'
+            }
+          })
         }
       } catch (apiError) {
         console.error('API Error:', apiError)
@@ -120,7 +131,7 @@ function getMockGames() {
       id: "1",
       homeTeam: "Flamengo",
       awayTeam: "Palmeiras",
-      date: "2024-01-20",
+      date: "20/01/2025",
       time: "16:00",
       league: "Brasileirão Série A",
       status: "NS",
@@ -130,7 +141,7 @@ function getMockGames() {
       id: "2", 
       homeTeam: "Corinthians",
       awayTeam: "São Paulo",
-      date: "2024-01-21",
+      date: "21/01/2025",
       time: "18:30",
       league: "Brasileirão Série A",
       status: "NS",
@@ -140,7 +151,7 @@ function getMockGames() {
       id: "3",
       homeTeam: "Arsenal",
       awayTeam: "Chelsea",
-      date: "2024-01-22",
+      date: "22/01/2025",
       time: "15:00",
       league: "Premier League",
       status: "NS",

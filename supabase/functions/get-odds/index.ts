@@ -51,7 +51,7 @@ function getMockOdds() {
   return [
     {
       jogo: "Flamengo vs Palmeiras",
-      horario: "2025-01-25T19:00:00Z",
+      horario: "25/01/2025 16:00",
       mercado: "Match Winner",
       analises: [
         {
@@ -76,7 +76,7 @@ function getMockOdds() {
     },
     {
       jogo: "São Paulo vs Corinthians",
-      horario: "2025-01-26T16:00:00Z",
+      horario: "26/01/2025 13:00",
       mercado: "Total Goals",
       analises: [
         {
@@ -95,7 +95,7 @@ function getMockOdds() {
     },
     {
       jogo: "Arsenal vs Chelsea",
-      horario: "2025-01-25T15:00:00Z",
+      horario: "25/01/2025 12:00",
       mercado: "Match Winner",
       analises: [
         {
@@ -144,7 +144,18 @@ serve(async (req) => {
             const fixture = item.fixture || {}
             const homeTeam = fixture.teams?.home?.name || 'Home Team'
             const awayTeam = fixture.teams?.away?.name || 'Away Team'
-            const matchTime = fixture.date || new Date().toISOString()
+            const matchDate = new Date(fixture.date || new Date())
+            
+            // Convert to Brasília timezone (UTC-3)
+            const brasiliaDate = new Date(matchDate.getTime() - (3 * 60 * 60 * 1000))
+            const matchTime = brasiliaDate.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: '2-digit', 
+              year: 'numeric'
+            }) + ' ' + brasiliaDate.toLocaleTimeString('pt-BR', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            })
 
             const bookmakers = item.bookmakers || []
             const analyses = []
