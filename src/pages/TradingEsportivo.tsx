@@ -9,13 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AnaliseCompletaCard } from "@/components/signals/AnaliseCompletaCard";
 
-// Import league images
-import brasileiraoImg from "@/assets/brasileirao.jpg";
-import premierLeagueImg from "@/assets/premier-league.jpg";
-import bundesligaImg from "@/assets/bundesliga.jpg";
-import laLigaImg from "@/assets/la-liga.jpg";
-import serieAImg from "@/assets/serie-a.jpg";
-import ligue1Img from "@/assets/ligue-1.jpg";
 
 interface TradingEsportivoSignal {
   sinal: string;
@@ -43,12 +36,12 @@ interface Match {
 }
 
 const leagues = [
-  { id: "Brasileirão Série A", name: "Brasileirão Série A", flag: "🇧🇷", image: brasileiraoImg },
-  { id: "Premier League", name: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", image: premierLeagueImg },
-  { id: "Bundesliga", name: "Bundesliga", flag: "🇩🇪", image: bundesligaImg },
-  { id: "La Liga", name: "La Liga", flag: "🇪🇸", image: laLigaImg },
-  { id: "Serie A", name: "Serie A", flag: "🇮🇹", image: serieAImg },
-  { id: "Ligue 1", name: "Ligue 1", flag: "🇫🇷", image: ligue1Img },
+  { id: "Brasileirão Série A", name: "Brasileirão Série A", flag: "🇧🇷" },
+  { id: "Premier League", name: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+  { id: "Bundesliga", name: "Bundesliga", flag: "🇩🇪" },
+  { id: "La Liga", name: "La Liga", flag: "🇪🇸" },
+  { id: "Serie A", name: "Serie A", flag: "🇮🇹" },
+  { id: "Ligue 1", name: "Ligue 1", flag: "🇫🇷" },
 ];
 
 const markets = [
@@ -332,12 +325,7 @@ const TradingEsportivo = () => {
                     }}
                   >
                     <div className="flex items-center gap-3">
-                      <img 
-                        src={league.image} 
-                        alt={league.name}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                      <span className="text-2xl">{league.flag}</span>
+                      <span className="text-3xl">{league.flag}</span>
                       <span className="text-left">{league.name}</span>
                     </div>
                   </Button>
