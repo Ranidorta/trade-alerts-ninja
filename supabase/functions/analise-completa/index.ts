@@ -101,17 +101,42 @@ serve(async (req) => {
       );
     }
 
-    // Simulação para MVP - dados baseados no fixture_id
+    // Gerar dados dinâmicos baseados no fixture_id
+    const teamPairs = [
+      { home: "Palmeiras", away: "Fluminense" },
+      { home: "Flamengo", away: "Corinthians" },
+      { home: "São Paulo", away: "Santos" },
+      { home: "Grêmio", away: "Internacional" },
+      { home: "Atlético-MG", away: "Cruzeiro" },
+      { home: "Vasco", away: "Botafogo" },
+      { home: "Bahia", away: "Vitória" },
+      { home: "Fortaleza", away: "Ceará" }
+    ];
+
+    // Usar fixture_id como seed para gerar dados consistentes mas diferentes
+    const seed = parseInt(fixture_id) || 1;
+    const teamIndex = seed % teamPairs.length;
+    const selectedTeams = teamPairs[teamIndex];
+
+    // Gerar probabilidades e médias baseadas no seed
+    const random1 = ((seed * 9301 + 49297) % 233280) / 233280;
+    const random2 = ((seed * 1103 + 7919) % 211111) / 211111;
+    const random3 = ((seed * 2203 + 3331) % 188888) / 188888;
+
+    const prob_home = Math.round((0.3 + random1 * 0.5) * 100) / 100;
+    const prob_away = Math.round((0.15 + random2 * 0.35) * 100) / 100;
+    const prob_empate = Math.round((1 - prob_home - prob_away) * 100) / 100;
+
     const dados_partida: DadosPartida = {
-      home_team: "Palmeiras",
-      away_team: "Fluminense", 
-      media_gols_home: 1.7,
-      media_gols_away: 1.1,
-      media_escanteios_home: 5.6,
-      media_escanteios_away: 4.8,
-      prob_vitoria_home: 0.57,
-      prob_empate: 0.25,
-      prob_vitoria_away: 0.18
+      home_team: selectedTeams.home,
+      away_team: selectedTeams.away,
+      media_gols_home: Math.round((1.0 + random1 * 1.5) * 10) / 10,
+      media_gols_away: Math.round((0.8 + random2 * 1.2) * 10) / 10,
+      media_escanteios_home: Math.round((4.0 + random1 * 3.0) * 10) / 10,
+      media_escanteios_away: Math.round((3.5 + random2 * 3.5) * 10) / 10,
+      prob_vitoria_home: prob_home,
+      prob_empate: prob_empate,
+      prob_vitoria_away: prob_away
     };
 
     const resultado = calcularProbabilidadesCompletas(dados_partida);
