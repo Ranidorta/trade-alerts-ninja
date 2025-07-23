@@ -29,21 +29,29 @@ async function fetchFixtures(leagueId: number, season: number) {
   const fromDate = today.toISOString().split('T')[0]
   const toDate = nextWeek.toISOString().split('T')[0]
 
+  console.log(`Fetching fixtures for league ${leagueId} from ${fromDate} to ${toDate}`)
+
   const response = await fetch(
-    `https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=${season}&from=${fromDate}&to=${toDate}`,
+    `https://api-football-v1.p.rapidapi.com/v2/fixtures/league/${leagueId}?page=1`,
     {
       headers: {
-        'X-RapidAPI-Key': apiKey,
-        'X-RapidAPI-Host': 'v3.football.api-sports.io'
+        'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
+        'x-rapidapi-key': apiKey
       }
     }
   )
 
+  console.log(`API Response status: ${response.status}`)
+
   if (!response.ok) {
+    const errorText = await response.text()
+    console.error(`API Error: ${response.status} - ${errorText}`)
     throw new Error(`API request failed: ${response.status}`)
   }
 
-  return response.json()
+  const data = await response.json()
+  console.log('API Response data:', JSON.stringify(data, null, 2))
+  return data
 }
 
 serve(async (req) => {
