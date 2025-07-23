@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, TrendingUp, Target, AlertCircle, Trophy, Calendar, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { AnaliseCompletaCard } from "@/components/signals/AnaliseCompletaCard";
 
 interface TradingEsportivoSignal {
   sinal: string;
@@ -64,9 +65,11 @@ const TradingEsportivo = () => {
   const [signals, setSignals] = useState<TradingEsportivoSignal[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [oddsAnalyses, setOddsAnalyses] = useState<OddsAnalysis[]>([]);
+  const [analiseCompleta, setAnaliseCompleta] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
   const [isLoadingOdds, setIsLoadingOdds] = useState(false);
+  const [isLoadingAnalise, setIsLoadingAnalise] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -163,52 +166,41 @@ const TradingEsportivo = () => {
     }
   };
 
-  const fetchMatchOddsAnalysis = async (match: Match) => {
-    setIsLoadingOdds(true);
+  const fetchAnaliseCompleta = async (match: Match) => {
+    setIsLoadingAnalise(true);
     try {
-      console.log(`📊 Buscando análises de odds para o jogo: ${match.homeTeam} vs ${match.awayTeam}`);
+      console.log(`📊 Buscando análise completa para: ${match.homeTeam} vs ${match.awayTeam}`);
       
-      const { data, error } = await supabase.functions.invoke('get-odds', {
-        body: { league: selectedLeague, page: 1 }
+      const { data, error } = await supabase.functions.invoke('analise-completa', {
+        body: { fixture_id: match.id }
       });
 
       if (error) {
-        console.error('❌ Erro na edge function de odds:', error);
-        throw new Error(`Erro na API de odds: ${error.message}`);
+        console.error('❌ Erro na edge function de análise completa:', error);
+        throw new Error(`Erro na API de análise: ${error.message}`);
       }
 
-      console.log('📊 Resposta da edge function de odds:', data);
+      console.log('📊 Resposta da análise completa:', data);
 
-      if (data && data.analises) {
-        // Filter analyses for the selected match
-        const matchAnalyses = data.analises.filter((analysis: OddsAnalysis) => 
-          analysis.jogo.includes(match.homeTeam) && analysis.jogo.includes(match.awayTeam)
-        );
-        
-        if (matchAnalyses.length === 0) {
-          // If no specific match found, show all analyses for reference
-          setOddsAnalyses(data.analises);
-        } else {
-          setOddsAnalyses(matchAnalyses);
-        }
-        
+      if (data) {
+        setAnaliseCompleta(data);
         toast({
-          title: "Análises carregadas",
-          description: `Análises de odds carregadas para o jogo selecionado.`
+          title: "Análise completa carregada",
+          description: `Análise completa carregada para ${match.homeTeam} vs ${match.awayTeam}.`
         });
       } else {
-        setOddsAnalyses([]);
+        setAnaliseCompleta(null);
       }
     } catch (error) {
-      console.error('❌ Erro ao buscar análises de odds:', error);
+      console.error('❌ Erro ao buscar análise completa:', error);
       toast({
-        title: "Erro ao carregar odds",
-        description: "Não foi possível carregar as análises de odds.",
+        title: "Erro ao carregar análise",
+        description: "Não foi possível carregar a análise completa.",
         variant: "destructive"
       });
-      setOddsAnalyses([]);
+      setAnaliseCompleta(null);
     } finally {
-      setIsLoadingOdds(false);
+      setIsLoadingAnalise(false);
     }
   };
 
@@ -380,7 +372,7 @@ const TradingEsportivo = () => {
                     className="w-full h-auto p-4 justify-between"
                     onClick={() => {
                       setSelectedMatch(match);
-                      fetchMatchOddsAnalysis(match);
+                      fetchAnaliseCompleta(match);
                     }}
                   >
                     <div className="flex items-center gap-4">
@@ -499,7 +491,7 @@ const TradingEsportivo = () => {
           <div className="flex items-center gap-4 mb-6">
             <Button variant="outline" onClick={() => {
               setSelectedMatch(null);
-              setOddsAnalyses([]);
+              setAnaliseCompleta(null);
             }}>
               ← Voltar
             </Button>
@@ -513,89 +505,25 @@ const TradingEsportivo = () => {
             </div>
           </div>
 
-          {/* Match Odds Analysis */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                Análises de Apostas
-              </CardTitle>
-              <CardDescription>
-                Todas as análises disponíveis para este jogo
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingOdds ? (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 text-primary mx-auto mb-4 animate-spin" />
-                  <p className="text-muted-foreground">Carregando análises...</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {oddsAnalyses.length === 0 ? (
-                    <div className="text-center py-8">
-                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                        Nenhuma análise encontrada
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Não há análises disponíveis para este jogo no momento
-                      </p>
-                    </div>
-                  ) : (
-                    oddsAnalyses.map((analysis, index) => (
-                      <Card key={index} className="border">
-                        <CardContent className="p-4">
-                          <div className="space-y-3">
-                            {/* Match Info */}
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="font-semibold">{analysis.jogo}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {analysis.horario}
-                                </p>
-                              </div>
-                              <Badge variant="outline">{analysis.mercado}</Badge>
-                            </div>
-
-                            {/* Odds Analysis */}
-                            <div className="grid gap-2">
-                              {analysis.analises.map((bet, betIndex) => (
-                                <div 
-                                  key={betIndex} 
-                                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <span className="font-medium">{bet.aposta}</span>
-                                    <Badge 
-                                      variant="outline" 
-                                      className={
-                                        bet.valor_esperado === "Positivo" 
-                                          ? "border-green-500 text-green-700" 
-                                          : bet.valor_esperado === "Negativo"
-                                          ? "border-red-500 text-red-700"
-                                          : "border-yellow-500 text-yellow-700"
-                                      }
-                                    >
-                                      {bet.valor_esperado}
-                                    </Badge>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold text-lg">{bet.odd}</div>
-                                    <div className="text-sm text-muted-foreground">{bet.probabilidade}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Análise Completa */}
+          {isLoadingAnalise ? (
+            <div className="text-center py-8">
+              <Loader2 className="h-8 w-8 text-primary mx-auto mb-4 animate-spin" />
+              <p className="text-muted-foreground">Carregando análise completa...</p>
+            </div>
+          ) : analiseCompleta ? (
+            <AnaliseCompletaCard analise={analiseCompleta} />
+          ) : (
+            <div className="text-center py-8">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                Nenhuma análise encontrada
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Não há análise disponível para este jogo no momento
+              </p>
+            </div>
+          )}
 
         </div>
       )}
