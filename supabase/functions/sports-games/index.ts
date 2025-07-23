@@ -32,7 +32,7 @@ async function fetchFixtures(leagueId: number, season: number) {
   console.log(`Fetching fixtures for league ${leagueId} from ${fromDate} to ${toDate}`)
 
   const response = await fetch(
-    `https://api-football-v1.p.rapidapi.com/v2/fixtures/league/${leagueId}?page=1`,
+    `https://api-football-v1.p.rapidapi.com/v3/fixtures?league=${leagueId}&season=${season}&from=${fromDate}&to=${toDate}`,
     {
       headers: {
         'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
