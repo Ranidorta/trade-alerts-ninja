@@ -83,7 +83,13 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const fixture_id = url.searchParams.get('fixture_id');
+    let fixture_id = url.searchParams.get('fixture_id');
+
+    // Se não encontrar na URL, tenta buscar no body
+    if (!fixture_id) {
+      const body = await req.json();
+      fixture_id = body.fixture_id;
+    }
 
     if (!fixture_id) {
       return new Response(
