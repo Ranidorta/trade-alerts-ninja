@@ -163,6 +163,55 @@ const TradingEsportivo = () => {
     }
   };
 
+  const fetchMatchOddsAnalysis = async (match: Match) => {
+    setIsLoadingOdds(true);
+    try {
+      console.log(`📊 Buscando análises de odds para o jogo: ${match.homeTeam} vs ${match.awayTeam}`);
+      
+      const { data, error } = await supabase.functions.invoke('get-odds', {
+        body: { league: selectedLeague, page: 1 }
+      });
+
+      if (error) {
+        console.error('❌ Erro na edge function de odds:', error);
+        throw new Error(`Erro na API de odds: ${error.message}`);
+      }
+
+      console.log('📊 Resposta da edge function de odds:', data);
+
+      if (data && data.analises) {
+        // Filter analyses for the selected match
+        const matchAnalyses = data.analises.filter((analysis: OddsAnalysis) => 
+          analysis.jogo.includes(match.homeTeam) && analysis.jogo.includes(match.awayTeam)
+        );
+        
+        if (matchAnalyses.length === 0) {
+          // If no specific match found, show all analyses for reference
+          setOddsAnalyses(data.analises);
+        } else {
+          setOddsAnalyses(matchAnalyses);
+        }
+        
+        toast({
+          title: "Análises carregadas",
+          description: `Análises de odds carregadas para o jogo selecionado.`
+        });
+      } else {
+        setOddsAnalyses([]);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar análises de odds:', error);
+      toast({
+        title: "Erro ao carregar odds",
+        description: "Não foi possível carregar as análises de odds.",
+        variant: "destructive"
+      });
+      setOddsAnalyses([]);
+    } finally {
+      setIsLoadingOdds(false);
+    }
+  };
+
   const handleGenerateSignal = async () => {
     if (!selectedMatch || !selectedMarket || !selectedMarketOption || !selectedSignalType) {
       toast({
@@ -329,7 +378,10 @@ const TradingEsportivo = () => {
                     key={match.id}
                     variant="outline"
                     className="w-full h-auto p-4 justify-between"
-                    onClick={() => setSelectedMatch(match)}
+                    onClick={() => {
+                      setSelectedMatch(match);
+                      fetchMatchOddsAnalysis(match);
+                    }}
                   >
                     <div className="flex items-center gap-4">
                       <div className="text-left">
@@ -441,11 +493,14 @@ const TradingEsportivo = () => {
         </div>
       )}
 
-      {/* Step 3: Market and Signal Type Selection */}
+      {/* Step 3: Match Analysis Display */}
       {selectedMatch && (
         <div className="space-y-6">
           <div className="flex items-center gap-4 mb-6">
-            <Button variant="outline" onClick={() => setSelectedMatch(null)}>
+            <Button variant="outline" onClick={() => {
+              setSelectedMatch(null);
+              setOddsAnalyses([]);
+            }}>
               ← Voltar
             </Button>
             <div>
@@ -458,191 +513,90 @@ const TradingEsportivo = () => {
             </div>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Configuration Panel */}
-            <div className="lg:col-span-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-primary" />
-                    Configurar Sinal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Market Selection */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Mercado</label>
-                    <Select value={selectedMarket} onValueChange={setSelectedMarket}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o mercado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {markets.map((market) => (
-                          <SelectItem key={market.id} value={market.id}>
-                            {market.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Market Option */}
-                  {selectedMarket && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Opção do Mercado</label>
-                      <Select value={selectedMarketOption} onValueChange={setSelectedMarketOption}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione a opção" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {markets.find(m => m.id === selectedMarket)?.options.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Signal Type */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Tipo de Sinal</label>
-                    <Select value={selectedSignalType} onValueChange={setSelectedSignalType}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Back ou Lay" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {signalTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            <div>
-                              <div className="font-medium">{type.name}</div>
-                              <div className="text-xs text-muted-foreground">{type.description}</div>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <Button 
-                    onClick={handleGenerateSignal}
-                    className="w-full" 
-                    disabled={isLoading || !selectedMarket || !selectedMarketOption || !selectedSignalType}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Gerando Sinal...
-                      </>
-                    ) : (
-                      "Gerar Sinal"
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Results Panel */}
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    Sinal Gerado
-                  </CardTitle>
-                  <CardDescription>
-                    Resultado da análise estatística para trading esportivo
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {error && (
-                    <Alert variant="destructive" className="mb-4">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {signals.length === 0 && !isLoading && !error && (
+          {/* Match Odds Analysis */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Análises de Apostas
+              </CardTitle>
+              <CardDescription>
+                Todas as análises disponíveis para este jogo
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOdds ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 text-primary mx-auto mb-4 animate-spin" />
+                  <p className="text-muted-foreground">Carregando análises...</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {oddsAnalyses.length === 0 ? (
                     <div className="text-center py-8">
-                      <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                        Configure e gere seu sinal
+                        Nenhuma análise encontrada
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        Selecione o mercado, opção e tipo de sinal para gerar a análise
+                        Não há análises disponíveis para este jogo no momento
                       </p>
                     </div>
-                  )}
-
-                  {isLoading && (
-                    <div className="text-center py-8">
-                      <Loader2 className="h-12 w-12 text-primary mx-auto mb-4 animate-spin" />
-                      <h3 className="text-lg font-medium mb-2">
-                        Analisando jogo...
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Processando dados estatísticos com modelo Poisson
-                      </p>
-                    </div>
-                  )}
-
-                  {signals.length > 0 && (
-                    <div className="space-y-4">
-                      {signals.map((signal, index) => (
-                        <Card key={index} className="border">
-                          <CardContent className="p-6">
-                            <div className="space-y-4">
-                              {/* Signal Header */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  {getProbabilityIcon(signal.probabilidade)}
-                                  <div>
-                                    <h4 className="font-semibold text-lg">{signal.sinal}</h4>
-                                    <p className="text-muted-foreground">
-                                      {selectedMatch.homeTeam} vs {selectedMatch.awayTeam}
-                                    </p>
-                                  </div>
-                                </div>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-lg px-4 py-2 ${getProbabilityColor(signal.probabilidade)}`}
-                                >
-                                  {(signal.probabilidade * 100).toFixed(1)}%
-                                </Badge>
+                  ) : (
+                    oddsAnalyses.map((analysis, index) => (
+                      <Card key={index} className="border">
+                        <CardContent className="p-4">
+                          <div className="space-y-3">
+                            {/* Match Info */}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold">{analysis.jogo}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {analysis.horario}
+                                </p>
                               </div>
-
-                              {/* Match Details */}
-                              <div className="bg-muted/30 rounded-lg p-4">
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                  <div>
-                                    <span className="text-muted-foreground">Data:</span>
-                                    <span className="ml-2 font-medium">{selectedMatch.date}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Horário:</span>
-                                    <span className="ml-2 font-medium">{selectedMatch.time}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Mercado:</span>
-                                    <span className="ml-2 font-medium">{selectedMarketOption}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Tipo:</span>
-                                    <span className="ml-2 font-medium capitalize">{selectedSignalType}</span>
-                                  </div>
-                                </div>
-                              </div>
+                              <Badge variant="outline">{analysis.mercado}</Badge>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+
+                            {/* Odds Analysis */}
+                            <div className="grid gap-2">
+                              {analysis.analises.map((bet, betIndex) => (
+                                <div 
+                                  key={betIndex} 
+                                  className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-medium">{bet.aposta}</span>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={
+                                        bet.valor_esperado === "Positivo" 
+                                          ? "border-green-500 text-green-700" 
+                                          : bet.valor_esperado === "Negativo"
+                                          ? "border-red-500 text-red-700"
+                                          : "border-yellow-500 text-yellow-700"
+                                      }
+                                    >
+                                      {bet.valor_esperado}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-bold text-lg">{bet.odd}</div>
+                                    <div className="text-sm text-muted-foreground">{bet.probabilidade}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
                   )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
       )}
     </div>
