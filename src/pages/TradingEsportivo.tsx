@@ -171,6 +171,8 @@ const TradingEsportivo = () => {
     setIsLoadingAnalise(true);
     try {
       console.log(`📊 Buscando análise completa para: ${match.homeTeam} vs ${match.awayTeam}`);
+      console.log(`📊 Match ID enviado para API: ${match.id}`);
+      console.log(`📊 Match object completo enviado:`, match);
       
       const { data, error } = await supabase.functions.invoke('analise-completa', {
         body: { fixture_id: match.id }
@@ -371,7 +373,11 @@ const TradingEsportivo = () => {
                     key={match.id}
                     variant="outline"
                     className="w-full h-auto p-4 justify-between"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log(`🔍 Click capturado - Match ID: ${match.id}, Teams: ${match.homeTeam} vs ${match.awayTeam}`);
+                      console.log(`🔍 Match object completo:`, match);
                       setSelectedMatch(match);
                       fetchAnaliseCompleta(match);
                     }}
