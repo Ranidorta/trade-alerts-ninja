@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Home,
   BarChart4, 
@@ -11,6 +11,7 @@ import {
   Settings
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Sidebar,
   SidebarContent,
@@ -42,17 +43,25 @@ const mainItems = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile, openMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const currentPath = location.pathname;
+  const isMobile = useIsMobile();
 
   const isActive = (path: string) => currentPath === path;
   const isExpanded = mainItems.some((i) => isActive(i.url));
   
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent/50";
+
+  // Auto-close mobile menu on route change
+  useEffect(() => {
+    if (isMobile && openMobile) {
+      setOpenMobile(false);
+    }
+  }, [currentPath, isMobile, openMobile, setOpenMobile]);
 
   const handleLogout = async () => {
     try {
@@ -117,8 +126,13 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Button 
-                  onClick={() => navigate("/checkout")}
+                 <Button 
+                  onClick={() => {
+                    navigate("/checkout");
+                    if (isMobile && openMobile) {
+                      setOpenMobile(false);
+                    }
+                  }}
                   variant="default"
                   size="sm"
                   className={`w-full h-11 justify-start gap-3 ${isCollapsed ? 'px-3' : 'px-3'}`}
@@ -166,10 +180,15 @@ export function AppSidebar() {
                   <div className="flex items-center gap-3 px-3 py-3">
                     <ThemeToggle />
                     {!isCollapsed && (
-                      <Button
+                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleLogout}
+                        onClick={() => {
+                          handleLogout();
+                          if (isMobile && openMobile) {
+                            setOpenMobile(false);
+                          }
+                        }}
                         className="flex-1 justify-start h-auto p-0 hover:bg-transparent text-muted-foreground hover:text-foreground"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
