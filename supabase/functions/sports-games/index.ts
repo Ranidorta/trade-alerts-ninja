@@ -8,6 +8,7 @@ const corsHeaders = {
 // League mapping to API Football IDs
 const leagueMapping: Record<string, number> = {
   "Brasileirão Série A": 71,
+  "Brasileirão Série B": 72,
   "Premier League": 39,
   "Bundesliga": 78,
   "La Liga": 140,
@@ -156,6 +157,26 @@ function getMockGames() {
       league: "Premier League",
       status: "NS",
       venue: "Emirates Stadium"
+    },
+    {
+      id: "4",
+      homeTeam: "Santos",
+      awayTeam: "Sport Recife",
+      date: "20/01/2025",
+      time: "19:00",
+      league: "Brasileirão Série B",
+      status: "NS",
+      venue: "Vila Belmiro"
+    },
+    {
+      id: "5",
+      homeTeam: "Ponte Preta",
+      awayTeam: "Goiás",
+      date: "21/01/2025",
+      time: "16:30",
+      league: "Brasileirão Série B",
+      status: "NS",
+      venue: "Estádio Moisés Lucarelli"
     }
   ]
 }

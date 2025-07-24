@@ -8,6 +8,7 @@ const corsHeaders = {
 // League mapping to API Football IDs
 const leagueMapping: Record<string, number> = {
   "Brasileirão Série A": 71,
+  "Brasileirão Série B": 72,
   "Premier League": 39,
   "Bundesliga": 78,
   "La Liga": 140,
@@ -117,6 +118,50 @@ function getMockOdds() {
           valor_esperado: "Negativo"
         }
       ]
+    },
+    {
+      jogo: "Santos vs Sport Recife",
+      horario: "24/01/2025 20:00",
+      mercado: "Match Winner",
+      analises: [
+        {
+          aposta: "Santos",
+          odd: "1.75",
+          probabilidade: "57.1%",
+          valor_esperado: "Positivo"
+        },
+        {
+          aposta: "Draw",
+          odd: "3.50",
+          probabilidade: "28.6%",
+          valor_esperado: "Neutro"
+        },
+        {
+          aposta: "Sport Recife",
+          odd: "4.20",
+          probabilidade: "23.8%",
+          valor_esperado: "Negativo"
+        }
+      ]
+    },
+    {
+      jogo: "Ponte Preta vs Goiás",
+      horario: "25/01/2025 17:30",
+      mercado: "Total Goals",
+      analises: [
+        {
+          aposta: "Over 2.5",
+          odd: "2.00",
+          probabilidade: "50.0%",
+          valor_esperado: "Neutro"
+        },
+        {
+          aposta: "Under 2.5",
+          odd: "1.80",
+          probabilidade: "55.6%",
+          valor_esperado: "Positivo"
+        }
+      ]
     }
   ]
 }
@@ -193,13 +238,16 @@ serve(async (req) => {
       } catch (apiError) {
         console.error('API Error:', apiError)
         // Fallback to mock data if API fails
-        analises = getMockOdds().filter(item => 
-          league === "Brasileirão Série A" ? 
-            item.jogo.includes("Flamengo") || item.jogo.includes("São Paulo") :
-          league === "Premier League" ?
-            item.jogo.includes("Arsenal") :
-            false
-        )
+        analises = getMockOdds().filter(item => {
+          if (league === "Brasileirão Série A") {
+            return item.jogo.includes("Flamengo") || item.jogo.includes("São Paulo")
+          } else if (league === "Brasileirão Série B") {
+            return item.jogo.includes("Santos") || item.jogo.includes("Ponte Preta")
+          } else if (league === "Premier League") {
+            return item.jogo.includes("Arsenal")
+          }
+          return false
+        })
       }
     } else {
       // Return sample data for all leagues
