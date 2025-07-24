@@ -37,6 +37,7 @@ interface Match {
 
 const leagues = [
   { id: "Brasileirão Série A", name: "Brasileirão Série A", flag: "🇧🇷" },
+  { id: "Brasileirão Série B", name: "Brasileirão Série B", flag: "🇧🇷" },
   { id: "Premier League", name: "Premier League", flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
   { id: "Bundesliga", name: "Bundesliga", flag: "🇩🇪" },
   { id: "La Liga", name: "La Liga", flag: "🇪🇸" },
