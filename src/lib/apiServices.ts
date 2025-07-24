@@ -1,16 +1,10 @@
 import { useToast } from "@/hooks/use-toast";
 import { CryptoNews, TradingSignal, SignalStatus, CryptoCoin, PriceTarget } from "./types";
+import { SecureApiService } from "./secureApiService";
 
-// API URLs and keys
+// API URLs - Now using secure proxy service
 const BYBIT_API_URL = "https://api.bybit.com/v5/market/kline";
-const COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global";
-const COINGECKO_API_KEY = "CG-r1Go4M9HPMrsNaH6tASKaWLr";
-const TELEGRAM_BOT_TOKEN = "7807375635:AAGWvj86Ok_9oYdwdB-VtSb1QQ3ZjXBSz04";
-const TELEGRAM_CHAT_ID = "981122089";
-const CRYPTO_APIS_KEY = "34b71000c7b0a5e31fb4b7bb5aca0b87bab6d05f";
 const COIN_DESK_API_URL = "https://api.coindesk.com/v1/bpi/currentprice.json";
-const CRYPTONEWS_API_KEY = "yq8qjvqe7rknrfsswlzjiwmlzuurgk3p4thsqgfs";
-const CRYPTONEWS_API_URL = "https://cryptonews-api.com/api/v1";
 
 // Symbols to monitor - expanded list
 const SYMBOLS = ["PNUTUSDT", "BTCUSDT", "ETHUSDT", "AUCTIONUSDT", "XRPUSDT", "AVAXUSDT", "ADAUSDT", "UNIUSDT", "SOLUSDT"];
@@ -24,31 +18,22 @@ const handleApiError = (error: any, endpoint: string) => {
   return null;
 };
 
-// Fetch kline data from Bybit
+// Fetch kline data from Bybit using secure proxy
 export const fetchBybitKlines = async (
   symbol: string,
   interval: string = "5", // 5 min interval
   limit: number = 50
 ) => {
   try {
-    const params = new URLSearchParams({
-      category: "linear",
+    console.log("Fetching Bybit klines for:", symbol);
+    
+    const data = await SecureApiService.fetchBybitData('/v5/market/kline', {
+      category: 'linear',
       symbol: symbol.toUpperCase(),
-      interval: interval,
+      interval,
       limit: limit.toString()
     });
     
-    const response = await fetch(`${BYBIT_API_URL}?${params}`, {
-      headers: {
-        "Accept": "application/json"
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    const data = await response.json();
     if (data.retCode === 0 && data.result?.list) {
       return data.result.list;
     } else {
@@ -60,76 +45,61 @@ export const fetchBybitKlines = async (
   }
 };
 
-// Fetch global market data from CoinGecko
+// Fetch global market data from CoinGecko using secure proxy
 export const fetchCoinGeckoGlobal = async () => {
   try {
-    const response = await fetch(COINGECKO_GLOBAL_URL, {
-      headers: {
-        "x-cg-api-key": COINGECKO_API_KEY
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await SecureApiService.fetchCoinGeckoData('/global');
     return data;
   } catch (error) {
     return handleApiError(error, "CoinGecko Global");
   }
 };
 
-// Fetch coin data from CoinGecko
+// Fetch coin data from CoinGecko using secure proxy
 export const fetchCoinData = async (coinId: string) => {
   try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`,
-      {
-        headers: {
-          "x-cg-api-key": COINGECKO_API_KEY
-        }
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await SecureApiService.fetchCoinGeckoData(`/coins/${coinId}`, {
+      localization: 'false',
+      tickers: 'false',
+      market_data: 'true',
+      community_data: 'false',
+      developer_data: 'false'
+    });
     return data;
   } catch (error) {
     return handleApiError(error, `CoinGecko ${coinId}`);
   }
 };
 
-// Fetch crypto news from real APIs
+// Fetch crypto news using secure proxy
 export const fetchCryptoNews = async (): Promise<CryptoNews[]> => {
   try {
-    // Try CryptoNews API first
+    console.log("Fetching crypto news...");
+    
+    // Try secure CryptoNews API first
     try {
-      const response = await fetch(
-        `${CRYPTONEWS_API_URL}/category?section=general&items=10&page=1&token=${CRYPTONEWS_API_KEY}`
-      );
+      const data = await SecureApiService.fetchCryptoNews({
+        section: 'general',
+        items: '10',
+        page: '1'
+      });
+      console.log("CryptoNews API response:", data);
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.news && data.news.length > 0) {
-          return data.news.map((item: any) => ({
-            title: item.title,
-            description: item.text || item.description,
-            url: item.news_url,
-            publishedAt: item.date,
-            source: { name: item.source_name },
-            urlToImage: item.image_url
-          }));
-        }
+      if (data.news && data.news.length > 0) {
+        return data.news.map((item: any) => ({
+          title: item.title,
+          description: item.text || item.description,
+          url: item.news_url,
+          publishedAt: item.date,
+          source: { name: item.source_name },
+          urlToImage: item.image_url
+        }));
       }
-    } catch (error) {
-      console.error("Error fetching from CryptoNews API:", error);
+    } catch (cryptoNewsError) {
+      console.log("CryptoNews API failed, trying CoinDesk API...", cryptoNewsError);
     }
     
-    // Try CoinDesk API as fallback
+    // Try CoinDesk API as fallback (public, no auth needed)
     try {
       const response = await fetch("https://api.coindesk.com/v2/news/alerts/latest");
       
@@ -188,30 +158,14 @@ export const getMockCryptoNews = () => {
   ];
 };
 
-// Send message via Telegram bot
+// Send message via Telegram bot using secure proxy
 export const sendTelegramMessage = async (message: string) => {
   try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: message,
-          parse_mode: "HTML",
-        }),
-      }
-    );
+    console.log("Sending Telegram message:", message);
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data;
+    await SecureApiService.sendTelegramMessage(message);
+    console.log("Telegram message sent successfully");
+    return { ok: true };
   } catch (error) {
     return handleApiError(error, "Telegram API");
   }
