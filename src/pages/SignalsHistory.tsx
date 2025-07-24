@@ -14,6 +14,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/signals/PageHeader';
 import { TradingSignal } from '@/lib/types';
 import { useToast } from '@/components/ui/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ClassicSignalsHistory from '@/components/signals/ClassicSignalsHistory';
+
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('pt-BR', {
@@ -346,10 +349,31 @@ const SignalsHistory = () => {
   if (isLoading) {
     return;
   }
-  return <div className="container mx-auto px-4 py-8">
+
+  // Separar sinais por estratégia
+  const classicSignals = filteredSignals.filter(signal => 
+    signal.strategy === 'classic_ai' || signal.strategy === 'Classic Strategy' || 
+    signal.strategy?.toLowerCase().includes('classic')
+  );
+  const otherSignals = filteredSignals.filter(signal => 
+    !signal.strategy?.toLowerCase().includes('classic') && 
+    signal.strategy !== 'classic_ai' && 
+    signal.strategy !== 'Classic Strategy'
+  );
+
+  return (
+    <div className="container mx-auto px-4 py-8">
       <PageHeader title="Histórico de Sinais" description={isLocalMode ? "Sinais carregados do localStorage - validação usando dados reais da Bybit" : "Sinais carregados do backend - validação automática"} />
       
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+      <Tabs defaultValue="all" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="all">Todos os Sinais ({filteredSignals.length})</TabsTrigger>
+          <TabsTrigger value="classic">Sinais Classic ({classicSignals.length})</TabsTrigger>
+          <TabsTrigger value="other">Outros Sinais ({otherSignals.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all" className="space-y-6">
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
         {/* Search */}
         <div className="relative w-full sm:w-64 flex-shrink-0">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -535,6 +559,105 @@ const SignalsHistory = () => {
             </TableBody>
           </Table>
         </Card>}
-    </div>;
+        </TabsContent>
+
+        <TabsContent value="classic" className="space-y-6">
+          <ClassicSignalsHistory signals={classicSignals} />
+        </TabsContent>
+
+        <TabsContent value="other" className="space-y-6">
+          <div className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
+            <div className="relative w-full sm:w-64 flex-shrink-0">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input type="search" placeholder="Pesquisar sinais..." className="pl-8" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            </div>
+            
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              <div className="flex gap-1">
+                <Button 
+                  variant={sortOrder === 'newest' ? 'default' : 'outline'} 
+                  size="sm" 
+                  onClick={() => setSortOrder('newest')}
+                  className="h-9"
+                >
+                  Mais Recentes
+                </Button>
+                <Button 
+                  variant={sortOrder === 'oldest' ? 'default' : 'outline'} 
+                  size="sm" 
+                  onClick={() => setSortOrder('oldest')}
+                  className="h-9"
+                >
+                  Mais Antigos
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {otherSignals.length === 0 ? (
+            <Card className="col-span-full">
+              <CardContent className="p-8 text-center">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                  <Calendar className="h-10 w-10 text-muted-foreground" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold">Nenhum outro sinal encontrado</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Apenas sinais Classic foram encontrados no histórico.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <Table>
+                <TableHeader className="sticky top-0 bg-background z-10">
+                  <TableRow>
+                    <TableHead>Data/Hora</TableHead>
+                    <TableHead>Ativo</TableHead>
+                    <TableHead>Direção</TableHead>
+                    <TableHead>Entrada</TableHead>
+                    <TableHead>Targets (TP)</TableHead>
+                    <TableHead>SL</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Resultado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {otherSignals.map(signal => (
+                    <TableRow key={signal.id}>
+                      <TableCell>
+                        {formatDate(signal.createdAt)}
+                      </TableCell>
+                      <TableCell className="font-medium">{signal.symbol}</TableCell>
+                      <TableCell>
+                        <Badge variant={getDirectionClass(signal.direction || 'BUY')}>
+                          {(signal.direction || 'BUY').toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>${(signal.entryPrice || 0).toFixed(4)}</TableCell>
+                      <TableCell>
+                        {renderTargets(signal)}
+                      </TableCell>
+                      <TableCell className="text-red-600">${signal.stopLoss.toFixed(4)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {signal.status || 'ACTIVE'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getResultClass(signal.result)}>
+                          {getResultText(signal.result)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 };
+
 export default SignalsHistory;

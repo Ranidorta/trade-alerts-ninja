@@ -10,6 +10,7 @@ import ClassicSignalCard from "./ClassicSignalCard";
 import { fetchClassicSignals } from "@/lib/classicSignalsApi";
 import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
 import { verifyAllSignals } from "@/lib/signalVerification";
+import { useSignalPersistence } from "@/hooks/useSignalPersistence";
 const ClassicSignalsTab = () => {
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
@@ -24,8 +25,38 @@ const ClassicSignalsTab = () => {
   } = useToast();
   const {
     saveSignalsToSupabase,
-    updateSignalInSupabase
+    updateSignalInSupabase,
+    getSignalsFromSupabase
   } = useSupabaseSignals();
+
+  // Garantir persistência automática dos sinais
+  useSignalPersistence(signals);
+
+  // Carregar sinais existentes ao inicializar
+  useEffect(() => {
+    const loadExistingSignals = async () => {
+      try {
+        console.log("🔄 Carregando sinais Classic existentes...");
+        const existingSignals = await getSignalsFromSupabase();
+        
+        // Filtrar apenas sinais Classic
+        const classicSignals = existingSignals.filter(signal => 
+          signal.strategy === 'classic_ai' || 
+          signal.strategy === 'Classic Strategy' || 
+          signal.strategy?.toLowerCase().includes('classic')
+        );
+        
+        if (classicSignals.length > 0) {
+          console.log(`✅ ${classicSignals.length} sinais Classic carregados`);
+          setSignals(classicSignals);
+        }
+      } catch (error) {
+        console.error("❌ Erro ao carregar sinais existentes:", error);
+      }
+    };
+
+    loadExistingSignals();
+  }, [getSignalsFromSupabase]);
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
@@ -71,7 +102,13 @@ const ClassicSignalsTab = () => {
       console.log("📊 Received signals:", classicSignals);
       if (classicSignals.length > 0) {
         console.log("✅ Setting signals state with:", classicSignals.length, "signals");
-        setSignals(classicSignals);
+        
+        // Combinar com sinais existentes, evitando duplicatas
+        setSignals(prevSignals => {
+          const existingIds = new Set(prevSignals.map(s => s.id));
+          const newSignals = classicSignals.filter(s => !existingIds.has(s.id));
+          return [...prevSignals, ...newSignals];
+        });
 
         // Save signals to Supabase
         const savedCount = await saveSignalsToSupabase(classicSignals);
@@ -81,7 +118,18 @@ const ClassicSignalsTab = () => {
         console.log("🔍 Starting signal validation...");
         try {
           const validatedSignals = await verifyAllSignals(classicSignals);
-          setSignals(validatedSignals);
+          
+          // Atualizar apenas os novos sinais validados
+          setSignals(prevSignals => {
+            const updatedSignals = [...prevSignals];
+            validatedSignals.forEach(validatedSignal => {
+              const index = updatedSignals.findIndex(s => s.id === validatedSignal.id);
+              if (index !== -1) {
+                updatedSignals[index] = validatedSignal;
+              }
+            });
+            return updatedSignals;
+          });
 
           // Update validated signals in Supabase
           for (const validatedSignal of validatedSignals) {
