@@ -520,7 +520,7 @@ const TradingEsportivo = () => {
               <p className="text-muted-foreground">Carregando análise completa...</p>
             </div>
           ) : analiseCompleta ? (
-            <AnaliseCompletaCard analise={analiseCompleta} />
+            <AnaliseCompletaCard analise={analiseCompleta} matchInfo={selectedMatch} />
           ) : (
             <div className="text-center py-8">
               <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
