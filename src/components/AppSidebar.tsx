@@ -56,12 +56,13 @@ export function AppSidebar() {
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-accent text-accent-foreground font-medium" : "hover:bg-accent/50";
 
-  // Auto-close mobile menu on route change
-  useEffect(() => {
+  // Handle mobile menu close on navigation click
+  const handleMobileNavigation = (callback: () => void) => {
+    callback();
     if (isMobile && openMobile) {
       setOpenMobile(false);
     }
-  }, [currentPath, isMobile, openMobile, setOpenMobile]);
+  };
 
   const handleLogout = async () => {
     try {
@@ -101,6 +102,11 @@ export function AppSidebar() {
                     <NavLink 
                       to={item.url} 
                       end 
+                      onClick={() => {
+                        if (isMobile && openMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
                         ${isActive 
@@ -158,6 +164,11 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild className="h-11">
                     <NavLink 
                       to="/profile" 
+                      onClick={() => {
+                        if (isMobile && openMobile) {
+                          setOpenMobile(false);
+                        }
+                      }}
                       className={({ isActive }) => `
                         flex items-center gap-3 px-3 py-3 rounded-lg transition-colors
                         ${isActive 
