@@ -41,6 +41,72 @@ export type Database = {
         }
         Relationships: []
       }
+      sports_games_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          games_data: Json
+          id: string
+          league: string
+          season: number
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at?: string
+          games_data: Json
+          id?: string
+          league: string
+          season: number
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          games_data?: Json
+          id?: string
+          league?: string
+          season?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sports_odds_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          expires_at: string
+          id: string
+          league: string
+          odds_data: Json
+          page: number
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          league: string
+          odds_data: Json
+          page?: number
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          league?: string
+          odds_data?: Json
+          page?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       trading_signals: {
         Row: {
           completed_at: string | null
@@ -115,7 +181,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_cache: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
