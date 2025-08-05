@@ -203,12 +203,12 @@ const generateClassicCryptoSignals = async (): Promise<TradingSignal[]> => {
         const candleRange = candleHigh - candleLow;
         const strongCandle = candleRange > 0 && (candleBody / candleRange) > 0.6;
         
-        // Validate all entry conditions
-        const rsiValid = rsi15m >= 45 && rsi15m <= 65;
-        const adxValid = adx15m > 25;
+        // Validate entry conditions - MAIS FLEXÍVEL
+        const rsiValid = (trendDirection === 'BUY' && rsi15m < 75) || (trendDirection === 'SELL' && rsi15m > 25);
+        const adxValid = adx15m > 20; // Reduzido de 25 para 20
         const volumeValid = volumeSpike;
         const candleValid = strongCandle;
-        
+
         console.log(`📊 ${symbol} Analysis:`, {
           trend: trendDirection,
           rsi: rsi15m.toFixed(1),
@@ -218,8 +218,9 @@ const generateClassicCryptoSignals = async (): Promise<TradingSignal[]> => {
           conditions: { rsiValid, adxValid, volumeValid, candleValid }
         });
         
-        // All conditions must be met
-        if (!rsiValid || !adxValid || !volumeValid || !candleValid) {
+        // Pelo menos 2 de 4 condições devem ser atendidas (mais flexível)
+        const conditionsMet = [rsiValid, adxValid, volumeValid, candleValid].filter(Boolean).length;
+        if (conditionsMet < 2) {
           continue;
         }
         
