@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { config } from "@/config/env";
@@ -22,6 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const functions = getFunctions(app);
 export const googleProvider = new GoogleAuthProvider();
 
 // Initialize App Check with reCAPTCHA Enterprise

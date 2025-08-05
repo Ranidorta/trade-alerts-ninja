@@ -1,88 +1,106 @@
-import { supabase } from '@/integrations/supabase/client';
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
 
 interface ApiRequest {
   service: 'coingecko' | 'cryptonews' | 'bybit' | 'telegram';
   endpoint: string;
-  params?: Record<string, any>;
   method?: 'GET' | 'POST';
-  body?: any;
+  params?: Record<string, any>;
+  headers?: Record<string, string>;
+}
+
+interface ApiResponse {
+  data: any;
+  success: boolean;
+  error?: string;
 }
 
 /**
- * Secure API service that routes all external API calls through Supabase edge functions
- * This prevents exposure of API keys in the frontend
+ * Secure API Service that routes through Firebase Cloud Functions
+ * This prevents direct client-side API calls and provides security
  */
 export class SecureApiService {
-  /**
-   * Make a secure API call through the crypto-api-proxy edge function
-   */
-  static async makeSecureApiCall(request: ApiRequest): Promise<any> {
+  static async makeSecureApiCall(request: ApiRequest): Promise<ApiResponse> {
     try {
-      const { data, error } = await supabase.functions.invoke('crypto-api-proxy', {
-        body: request
-      });
-
-      if (error) {
-        console.error('Secure API call error:', error);
-        throw new Error(`API call failed: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Secure API service error:', error);
-      throw error;
+      const cryptoApiProxy = httpsCallable(functions, 'cryptoApiProxy');
+      const result = await cryptoApiProxy(request);
+      
+      return {
+        data: result.data,
+        success: true
+      };
+    } catch (error: any) {
+      console.error('Firebase Cloud Function error:', error);
+      return {
+        data: null,
+        success: false,
+        error: error.message
+      };
     }
   }
 
-  /**
-   * Fetch CoinGecko data securely
-   */
-  static async fetchCoinGeckoData(endpoint: string, params?: Record<string, any>) {
+  // Specific methods for different services
+  static async getCoinGeckoData(endpoint: string, params?: Record<string, any>) {
     return this.makeSecureApiCall({
       service: 'coingecko',
       endpoint,
-      params,
-      method: 'GET'
+      params
     });
   }
 
-  /**
-   * Fetch crypto news securely
-   */
-  static async fetchCryptoNews(params?: Record<string, any>) {
+  static async getCryptoNews(params?: Record<string, any>) {
     return this.makeSecureApiCall({
       service: 'cryptonews',
-      endpoint: '/news',
-      params,
-      method: 'GET'
+      endpoint: 'news',
+      params
     });
   }
 
-  /**
-   * Fetch Bybit data securely
-   */
-  static async fetchBybitData(endpoint: string, params?: Record<string, any>) {
+  static async getBybitData(endpoint: string, params?: Record<string, any>) {
     return this.makeSecureApiCall({
       service: 'bybit',
       endpoint,
-      params,
-      method: 'GET'
+      params
     });
   }
 
-  /**
-   * Send Telegram message securely
-   */
-  static async sendTelegramMessage(message: string, chatId?: string) {
+  // Helper method for telegram notifications
+  static async sendTelegramNotification(message: string, chatId?: string) {
     return this.makeSecureApiCall({
       service: 'telegram',
-      endpoint: '/sendMessage',
+      endpoint: 'sendMessage',
       method: 'POST',
-      body: {
-        chat_id: chatId, // Chat ID will be handled by the edge function
+      params: {
         text: message,
-        parse_mode: 'HTML'
+        chat_id: chatId
       }
     });
+  }
+
+  // Legacy method for backward compatibility
+  static async fetchCryptoData(endpoint: string, params?: Record<string, any>) {
+    return this.getCoinGeckoData(endpoint, params);
+  }
+
+  // Legacy method for crypto news
+  static async fetchCryptoNews() {
+    const response = await this.getCryptoNews();
+    return response.success ? response.data : [];
+  }
+
+  // Legacy method for market data
+  static async fetchMarketData() {
+    const response = await this.getCoinGeckoData('global');
+    return response.success ? response.data : null;
+  }
+
+  // Legacy method for coin prices
+  static async fetchCoinPrices(coinIds: string[]) {
+    const response = await this.getCoinGeckoData('simple/price', {
+      ids: coinIds.join(','),
+      vs_currencies: 'usd',
+      include_24hr_change: true
+    });
+    return response.success ? response.data : {};
   }
 }

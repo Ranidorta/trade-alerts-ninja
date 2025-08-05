@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Target, CheckCircle, XCircle } from "lucide-react";
 import { useState } from "react";
 import { TradingSignal, SignalDirection } from "@/lib/types";
-import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
+import { useFirebaseSignals } from "@/hooks/useFirebaseSignals";
 import { useSignalPersistence } from "@/hooks/useSignalPersistence";
 import { useToast } from "@/hooks/use-toast";
 
@@ -39,7 +39,7 @@ interface AnaliseCompletaCardProps {
 
 export const AnaliseCompletaCard = ({ analise, matchInfo }: AnaliseCompletaCardProps) => {
   const [savedSignals, setSavedSignals] = useState<TradingSignal[]>([]);
-  const { saveSignalToSupabase, updateSignalInSupabase } = useSupabaseSignals();
+  const { saveSignalToFirebase, updateSignalInFirebase } = useFirebaseSignals();
   const { toast } = useToast();
   
   // Use persistence hook for automatic saving
@@ -95,7 +95,7 @@ export const AnaliseCompletaCard = ({ analise, matchInfo }: AnaliseCompletaCardP
       signal.profit = result === 'win' ? 10 : -10; // Example profit/loss
       
       // Save to Supabase
-      const saved = await saveSignalToSupabase(signal);
+      const saved = await saveSignalToFirebase(signal);
       
       if (saved) {
         // Update local state for persistence

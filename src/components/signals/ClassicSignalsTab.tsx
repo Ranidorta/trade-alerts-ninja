@@ -8,7 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ClassicSignalCard from "./ClassicSignalCard";
 import { fetchClassicSignals } from "@/lib/classicSignalsApi";
-import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
+import { useFirebaseSignals } from "@/hooks/useFirebaseSignals";
 import { verifyAllSignals } from "@/lib/signalVerification";
 import { useSignalPersistence } from "@/hooks/useSignalPersistence";
 const ClassicSignalsTab = () => {
@@ -24,10 +24,10 @@ const ClassicSignalsTab = () => {
     toast
   } = useToast();
   const {
-    saveSignalsToSupabase,
-    updateSignalInSupabase,
-    getSignalsFromSupabase
-  } = useSupabaseSignals();
+    saveSignalsToFirebase,
+    updateSignalInFirebase,
+    getSignalsFromFirebase
+  } = useFirebaseSignals();
 
   // Garantir persistência automática dos sinais
   useSignalPersistence(signals);
@@ -37,7 +37,7 @@ const ClassicSignalsTab = () => {
     const loadExistingSignals = async () => {
       try {
         console.log("🔄 Carregando sinais Classic existentes...");
-        const existingSignals = await getSignalsFromSupabase();
+        const existingSignals = await getSignalsFromFirebase();
         
         // Filtrar apenas sinais Classic
         const classicSignals = existingSignals.filter(signal => 
@@ -56,7 +56,7 @@ const ClassicSignalsTab = () => {
     };
 
     loadExistingSignals();
-  }, [getSignalsFromSupabase]);
+  }, [getSignalsFromFirebase]);
 
   // Apply filters whenever signals or filters change
   useEffect(() => {
@@ -111,7 +111,7 @@ const ClassicSignalsTab = () => {
         });
 
         // Save signals to Supabase
-        const savedCount = await saveSignalsToSupabase(classicSignals);
+        const savedCount = await saveSignalsToFirebase(classicSignals);
         console.log(`💾 Saved ${savedCount} signals to Supabase`);
 
         // Start validation process
@@ -134,7 +134,7 @@ const ClassicSignalsTab = () => {
           // Update validated signals in Supabase
           for (const validatedSignal of validatedSignals) {
             if (validatedSignal.result || validatedSignal.verifiedAt) {
-              await updateSignalInSupabase(validatedSignal);
+              await updateSignalInFirebase(validatedSignal);
             }
           }
           console.log("✅ Signal validation completed");

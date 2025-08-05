@@ -5,12 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { useSupabaseSignals } from "@/hooks/useSupabaseSignals";
+import { useFirebaseSignals } from "@/hooks/useFirebaseSignals";
 
 const ClassicSignalsHistory = () => {
   const [classicHistory, setClassicHistory] = useState<TradingSignal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { getSignalsFromSupabase } = useSupabaseSignals();
+  const { getSignalsFromFirebase } = useFirebaseSignals();
 
   // Performance metrics for classic signals only
   const [metrics, setMetrics] = useState({
@@ -29,7 +29,7 @@ const ClassicSignalsHistory = () => {
     setIsLoading(true);
     try {
       // Load classic signals from Supabase
-      const allSignals = await getSignalsFromSupabase();
+      const allSignals = await getSignalsFromFirebase();
       
       // Filter only classic strategy signals
       const classicSignals = allSignals.filter(signal => 
