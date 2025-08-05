@@ -39,8 +39,9 @@ const ClassicSignalsTab = () => {
         console.log("🔄 Carregando sinais Classic existentes...");
         const existingSignals = await getSignalsFromFirebase();
         
-        // Filtrar apenas sinais Classic
+        // Filtrar apenas sinais Classic Crypto
         const classicSignals = existingSignals.filter(signal => 
+          signal.strategy === 'classic_crypto_15m' || 
           signal.strategy === 'classic_ai' || 
           signal.strategy === 'Classic Strategy' || 
           signal.strategy?.toLowerCase().includes('classic')
@@ -142,21 +143,21 @@ const ClassicSignalsTab = () => {
           console.error("⚠️ Signal validation failed:", validationError);
         }
         toast({
-          title: "Sinais Classic gerados",
-          description: `${classicSignals.length} novos sinais foram gerados e salvos com sucesso`
+          title: "🚀 Sinais Classic Crypto gerados",
+          description: `${classicSignals.length} novos sinais de criptoativos foram analisados e salvos`
         });
       } else {
         console.log("⚠️ No signals received");
         toast({
-          title: "Nenhum sinal classic gerado",
-          description: "Não foi possível gerar sinais no momento. Tente novamente."
+          title: "⚠️ Nenhum sinal crypto gerado",
+          description: "Mercado não apresenta condições ideais no momento. Tente novamente."
         });
       }
     } catch (error) {
       console.error("❌ Error generating classic signals:", error);
       toast({
-        title: "Erro ao gerar sinais classic",
-        description: "Falha na geração dos sinais",
+        title: "❌ Erro ao gerar sinais crypto",
+        description: "Falha na conexão com Bybit ou análise técnica",
         variant: "destructive"
       });
     } finally {
@@ -181,13 +182,16 @@ const ClassicSignalsTab = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold">Sinais Classic</h2>
+          <h2 className="text-xl font-bold">🚀 Classic Crypto</h2>
           <p className="text-slate-600 dark:text-slate-300 text-sm">
-            Sinais clássicos de IA com análise tradicional
+            Sinais exclusivos para criptoativos Bybit Futures com análise técnica avançada
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
-              Classic AI Strategy
+            <span className="text-xs bg-crypto-100 text-crypto-800 font-medium px-2 py-1 rounded">
+              Classic Crypto - Timeframe 15m
+            </span>
+            <span className="text-xs bg-amber-100 text-amber-800 font-medium px-2 py-1 rounded">
+              Bybit Futures
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">
               Última atualização: {formatLastUpdated()}
@@ -197,7 +201,7 @@ const ClassicSignalsTab = () => {
 
         <Button onClick={generateClassicSignals} variant="default" disabled={isLoading} className="w-full md:w-auto">
           <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? 'Gerando Sinais...' : 'Gerar Sinais Classic'}
+          {isLoading ? 'Analisando Crypto...' : 'Gerar Sinais Crypto'}
         </Button>
       </div>
 
@@ -210,7 +214,7 @@ const ClassicSignalsTab = () => {
               </Button>
             </SheetTrigger>
             <SheetContent className="w-[80vw] p-4" side="right">
-              <h3 className="text-lg font-medium mb-4">Filtros Classic</h3>
+              <h3 className="text-lg font-medium mb-4">Filtros Classic Crypto</h3>
               
               <div className="space-y-4">
                 <div>

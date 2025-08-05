@@ -1,180 +1,57 @@
 import axios from 'axios';
 import { TradingSignal } from '@/lib/types';
 
-// Try multiple endpoints for classic signals (localhost first for development)
-const CLASSIC_SIGNALS_ENDPOINTS = [
-  'http://localhost:5000/generate_classic_signal',
-  'https://trade-alerts-ninja.onrender.com/generate_classic_signal'
-];
+// Bybit API for Classic Crypto signals
+const BYBIT_API_BASE = 'https://api.bybit.com/v5';
 
-// Create axios instance for classic signals
-const classicApi = axios.create({
+// Create axios instance for API calls
+const classicCryptoApi = axios.create({
   timeout: 10000,
 });
 
-// Transform classic signal response to TradingSignal interface
-const transformClassicSignal = (classicData: any): TradingSignal => {
-  const entryPrice = classicData.entry_price || classicData.entryPrice;
-  const stopLoss = classicData.stop_loss || classicData.stopLoss;
-  const targets = classicData.targets || [];
-  
-  return {
-    id: `classic-${classicData.symbol}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    symbol: classicData.symbol,
-    pair: classicData.symbol,
-    direction: classicData.direction,
-    type: classicData.direction === 'BUY' ? 'LONG' : 'SHORT',
-    entryPrice: entryPrice,
-    entry_price: entryPrice,
-    entryAvg: entryPrice,
-    stopLoss: stopLoss,
-    status: 'WAITING',
-    strategy: classicData.strategy || 'classic_ai',
-    createdAt: new Date().toISOString(),
-    confidence: classicData.confidence || 0,
-    tp1: targets[0] || null,
-    tp2: targets[1] || null,
-    tp3: targets[2] || null,
-    targets: targets.map((price: number, index: number) => ({
-      level: index + 1,
-      price: price,
-      hit: false
-    })),
-    result: null,
-    profit: null,
-    analysis: `Sinal Classic AI para ${classicData.symbol} com confiança de ${((classicData.confidence || 0) * 100).toFixed(1)}%. Estratégia: ${classicData.strategy || 'classic_ai'}.`
-  };
-};
-
-// Try multiple endpoints with fallback
-const tryEndpoint = async (endpoint: string): Promise<TradingSignal | null> => {
+// Get available Bybit USDT Futures symbols
+const getBybitFuturesSymbols = async (): Promise<string[]> => {
   try {
-    const response = await classicApi.get(endpoint);
-    if (response.data && response.data.symbol) {
-      console.log(`✅ Got classic signal from ${endpoint}:`, response.data);
-      return transformClassicSignal(response.data);
-    }
-    return null;
-  } catch (error) {
-    console.warn(`⚠️ Failed to get classic signal from ${endpoint}:`, error.message);
-    return null;
-  }
-};
-
-// Generate local classic signals using real Bybit prices
-const generateLocalClassicSignals = async (): Promise<TradingSignal[]> => {
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'LINKUSDT', 'AVAXUSDT'];
-  
-  console.log('🎯 Generating local classic signals with real Bybit prices...');
-
-  // Import Bybit service
-  const { fetchBybitKlines } = await import('@/lib/apiServices');
-
-  const signals: TradingSignal[] = [];
-
-  // Generate signals for each symbol using real market data
-  for (let index = 0; index < symbols.length; index++) {
-    const symbol = symbols[index];
+    const response = await classicCryptoApi.get(`${BYBIT_API_BASE}/market/instruments-info`, {
+      params: { category: 'linear' }
+    });
     
-    try {
-      // 50% chance for each symbol (classic filter)
-      if (Math.random() > 0.5) continue;
-
-      // Get real market data from Bybit
-      const klineData = await fetchBybitKlines(symbol, "15", 50);
-      if (!klineData || klineData.length === 0) continue;
-
-      // Use the latest candle close price as entry
-      const latestCandle = klineData[0]; // Bybit returns newest first
-      const entryPrice = parseFloat(latestCandle[4]); // Close price
-      const high = parseFloat(latestCandle[2]);
-      const low = parseFloat(latestCandle[3]);
-      const volume = parseFloat(latestCandle[5]);
-
-      // Calculate technical indicators for real direction analysis
-      const prices = klineData.slice(0, 50).map(k => parseFloat(k[4])).reverse(); // Get last 50 closes, oldest first
-      
-      // Calculate EMA 9 and EMA 21 (classic AI style)
-      const ema9 = calculateEMA(prices, 9);
-      const ema21 = calculateEMA(prices, 21);
-      
-      // Calculate RSI
-      const rsi = calculateRSI(prices, 14);
-      
-      // Calculate volume average
-      const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
-      const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
-      
-      // Classic AI technical analysis for direction
-      const direction = ema9 > ema21 && rsi > 45 && rsi < 75 && volume > avgVolume * 1.2 ? "BUY" : 
-                       ema9 < ema21 && rsi < 55 && rsi > 25 && volume > avgVolume * 1.2 ? "SELL" : 
-                       // Fallback: use only EMA trend if volume/RSI requirements not met
-                       ema9 > ema21 ? "BUY" :
-                       ema9 < ema21 ? "SELL" :
-                       "NEUTRAL";
-      
-      // Skip if no clear direction
-      if (direction === "NEUTRAL") continue;
-
-      // Calculate ATR-like value from recent candles (classic style - smaller targets)
-      const atr = entryPrice * (Math.random() * 0.015 + 0.008); // 0.8-2.3% ATR
-      const confidence = 0.65 + Math.random() * 0.15; // 65-80% confidence
-      
-      // Calculate targets (classic style - more conservative)
-      const tp1 = direction === 'BUY' 
-        ? entryPrice + (0.6 * atr)
-        : entryPrice - (0.6 * atr);
-      const tp2 = direction === 'BUY' 
-        ? entryPrice + (1.2 * atr)
-        : entryPrice - (1.2 * atr);
-      const tp3 = direction === 'BUY' 
-        ? entryPrice + (1.8 * atr)
-        : entryPrice - (1.8 * atr);
-      
-      const signal: TradingSignal = {
-        id: `local-classic-${symbol}-${Date.now()}-${index}`,
-        symbol,
-        pair: symbol,
-        direction: direction as 'BUY' | 'SELL',
-        type: direction === 'BUY' ? 'LONG' : 'SHORT',
-        entryPrice: parseFloat(entryPrice.toFixed(6)),
-        entry_price: parseFloat(entryPrice.toFixed(6)),
-        entryAvg: parseFloat(entryPrice.toFixed(6)),
-        stopLoss: direction === 'BUY' 
-          ? parseFloat((entryPrice - 1.5 * atr).toFixed(6))
-          : parseFloat((entryPrice + 1.5 * atr).toFixed(6)),
-        status: 'WAITING',
-        strategy: 'classic_ai_15m_bybit_local',
-        createdAt: new Date().toISOString(),
-        confidence: parseFloat(confidence.toFixed(3)),
-        tp1: parseFloat(tp1.toFixed(6)),
-        tp2: parseFloat(tp2.toFixed(6)),
-        tp3: parseFloat(tp3.toFixed(6)),
-        targets: [
-          { level: 1, price: parseFloat(tp1.toFixed(6)), hit: false },
-          { level: 2, price: parseFloat(tp2.toFixed(6)), hit: false },
-          { level: 3, price: parseFloat(tp3.toFixed(6)), hit: false }
-        ],
-        result: null,
-        profit: null,
-        rsi: parseFloat(rsi.toFixed(2)),
-        atr: parseFloat(atr.toFixed(6)),
-        analysis: `Sinal Classic AI local para ${symbol} com ${(confidence * 100).toFixed(1)}% de confiança. EMA9: ${ema9.toFixed(2)}, EMA21: ${ema21.toFixed(2)}, RSI: ${rsi.toFixed(1)}`
-      };
-
-      signals.push(signal);
-
-    } catch (error) {
-      console.error(`Error generating classic signal for ${symbol}:`, error);
-      continue;
-    }
+    const symbols = response.data.result.list
+      .filter((instrument: any) => 
+        instrument.symbol.endsWith('USDT') && 
+        instrument.status === 'Trading' &&
+        instrument.quoteCoin === 'USDT'
+      )
+      .map((instrument: any) => instrument.symbol)
+      .slice(0, 20); // Top 20 most liquid pairs
+    
+    return symbols;
+  } catch (error) {
+    console.warn('Failed to fetch Bybit symbols, using defaults:', error);
+    return ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 'DOGEUSDT', 'XRPUSDT', 'AVAXUSDT'];
   }
-
-  console.log(`✅ Generated ${signals.length} local classic signals with real Bybit prices`);
-  return signals;
 };
 
-// Technical analysis helper functions
+// Get Bybit kline data
+const getBybitKlines = async (symbol: string, interval: string, limit: number = 200) => {
+  try {
+    const response = await classicCryptoApi.get(`${BYBIT_API_BASE}/market/kline`, {
+      params: {
+        category: 'linear',
+        symbol: symbol,
+        interval: interval,
+        limit: limit
+      }
+    });
+    
+    return response.data.result.list || [];
+  } catch (error) {
+    console.error(`Error fetching klines for ${symbol}:`, error);
+    return [];
+  }
+};
+
+// Calculate technical indicators
 const calculateEMA = (prices: number[], period: number): number => {
   if (prices.length < period) return prices[prices.length - 1];
   
@@ -188,7 +65,7 @@ const calculateEMA = (prices: number[], period: number): number => {
   return ema;
 };
 
-const calculateRSI = (prices: number[], period: number): number => {
+const calculateRSI = (prices: number[], period: number = 14): number => {
   if (prices.length < period + 1) return 50;
   
   let gains = 0;
@@ -219,122 +96,219 @@ const calculateRSI = (prices: number[], period: number): number => {
   return 100 - (100 / (1 + rs));
 };
 
-// Fetch classic signals with local generation fallback
-export const fetchClassicSignals = async (): Promise<TradingSignal[]> => {
-  console.log('🎯 Starting classic signals fetch...');
+const calculateADX = (high: number[], low: number[], close: number[], period: number = 14): number => {
+  if (high.length < period + 1) return 25;
+  
+  let dmPlus = 0;
+  let dmMinus = 0;
+  let tr = 0;
+  
+  for (let i = 1; i < Math.min(period + 1, high.length); i++) {
+    const highDiff = high[i] - high[i - 1];
+    const lowDiff = low[i - 1] - low[i];
+    
+    dmPlus += Math.max(highDiff > lowDiff && highDiff > 0 ? highDiff : 0, 0);
+    dmMinus += Math.max(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0, 0);
+    
+    const trueRange = Math.max(
+      high[i] - low[i],
+      Math.abs(high[i] - close[i - 1]),
+      Math.abs(low[i] - close[i - 1])
+    );
+    tr += trueRange;
+  }
+  
+  const diPlus = (dmPlus / tr) * 100;
+  const diMinus = (dmMinus / tr) * 100;
+  const dx = Math.abs(diPlus - diMinus) / (diPlus + diMinus) * 100;
+  
+  return dx || 25;
+};
+
+const calculateATR = (high: number[], low: number[], close: number[], period: number = 14): number => {
+  if (high.length < period + 1) return 0;
+  
+  let atrSum = 0;
+  for (let i = 1; i < Math.min(period + 1, high.length); i++) {
+    const trueRange = Math.max(
+      high[i] - low[i],
+      Math.abs(high[i] - close[i - 1]),
+      Math.abs(low[i] - close[i - 1])
+    );
+    atrSum += trueRange;
+  }
+  
+  return atrSum / period;
+};
+
+// Generate Classic Crypto signals with new logic
+const generateClassicCryptoSignals = async (): Promise<TradingSignal[]> => {
+  console.log('🎯 Generating Classic Crypto signals...');
   
   try {
-    // Try backend endpoints first
+    // Get available Bybit futures symbols
+    const symbols = await getBybitFuturesSymbols();
     const signals: TradingSignal[] = [];
     
-    for (const endpoint of CLASSIC_SIGNALS_ENDPOINTS) {
-      console.log('🔥 Trying classic signals endpoint:', endpoint);
-      
-      // Generate multiple signals by calling the endpoint multiple times
-      const signalPromises = [];
-      
-      // Call the endpoint multiple times to get diverse signals
-      for (let i = 0; i < 3; i++) {
-        signalPromises.push(tryEndpoint(endpoint));
-      }
-      
-      // Wait for all promises to resolve
-      const results = await Promise.allSettled(signalPromises);
-      
-      // Filter out failed requests and null results
-      const validSignals = results
-        .filter((result): result is PromiseFulfilledResult<TradingSignal> => 
-          result.status === 'fulfilled' && result.value !== null
-        )
-        .map(result => result.value);
-      
-      // If we got any signals from this endpoint, use them
-      if (validSignals.length > 0) {
-        console.log(`✅ Successfully fetched ${validSignals.length} classic signals from ${endpoint}`);
+    // Prevent duplicate signals (max 1 per symbol every 6h)
+    const signalCooldown = new Map<string, number>();
+    const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+    
+    for (const symbol of symbols) {
+      try {
+        // Check cooldown
+        const lastSignalTime = signalCooldown.get(symbol) || 0;
+        if (lastSignalTime > sixHoursAgo) {
+          continue;
+        }
         
-        // Remove duplicates by symbol (keep the one with highest confidence)
-        const uniqueSignals = validSignals.reduce((acc, signal) => {
-          const existing = acc.find(s => s.symbol === signal.symbol);
-          if (!existing || (signal.confidence || 0) > (existing.confidence || 0)) {
-            return [...acc.filter(s => s.symbol !== signal.symbol), signal];
-          }
-          return acc;
-        }, [] as TradingSignal[]);
+        // Get 4h data for trend filter
+        const klines4h = await getBybitKlines(symbol, '240', 50); // 4h
+        if (!klines4h || klines4h.length < 50) continue;
         
-        console.log(`📊 Returning ${uniqueSignals.length} unique classic signals from backend`);
-        return uniqueSignals;
+        // Get 15m data for entry conditions
+        const klines15m = await getBybitKlines(symbol, '15', 100); // 15m
+        if (!klines15m || klines15m.length < 50) continue;
+        
+        // Parse kline data (Bybit format: [startTime, openPrice, highPrice, lowPrice, closePrice, volume, turnover])
+        const prices4h = klines4h.map(k => parseFloat(k[4])).reverse(); // Close prices, oldest first
+        const prices15m = klines15m.map(k => parseFloat(k[4])).reverse();
+        const highs15m = klines15m.map(k => parseFloat(k[2])).reverse();
+        const lows15m = klines15m.map(k => parseFloat(k[3])).reverse();
+        const volumes15m = klines15m.map(k => parseFloat(k[5])).reverse();
+        
+        // 1. Filtro de tendência (4h): EMA 50 > EMA 200
+        const ema50_4h = calculateEMA(prices4h, 50);
+        const ema200_4h = calculateEMA(prices4h, 200);
+        const trendDirection = ema50_4h > ema200_4h ? 'BUY' : 'SELL';
+        
+        // 2. Condições de entrada (15m)
+        const currentPrice = prices15m[prices15m.length - 1];
+        const rsi15m = calculateRSI(prices15m, 14);
+        const adx15m = calculateADX(highs15m, lows15m, prices15m, 14);
+        const atr15m = calculateATR(highs15m, lows15m, prices15m, 14);
+        
+        // Volume check: current > 20% above 20-period average
+        const volumeAvg = volumes15m.slice(-20).reduce((a, b) => a + b, 0) / 20;
+        const currentVolume = volumes15m[volumes15m.length - 1];
+        const volumeSpike = currentVolume > volumeAvg * 1.2;
+        
+        // Candle body check: >60% of range
+        const lastKline = klines15m[0]; // Most recent
+        const candleOpen = parseFloat(lastKline[1]);
+        const candleHigh = parseFloat(lastKline[2]);
+        const candleLow = parseFloat(lastKline[3]);
+        const candleClose = parseFloat(lastKline[4]);
+        const candleBody = Math.abs(candleClose - candleOpen);
+        const candleRange = candleHigh - candleLow;
+        const strongCandle = candleRange > 0 && (candleBody / candleRange) > 0.6;
+        
+        // Validate all entry conditions
+        const rsiValid = rsi15m >= 45 && rsi15m <= 65;
+        const adxValid = adx15m > 25;
+        const volumeValid = volumeSpike;
+        const candleValid = strongCandle;
+        
+        console.log(`📊 ${symbol} Analysis:`, {
+          trend: trendDirection,
+          rsi: rsi15m.toFixed(1),
+          adx: adx15m.toFixed(1),
+          volumeSpike,
+          strongCandle,
+          conditions: { rsiValid, adxValid, volumeValid, candleValid }
+        });
+        
+        // All conditions must be met
+        if (!rsiValid || !adxValid || !volumeValid || !candleValid) {
+          continue;
+        }
+        
+        // 3. Gestão de Risco usando ATR
+        const stopLoss = trendDirection === 'BUY' 
+          ? currentPrice - (atr15m * 1.5)
+          : currentPrice + (atr15m * 1.5);
+        
+        const tp1 = trendDirection === 'BUY'
+          ? currentPrice + (atr15m * 1.0)
+          : currentPrice - (atr15m * 1.0);
+        
+        const tp2 = trendDirection === 'BUY'
+          ? currentPrice + (atr15m * 1.8)
+          : currentPrice - (atr15m * 1.8);
+        
+        const tp3 = trendDirection === 'BUY'
+          ? currentPrice + (atr15m * 2.5)
+          : currentPrice - (atr15m * 2.5);
+        
+        // Calculate confidence based on signal strength
+        let confidence = 0.6; // Base confidence
+        if (Math.abs(rsi15m - 55) <= 5) confidence += 0.1; // RSI near optimal range
+        if (adx15m > 30) confidence += 0.1; // Strong trend
+        if (currentVolume > volumeAvg * 1.5) confidence += 0.1; // Very high volume
+        if ((candleBody / candleRange) > 0.75) confidence += 0.05; // Very strong candle
+        
+        const signal: TradingSignal = {
+          id: `classic-crypto-${symbol}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          symbol,
+          pair: symbol,
+          direction: trendDirection,
+          type: trendDirection === 'BUY' ? 'LONG' : 'SHORT',
+          entryPrice: parseFloat(currentPrice.toFixed(6)),
+          entry_price: parseFloat(currentPrice.toFixed(6)),
+          entryAvg: parseFloat(currentPrice.toFixed(6)),
+          stopLoss: parseFloat(stopLoss.toFixed(6)),
+          tp1: parseFloat(tp1.toFixed(6)),
+          tp2: parseFloat(tp2.toFixed(6)),
+          tp3: parseFloat(tp3.toFixed(6)),
+          targets: [
+            { level: 1, price: parseFloat(tp1.toFixed(6)), hit: false },
+            { level: 2, price: parseFloat(tp2.toFixed(6)), hit: false },
+            { level: 3, price: parseFloat(tp3.toFixed(6)), hit: false }
+          ],
+          status: 'WAITING',
+          strategy: 'classic_crypto_15m',
+          createdAt: new Date().toISOString(),
+          confidence: parseFloat(confidence.toFixed(3)),
+          result: null,
+          profit: null,
+          rsi: parseFloat(rsi15m.toFixed(2)),
+          atr: parseFloat(atr15m.toFixed(6)),
+          timeframe: '15m',
+          analysis: `Classic Crypto para ${symbol}: Tendência 4h ${trendDirection}, RSI ${rsi15m.toFixed(1)}, ADX ${adx15m.toFixed(1)}, Volume ${volumeSpike ? 'Elevado' : 'Normal'}, Candle ${strongCandle ? 'Forte' : 'Fraco'}.`
+        };
+        
+        signals.push(signal);
+        signalCooldown.set(symbol, Date.now());
+        
+        console.log(`✅ Classic Crypto signal generated for ${symbol}: ${trendDirection} at ${currentPrice}`);
+        
+        // Limit to prevent too many signals at once
+        if (signals.length >= 8) break;
+        
+      } catch (error) {
+        console.error(`Error analyzing ${symbol}:`, error);
+        continue;
       }
     }
     
-    // If no backend endpoint worked, use local generation
-    console.log('⚠️ No classic signals from backend, using local generation...');
-    return await generateLocalClassicSignals();
+    console.log(`✅ Generated ${signals.length} Classic Crypto signals`);
+    return signals;
     
   } catch (error) {
-    console.error('❌ Error fetching classic signals, using local generation:', error);
-    return await generateLocalClassicSignals();
+    console.error('❌ Error generating Classic Crypto signals:', error);
+    return [];
   }
 };
 
-// Generate mock classic signals for testing/fallback
-const generateMockClassicSignals = (): TradingSignal[] => {
-  const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT'];
-  const mockSignals: TradingSignal[] = [];
+// Main export function - fetch Classic Crypto signals
+export const fetchClassicSignals = async (): Promise<TradingSignal[]> => {
+  console.log('🎯 Starting Classic Crypto signals generation...');
   
-  symbols.forEach((symbol, index) => {
-    // Skip some signals randomly to simulate realistic results
-    if (Math.random() > 0.7) return;
-    
-    const direction = Math.random() > 0.5 ? 'BUY' : 'SELL';
-    const entryPrice = Math.random() * 100 + 20; // Random price between 20-120
-    const confidence = Math.random() * 0.4 + 0.5; // Random confidence between 0.5-0.9
-    
-    const stopLoss = direction === 'BUY' 
-      ? entryPrice * 0.95  // 5% below entry for BUY
-      : entryPrice * 1.05; // 5% above entry for SELL
-    
-    const tp1 = direction === 'BUY' 
-      ? entryPrice * 1.02  // 2% above entry for BUY
-      : entryPrice * 0.98; // 2% below entry for SELL
-    
-    const tp2 = direction === 'BUY' 
-      ? entryPrice * 1.04  // 4% above entry for BUY
-      : entryPrice * 0.96; // 4% below entry for SELL
-      
-    const tp3 = direction === 'BUY' 
-      ? entryPrice * 1.06  // 6% above entry for BUY
-      : entryPrice * 0.94; // 6% below entry for SELL
-    
-    const signal: TradingSignal = {
-      id: `mock-classic-${symbol}-${Date.now()}-${index}`,
-      symbol,
-      pair: symbol,
-      direction: direction as 'BUY' | 'SELL',
-      type: direction === 'BUY' ? 'LONG' : 'SHORT',
-      entryPrice: parseFloat(entryPrice.toFixed(6)),
-      entry_price: parseFloat(entryPrice.toFixed(6)),
-      entryAvg: parseFloat(entryPrice.toFixed(6)),
-      stopLoss: parseFloat(stopLoss.toFixed(6)),
-      status: 'WAITING',
-      strategy: 'classic_ai_mock',
-      createdAt: new Date(Date.now() - Math.random() * 3600000).toISOString(), // Random time within last hour
-      confidence: parseFloat(confidence.toFixed(3)),
-      tp1: parseFloat(tp1.toFixed(6)),
-      tp2: parseFloat(tp2.toFixed(6)),
-      tp3: parseFloat(tp3.toFixed(6)),
-      targets: [
-        { level: 1, price: parseFloat(tp1.toFixed(6)), hit: false },
-        { level: 2, price: parseFloat(tp2.toFixed(6)), hit: false },
-        { level: 3, price: parseFloat(tp3.toFixed(6)), hit: false }
-      ],
-      result: null,
-      profit: null,
-      analysis: `Sinal Classic AI simulado para ${symbol} com confiança de ${(confidence * 100).toFixed(1)}%. Este é um sinal de teste gerado localmente.`
-    };
-    
-    mockSignals.push(signal);
-  });
-  
-  console.log(`🧪 Generated ${mockSignals.length} mock classic signals`);
-  return mockSignals;
+  try {
+    return await generateClassicCryptoSignals();
+  } catch (error) {
+    console.error('❌ Error fetching Classic Crypto signals:', error);
+    return [];
+  }
 };
+

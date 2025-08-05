@@ -31,7 +31,7 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
 
   const copySignalDetails = () => {
     const details = `
-🎯 SINAL CLASSIC ${signal.direction}
+🚀 CLASSIC CRYPTO ${signal.direction}
 💰 ${signal.symbol}
 📈 Entrada: ${signal.entryPrice || signal.entry_price}
 🛡️ Stop Loss: ${signal.stopLoss}
