@@ -7,6 +7,7 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged
 } from 'firebase/auth';
+import { securityService } from '@/lib/securityService';
 
 interface AuthContextType {
   user: User | null;
@@ -54,9 +55,33 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
+      
+      // Start session management for authenticated users
+      if (user) {
+        securityService.startSessionTimeout();
+      }
     });
 
-    return () => unsubscribe();
+    // Activity tracking for session management
+    const trackActivity = () => {
+      if (auth.currentUser) {
+        securityService.updateActivity();
+      }
+    };
+
+    // Track user activity
+    document.addEventListener('mousedown', trackActivity);
+    document.addEventListener('keydown', trackActivity);
+    document.addEventListener('scroll', trackActivity);
+    document.addEventListener('touchstart', trackActivity);
+
+    return () => {
+      unsubscribe();
+      document.removeEventListener('mousedown', trackActivity);
+      document.removeEventListener('keydown', trackActivity);
+      document.removeEventListener('scroll', trackActivity);
+      document.removeEventListener('touchstart', trackActivity);
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {

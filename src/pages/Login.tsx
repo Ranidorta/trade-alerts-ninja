@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
+import { SecurityService, securityService } from '@/lib/securityService';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -36,20 +37,40 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     
+    // Security validations
+    const sanitizedEmail = SecurityService.sanitizeInput(email);
+    
+    if (!SecurityService.validateEmail(sanitizedEmail)) {
+      toast({
+        variant: "destructive",
+        title: "Erro de validação",
+        description: "E-mail inválido.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // Rate limiting check
+    const rateLimitCheck = securityService.checkRateLimit(sanitizedEmail);
+    if (!rateLimitCheck.allowed) {
+      toast({
+        variant: "destructive",
+        title: "Muitas tentativas",
+        description: `Tente novamente em ${rateLimitCheck.timeRemaining} segundos.`,
+      });
+      setIsLoading(false);
+      return;
+    }
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, sanitizedEmail, password);
+      securityService.recordLoginAttempt(sanitizedEmail, true);
       navigate('/signals');
     } catch (error: any) {
       console.error("Login error:", error);
+      securityService.recordLoginAttempt(sanitizedEmail, false);
       
-      let errorMessage = 'Erro ao fazer login. Tente novamente.';
-      if (error.code === 'auth/invalid-credential') {
-        errorMessage = 'E-mail ou senha inválidos.';
-      } else if (error.code === 'auth/user-not-found') {
-        errorMessage = 'Usuário não encontrado.';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Senha incorreta.';
-      }
+      const errorMessage = SecurityService.sanitizeErrorMessage(error);
       
       toast({
         variant: "destructive",
@@ -65,20 +86,41 @@ const Login = () => {
     e.preventDefault();
     setIsLoading(true);
     
+    // Security validations
+    const sanitizedEmail = SecurityService.sanitizeInput(email);
+    const sanitizedName = SecurityService.sanitizeInput(name);
+    
+    if (!SecurityService.validateEmail(sanitizedEmail)) {
+      toast({
+        variant: "destructive",
+        title: "Erro de validação",
+        description: "E-mail inválido.",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const passwordValidation = SecurityService.validatePassword(password);
+    if (!passwordValidation.valid) {
+      toast({
+        variant: "destructive",
+        title: "Senha inválida",
+        description: passwordValidation.errors.join('. '),
+      });
+      setIsLoading(false);
+      return;
+    }
+    
     try {
-      if (password.length < 6) {
-        throw new Error('A senha precisa ter pelo menos 6 caracteres.');
-      }
-      
       if (password !== confirmPassword) {
         throw new Error('As senhas não coincidem.');
       }
       
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
       
-      if (userCredential.user && name) {
+      if (userCredential.user && sanitizedName) {
         await updateProfile(userCredential.user, {
-          displayName: name
+          displayName: sanitizedName
         });
       }
       
@@ -91,16 +133,7 @@ const Login = () => {
     } catch (error: any) {
       console.error("Registration error:", error);
       
-      let errorMessage = 'Erro ao criar conta. Tente novamente.';
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Este e-mail já está sendo usado.';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'E-mail inválido.';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'A senha é muito fraca.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+      const errorMessage = SecurityService.sanitizeErrorMessage(error);
       
       toast({
         variant: "destructive",
