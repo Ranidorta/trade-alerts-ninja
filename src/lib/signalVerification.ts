@@ -1,7 +1,7 @@
 
 import { TradingSignal } from "@/lib/types";
 import { getSignalHistory, saveSignalsToHistory } from "@/lib/signal-storage";
-import { verifyTradingSignal } from "./firebaseFunctions";
+// Removed Firebase dependency - using mock verification
 
 /**
  * Verifies a single trading signal against current market data
@@ -20,8 +20,8 @@ export async function verifySingleSignal(signal: TradingSignal): Promise<Trading
       return signal;
     }
     
-    // Verify the signal using Firebase Function (or local simulation)
-    const verifiedSignal = await verifyTradingSignal(signal);
+    // Mock verification - just return the signal for now
+    const verifiedSignal = { ...signal, result: signal.result || "PENDING" };
     
     // Log the verification result
     console.log(`Signal ${signal.id} verification result: ${verifiedSignal.result}`);

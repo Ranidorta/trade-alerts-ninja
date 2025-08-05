@@ -1,4 +1,4 @@
-import { auth } from '@/lib/firebase';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SecurityEvent {
   type: 'login' | 'logout' | 'failed_login' | 'signup' | 'password_reset' | 'suspicious_activity';
@@ -95,7 +95,7 @@ class SecurityService {
     
     if (timeSinceLastActivity >= SecurityService.SESSION_TIMEOUT) {
       try {
-        await auth.signOut();
+        await supabase.auth.signOut();
         this.logSecurityEvent({
           type: 'logout',
           timestamp: new Date(),

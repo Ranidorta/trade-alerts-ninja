@@ -7,7 +7,7 @@ import {
   updateAllSignalsStatus,
   reprocessAllHistory
 } from "@/lib/signalHistoryService";
-import { logTradeSignal } from "@/lib/firebase";
+// Removed Firebase dependency
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
 import { generateMonsterSignals } from "@/lib/signalsApi";
 
@@ -232,12 +232,6 @@ export const useTradingSignals = () => {
       
       processedNewSignals.forEach(signal => {
         saveSignalToHistory(signal);
-        
-        logTradeSignal(signal)
-          .then(success => {
-            if (!success) console.warn(`Failed to log signal ${signal.id} to Firebase`);
-          })
-          .catch(err => console.error("Error logging signal to Firebase:", err));
       });
       
       return updatedSignals;
