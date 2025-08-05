@@ -88,9 +88,9 @@ const TradingEsportivo = () => {
 
       console.log('📡 Resposta da edge function:', data);
 
-      if (data && data.games && data.games.length > 0) {
-        console.log(`✅ Recebidos ${data.games.length} jogos da API`);
-        setMatches(data.games.map((game: any) => ({
+      if ((data as any)?.games && Array.isArray((data as any).games)) {
+        console.log(`✅ Recebidos ${(data as any).games.length} jogos da API`);
+        setMatches((data as any).games.map((game: any) => ({
           id: game.id,
           homeTeam: game.homeTeam,
           awayTeam: game.awayTeam,
@@ -100,7 +100,7 @@ const TradingEsportivo = () => {
         
         toast({
           title: "Jogos carregados",
-          description: `${data.games.length} jogos encontrados para ${league}.`
+          description: `${(data as any).games.length} jogos encontrados para ${league}.`
         });
       } else {
         console.warn('⚠️ Nenhum jogo encontrado na resposta');
@@ -137,11 +137,11 @@ const TradingEsportivo = () => {
 
       console.log('📊 Resposta da edge function de odds:', data);
 
-      if (data && data.analises) {
-        setOddsAnalyses(data.analises);
+      if ((data as any)?.analises) {
+        setOddsAnalyses((data as any).analises);
         toast({
           title: "Análises de odds carregadas",
-          description: `${data.analises.length} análises encontradas para ${league}.`
+          description: `${(data as any).analises.length} análises encontradas para ${league}.`
         });
       } else {
         setOddsAnalyses([]);
@@ -220,14 +220,14 @@ const TradingEsportivo = () => {
       const data = result.data;
 
       if (error) {
-        throw new Error(`Erro na API: ${error.message}`);
+        throw new Error(`Erro na API: ${(error as any)?.message || 'Erro desconhecido'}`);
       }
       
-      if (data && data.signal) {
-        console.log(`Sinal gerado: ${data.signal} com probabilidade ${data.probability}`);
+      if ((data as any)?.signal) {
+        console.log(`Sinal gerado: ${(data as any).signal} com probabilidade ${(data as any).probability}`);
         setSignals([{
-          sinal: data.signal,
-          probabilidade: data.probability
+          sinal: (data as any).signal,
+          probabilidade: (data as any).probability
         }]);
         toast({
           title: "Sinal gerado com sucesso!",

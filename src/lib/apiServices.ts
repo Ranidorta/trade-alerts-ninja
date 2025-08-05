@@ -27,17 +27,17 @@ export const fetchBybitKlines = async (
   try {
     console.log("Fetching Bybit klines for:", symbol);
     
-    const data = await SecureApiService.fetchBybitData('/v5/market/kline', {
+    const data = await SecureApiService.getBybitData('/v5/market/kline', {
       category: 'linear',
       symbol: symbol.toUpperCase(),
       interval,
       limit: limit.toString()
     });
     
-    if (data.retCode === 0 && data.result?.list) {
-      return data.result.list;
+    if (data.success && data.data?.result?.list) {
+      return data.data.result.list;
     } else {
-      console.error(`Error in Bybit API response for ${symbol}: ${data.retMsg}`);
+      console.error(`Error in Bybit API response for ${symbol}: ${data.error || 'Unknown error'}`);
       return null;
     }
   } catch (error) {
@@ -48,7 +48,7 @@ export const fetchBybitKlines = async (
 // Fetch global market data from CoinGecko using secure proxy
 export const fetchCoinGeckoGlobal = async () => {
   try {
-    const data = await SecureApiService.fetchCoinGeckoData('/global');
+    const data = await SecureApiService.getCoinGeckoData('/global');
     return data;
   } catch (error) {
     return handleApiError(error, "CoinGecko Global");
@@ -58,7 +58,7 @@ export const fetchCoinGeckoGlobal = async () => {
 // Fetch coin data from CoinGecko using secure proxy
 export const fetchCoinData = async (coinId: string) => {
   try {
-    const data = await SecureApiService.fetchCoinGeckoData(`/coins/${coinId}`, {
+    const data = await SecureApiService.getCoinGeckoData(`/coins/${coinId}`, {
       localization: 'false',
       tickers: 'false',
       market_data: 'true',
@@ -78,15 +78,11 @@ export const fetchCryptoNews = async (): Promise<CryptoNews[]> => {
     
     // Try secure CryptoNews API first
     try {
-      const data = await SecureApiService.fetchCryptoNews({
-        section: 'general',
-        items: '10',
-        page: '1'
-      });
+      const data = await SecureApiService.getCryptoNews();
       console.log("CryptoNews API response:", data);
       
-      if (data.news && data.news.length > 0) {
-        return data.news.map((item: any) => ({
+      if (data.success && data.data?.length > 0) {
+        return data.data.map((item: any) => ({
           title: item.title,
           description: item.text || item.description,
           url: item.news_url,
@@ -163,7 +159,7 @@ export const sendTelegramMessage = async (message: string) => {
   try {
     console.log("Sending Telegram message:", message);
     
-    await SecureApiService.sendTelegramMessage(message);
+    await SecureApiService.sendTelegramNotification(message);
     console.log("Telegram message sent successfully");
     return { ok: true };
   } catch (error) {
