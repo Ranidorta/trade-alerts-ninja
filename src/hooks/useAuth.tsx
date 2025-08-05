@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // For now, these are simplified - you can extend later
   const hasActiveSubscription = !!user; // True if user is authenticated
-  const isAdmin = false; // Simplified for now
+  const isAdmin = user?.email === 'admin@teste.com'; // Admin test account
 
   const value = {
     user,
