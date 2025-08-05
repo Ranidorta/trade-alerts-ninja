@@ -1,13 +1,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  signInWithEmailAndPassword, 
-  signInWithPopup, 
-  createUserWithEmailAndPassword, 
-  updateProfile 
-} from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,10 +22,7 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  if (auth.currentUser) {
-    navigate('/signals');
-    return null;
-  }
+  // Authentication redirect is handled by useAuth hook
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +54,13 @@ const Login = () => {
     }
     
     try {
-      await signInWithEmailAndPassword(auth, sanitizedEmail, password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: sanitizedEmail,
+        password: password,
+      });
+      
+      if (error) throw error;
+      
       securityService.recordLoginAttempt(sanitizedEmail, true);
       navigate('/signals');
     } catch (error: any) {
@@ -116,17 +113,22 @@ const Login = () => {
         throw new Error('As senhas não coincidem.');
       }
       
-      const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
+      const { error } = await supabase.auth.signUp({
+        email: sanitizedEmail,
+        password: password,
+        options: {
+          data: {
+            display_name: sanitizedName,
+          },
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
       
-      if (userCredential.user && sanitizedName) {
-        await updateProfile(userCredential.user, {
-          displayName: sanitizedName
-        });
-      }
+      if (error) throw error;
       
       toast({
         title: "Conta criada com sucesso",
-        description: "Bem-vindo ao Trading Ninja!",
+        description: "Bem-vindo ao Trading Ninja! Verifique seu email para confirmar a conta.",
       });
       
       navigate('/signals');
@@ -149,33 +151,22 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      console.log("Google login successful:", result.user);
-      
-      toast({
-        title: "Login com Google realizado",
-        description: "Bem-vindo ao Trading Ninja!",
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/signals`
+        }
       });
       
-      navigate('/signals');
+      if (error) throw error;
+      
     } catch (error: any) {
       console.error("Google login error:", error);
-      
-      let errorMessage = 'Erro ao fazer login com Google. Tente novamente.';
-      if (error.code === 'auth/popup-closed-by-user') {
-        errorMessage = 'Popup de login fechado antes da conclusão.';
-      } else if (error.code === 'auth/popup-blocked') {
-        errorMessage = 'O navegador bloqueou o popup. Permita popups para este site.';
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        errorMessage = 'Operação cancelada. Tente novamente.';
-      } else if (error.code === 'auth/account-exists-with-different-credential') {
-        errorMessage = 'Este e-mail já está associado a outro método de login.';
-      }
       
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: errorMessage,
+        description: "Erro ao fazer login com Google. Tente novamente.",
       });
     } finally {
       setIsLoading(false);

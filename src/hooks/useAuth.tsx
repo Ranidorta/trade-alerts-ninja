@@ -1,12 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged
-} from 'firebase/auth';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { securityService } from '@/lib/securityService';
 
 interface AuthContextType {
@@ -49,22 +43,34 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-      
-      // Start session management for authenticated users
-      if (user) {
-        securityService.startSessionTimeout();
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+        
+        // Start session management for authenticated users
+        if (session?.user) {
+          securityService.startSessionTimeout();
+        }
       }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
     // Activity tracking for session management
     const trackActivity = () => {
-      if (auth.currentUser) {
+      if (session?.user) {
         securityService.updateActivity();
       }
     };
@@ -76,7 +82,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     document.addEventListener('touchstart', trackActivity);
 
     return () => {
-      unsubscribe();
+      subscription.unsubscribe();
       document.removeEventListener('mousedown', trackActivity);
       document.removeEventListener('keydown', trackActivity);
       document.removeEventListener('scroll', trackActivity);
@@ -85,25 +91,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    });
+    return { error };
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      return { error: null };
-    } catch (error: any) {
-      return { error };
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { error };
   };
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    await supabase.auth.signOut();
   };
 
   const logout = signOut; // Alias for compatibility

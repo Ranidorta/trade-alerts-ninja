@@ -28,7 +28,7 @@ export const useSignalSync = () => {
       const signalsRef = collection(db, 'user_signals');
       const q = query(
         signalsRef, 
-        where('userId', '==', user.uid),
+        where('userId', '==', user.id),
         orderBy('createdAt', 'desc')
       );
       
@@ -55,7 +55,7 @@ export const useSignalSync = () => {
       const signalsRef = collection(db, 'user_signals');
       const q = query(
         signalsRef, 
-        where('userId', '==', user.uid),
+        where('userId', '==', user.id),
         orderBy('createdAt', 'desc')
       );
       const snapshot = await getDocs(q);
@@ -80,7 +80,7 @@ export const useSignalSync = () => {
         // Save to Firestore if authenticated
         const signalWithUserId = {
           ...signal,
-          userId: user.uid,
+          userId: user.id,
           userEmail: user.email
         };
         
@@ -136,7 +136,7 @@ export const useSignalSync = () => {
           // Prepare signal data for Firestore (remove undefined values and non-serializable fields)
           const signalData = {
             ...signal,
-            userId: user.uid,
+            userId: user.id,
             userEmail: user.email
           };
           // Remove undefined values that could cause issues
