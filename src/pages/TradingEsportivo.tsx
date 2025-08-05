@@ -6,8 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, TrendingUp, Target, AlertCircle, Trophy, Calendar, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { httpsCallable } from "firebase/functions";
-import { functions } from "@/lib/firebase";
+import { supabase } from "@/integrations/supabase/client";
 import { AnaliseCompletaCard } from "@/components/signals/AnaliseCompletaCard";
 
 
@@ -82,15 +81,19 @@ const TradingEsportivo = () => {
     try {
       console.log(`🏈 Buscando jogos para a liga: ${league}`);
       
-      const getSportsGames = httpsCallable(functions, 'sportsGames');
-      const result = await getSportsGames({ league, season: 2025 });
-      const data = result.data;
+      const { data, error: supabaseError } = await supabase.functions.invoke('sports-games', {
+        body: { league, season: 2025 }
+      });
+      
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
 
       console.log('📡 Resposta da edge function:', data);
 
-      if ((data as any)?.games && Array.isArray((data as any).games)) {
-        console.log(`✅ Recebidos ${(data as any).games.length} jogos da API`);
-        setMatches((data as any).games.map((game: any) => ({
+      if (data?.games && Array.isArray(data.games)) {
+        console.log(`✅ Recebidos ${data.games.length} jogos da API`);
+        setMatches(data.games.map((game: any) => ({
           id: game.id,
           homeTeam: game.homeTeam,
           awayTeam: game.awayTeam,
@@ -100,7 +103,7 @@ const TradingEsportivo = () => {
         
         toast({
           title: "Jogos carregados",
-          description: `${(data as any).games.length} jogos encontrados para ${league}.`
+          description: `${data.games.length} jogos encontrados para ${league}.`
         });
       } else {
         console.warn('⚠️ Nenhum jogo encontrado na resposta');
@@ -131,17 +134,21 @@ const TradingEsportivo = () => {
     try {
       console.log(`📊 Buscando análises de odds para: ${league}`);
       
-      const getOdds = httpsCallable(functions, 'getOdds');
-      const result = await getOdds({ league, page: 1 });
-      const data = result.data;
+      const { data, error: supabaseError } = await supabase.functions.invoke('get-odds', {
+        body: { league, page: 1 }
+      });
+      
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
 
       console.log('📊 Resposta da edge function de odds:', data);
 
-      if ((data as any)?.analises) {
-        setOddsAnalyses((data as any).analises);
+      if (data?.analises) {
+        setOddsAnalyses(data.analises);
         toast({
           title: "Análises de odds carregadas",
-          description: `${(data as any).analises.length} análises encontradas para ${league}.`
+          description: `${data.analises.length} análises encontradas para ${league}.`
         });
       } else {
         setOddsAnalyses([]);
@@ -166,9 +173,13 @@ const TradingEsportivo = () => {
       console.log(`📊 Match ID enviado para API: ${match.id}`);
       console.log(`📊 Match object completo enviado:`, match);
       
-      const getAnaliseCompleta = httpsCallable(functions, 'analiseCompleta');
-      const result = await getAnaliseCompleta({ fixture_id: match.id });
-      const data = result.data;
+      const { data, error: supabaseError } = await supabase.functions.invoke('analise-completa', {
+        body: { fixture_id: match.id }
+      });
+      
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
 
       console.log('📊 Resposta da análise completa:', data);
 
@@ -210,24 +221,24 @@ const TradingEsportivo = () => {
     try {
       console.log(`Gerando sinal para jogo ${selectedMatch.id}`);
       
-      const generateSportsSignal = httpsCallable(functions, 'generateSportsSignal');
-      const result = await generateSportsSignal({
-        gameId: selectedMatch.id,
-        market: selectedMarket,
-        signalType: selectedSignalType,
-        line: selectedMarketOption.toLowerCase().replace(' ', '_').replace('.', '_')
+      const { data, error: supabaseError } = await supabase.functions.invoke('generate-sports-signal', {
+        body: {
+          gameId: selectedMatch.id,
+          market: selectedMarket,
+          signalType: selectedSignalType,
+          line: selectedMarketOption.toLowerCase().replace(' ', '_').replace('.', '_')
+        }
       });
-      const data = result.data;
 
-      if (error) {
-        throw new Error(`Erro na API: ${(error as any)?.message || 'Erro desconhecido'}`);
+      if (supabaseError) {
+        throw new Error(`Erro na API: ${supabaseError.message || 'Erro desconhecido'}`);
       }
       
-      if ((data as any)?.signal) {
-        console.log(`Sinal gerado: ${(data as any).signal} com probabilidade ${(data as any).probability}`);
+      if (data?.signal) {
+        console.log(`Sinal gerado: ${data.signal} com probabilidade ${data.probability}`);
         setSignals([{
-          sinal: (data as any).signal,
-          probabilidade: (data as any).probability
+          sinal: data.signal,
+          probabilidade: data.probability
         }]);
         toast({
           title: "Sinal gerado com sucesso!",
