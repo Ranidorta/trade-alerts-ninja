@@ -182,9 +182,9 @@ const ClassicSignalsTab = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold">🚀 Classic Crypto</h2>
+          <h2 className="text-xl font-bold">🪙 Classic Crypto - Day Trade Especializado</h2>
           <p className="text-slate-600 dark:text-slate-300 text-sm">
-            Sinais exclusivos para criptoativos Bybit Futures com análise técnica avançada
+            Agente especializado em day trade de criptoativos com lógica técnica sólida (15m + filtro 4h)
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="text-xs bg-crypto-100 text-crypto-800 font-medium px-2 py-1 rounded">
