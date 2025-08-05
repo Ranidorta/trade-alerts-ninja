@@ -91,22 +91,51 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+        }
+      });
+      
+      if (error) {
+        console.error('SignUp error:', error);
+        return { error };
       }
-    });
-    return { error };
+      
+      // Check if user needs email confirmation
+      if (data.user && !data.session) {
+        console.log('User created, check email for confirmation');
+        return { error: { message: 'Conta criada! Verifique seu email para confirmar o cadastro.' } };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      console.error('SignUp catch error:', err);
+      return { error: err };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('SignIn error:', error);
+        return { error };
+      }
+      
+      console.log('SignIn success:', data);
+      return { error: null };
+    } catch (err) {
+      console.error('SignIn catch error:', err);
+      return { error: err };
+    }
   };
 
   const signOut = async () => {
