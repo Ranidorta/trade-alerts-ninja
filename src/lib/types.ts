@@ -69,17 +69,6 @@ export interface TradingSignal {
   success_prob?: number;  // Added for monster signals success probability
   validationDetails?: string; // Added for validation information
   analysis?: string;      // Added for signal analysis details
-  expiresAt?: string;     // Added for signal expiration
-  riskReward?: number;    // Added for risk/reward ratio
-  validationsPassed?: number; // Added for validation count
-  mlFeatures?: {          // Added for ML features
-    ema_ratio: number;
-    rsi: number;
-    volume: number;
-    book_ratio: number;
-    candle_score: number;
-    label: number;
-  };
 }
 
 export interface Feature {
