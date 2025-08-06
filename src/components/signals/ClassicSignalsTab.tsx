@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ClassicSignalCard from "./ClassicSignalCard";
-import { fetchClassicSignals } from "@/lib/classicSignalsApi";
+import { fetchClassicCryptoProSignals } from "@/lib/classicCryptoProApi";
 import { useFirebaseSignals } from "@/hooks/useFirebaseSignals";
 import { verifyAllSignals } from "@/lib/signalVerification";
 import { useSignalPersistence } from "@/hooks/useSignalPersistence";
@@ -39,8 +39,9 @@ const ClassicSignalsTab = () => {
         console.log("🔄 Carregando sinais Classic existentes...");
         const existingSignals = await getSignalsFromFirebase();
         
-        // Filtrar apenas sinais Classic Crypto
+        // Filtrar apenas sinais Classic Crypto Pro
         const classicSignals = existingSignals.filter(signal => 
+          signal.strategy === 'classic_crypto_pro' || 
           signal.strategy === 'classic_crypto_15m' || 
           signal.strategy === 'classic_ai' || 
           signal.strategy === 'Classic Strategy' || 
@@ -98,8 +99,8 @@ const ClassicSignalsTab = () => {
   const generateClassicSignals = async () => {
     setIsLoading(true);
     try {
-      console.log("🔄 Generating classic signals...");
-      const classicSignals = await fetchClassicSignals();
+      console.log("🔄 Generating Classic Crypto Pro V3 signals...");
+      const classicSignals = await fetchClassicCryptoProSignals();
       console.log("📊 Received signals:", classicSignals);
       if (classicSignals.length > 0) {
         console.log("✅ Setting signals state with:", classicSignals.length, "signals");
@@ -143,21 +144,21 @@ const ClassicSignalsTab = () => {
           console.error("⚠️ Signal validation failed:", validationError);
         }
         toast({
-          title: "🚀 Sinais Classic Crypto gerados",
-          description: `${classicSignals.length} novos sinais de criptoativos foram analisados e salvos`
+          title: "🚀 Sinais Classic Crypto Pro V3 gerados",
+          description: `${classicSignals.length} novos sinais com 6 validações e ML foram gerados`
         });
       } else {
         console.log("⚠️ No signals received");
         toast({
-          title: "⚠️ Nenhum sinal crypto gerado",
-          description: "Mercado não apresenta condições ideais no momento. Tente novamente."
+          title: "⚠️ Nenhum sinal Pro V3 gerado",
+          description: "Nenhum ativo passou nos 6 módulos de validação. Score mínimo: 70% + 5/6 validações."
         });
       }
     } catch (error) {
       console.error("❌ Error generating classic signals:", error);
       toast({
-        title: "❌ Erro ao gerar sinais crypto",
-        description: "Falha na conexão com Bybit ou análise técnica",
+        title: "❌ Erro ao gerar sinais Pro V3",
+        description: "Falha na conexão com Bybit ou sistema de validações",
         variant: "destructive"
       });
     } finally {
@@ -182,13 +183,16 @@ const ClassicSignalsTab = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold">🪙 Classic Crypto - Day Trade Especializado</h2>
+          <h2 className="text-xl font-bold">🔥 Classic Crypto Pro V3 - Sistema Avançado</h2>
           <p className="text-slate-600 dark:text-slate-300 text-sm">
-            Agente especializado em day trade de criptoativos com lógica técnica sólida (15m + filtro 4h)
+            Sistema avançado com 6 validações rápidas + ML + filtro direcional 1h para máxima precisão
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="text-xs bg-crypto-100 text-crypto-800 font-medium px-2 py-1 rounded">
-              Classic Crypto - Timeframe 15m
+            <span className="text-xs bg-emerald-100 text-emerald-800 font-medium px-2 py-1 rounded">
+              Classic Pro V3 - 1m/5m/15m + 1h Filter
+            </span>
+            <span className="text-xs bg-purple-100 text-purple-800 font-medium px-2 py-1 rounded">
+              ML + 6 Validações
             </span>
             <span className="text-xs bg-amber-100 text-amber-800 font-medium px-2 py-1 rounded">
               Bybit Futures
@@ -201,7 +205,7 @@ const ClassicSignalsTab = () => {
 
         <Button onClick={generateClassicSignals} variant="default" disabled={isLoading} className="w-full md:w-auto">
           <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? 'Analisando Crypto...' : 'Gerar Sinais Crypto'}
+          {isLoading ? 'Processando 6 Validações...' : 'Gerar Sinais Pro V3'}
         </Button>
       </div>
 
@@ -214,7 +218,7 @@ const ClassicSignalsTab = () => {
               </Button>
             </SheetTrigger>
             <SheetContent className="w-[80vw] p-4" side="right">
-              <h3 className="text-lg font-medium mb-4">Filtros Classic Crypto</h3>
+              <h3 className="text-lg font-medium mb-4">Filtros Classic Pro V3</h3>
               
               <div className="space-y-4">
                 <div>
@@ -301,11 +305,11 @@ const ClassicSignalsTab = () => {
           <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
         </div> : signals.length === 0 ? <div className="text-center py-8">
           <p className="text-slate-500 dark:text-slate-400 mb-4">
-            Nenhum sinal classic foi gerado ainda
+            Nenhum sinal Pro V3 foi gerado ainda
           </p>
           <Button onClick={generateClassicSignals} variant="outline">
             <RefreshCw className="mr-2 h-4 w-4" />
-            Gerar Primeiros Sinais
+            Gerar Primeiros Sinais Pro V3
           </Button>
         </div> : filteredSignals.length > 0 ? <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
           {filteredSignals.map(signal => <ClassicSignalCard key={signal.id} signal={signal} />)}
