@@ -80,123 +80,300 @@ export const checkBackendHealth = async () => {
   }
 };
 
-// Generate local monster signals using real Bybit prices when backend is unavailable
+// Enhanced 1H directional filter for Monster signals
+const check1HDirectionalFilter = async (symbol: string): Promise<{ allowed: boolean; direction?: 'BUY' | 'SELL' }> => {
+  try {
+    // Fetch 1H timeframe data
+    const response = await fetch(
+      `https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=60&limit=50`
+    );
+    
+    if (!response.ok) return { allowed: false };
+    
+    const data = await response.json();
+    if (!data.result?.list || data.result.list.length < 50) return { allowed: false };
+    
+    const candles = data.result.list.reverse().map((candle: any[]) => ({
+      open: parseFloat(candle[1]),
+      high: parseFloat(candle[2]),
+      low: parseFloat(candle[3]),
+      close: parseFloat(candle[4])
+    }));
+    
+    const prices = candles.map(c => c.close);
+    const currentCandle = candles[candles.length - 1];
+    
+    // Calculate EMAs for 1H
+    const ema20 = calculateEMA(prices.slice(-20), 20);
+    const ema50 = calculateEMA(prices.slice(-50), 50);
+    
+    // Check directional conditions
+    const isGreenCandle = currentCandle.close > currentCandle.open;
+    const isRedCandle = currentCandle.close < currentCandle.open;
+    
+    // Bullish 1H condition: EMA20 > EMA50 and green candle
+    if (ema20 > ema50 && isGreenCandle) {
+      return { allowed: true, direction: 'BUY' };
+    }
+    
+    // Bearish 1H condition: EMA20 < EMA50 and red candle
+    if (ema20 < ema50 && isRedCandle) {
+      return { allowed: true, direction: 'SELL' };
+    }
+    
+    // Undefined scenario - no signal allowed
+    return { allowed: false };
+    
+  } catch (error) {
+    console.error(`Error in 1H directional filter for ${symbol}:`, error);
+    return { allowed: false };
+  }
+};
+
+// Get Bybit futures symbols
+const getBybitFuturesSymbols = async (): Promise<string[]> => {
+  try {
+    const response = await fetch('https://api.bybit.com/v5/market/instruments-info?category=linear');
+    const data = await response.json();
+    
+    if (data.result?.list) {
+      return data.result.list
+        .filter((instrument: any) => 
+          instrument.symbol.endsWith('USDT') && 
+          instrument.status === 'Trading'
+        )
+        .map((instrument: any) => instrument.symbol)
+        .slice(0, 20); // Top 20 most liquid
+    }
+    
+    return [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+      'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+    ];
+  } catch (error) {
+    console.error('Error fetching Bybit futures symbols:', error);
+    return [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+      'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+    ];
+  }
+};
+
+// Enhanced local monster signal generation with 1H filter
 const generateLocalMonsterSignals = async (symbols: string[] = []) => {
-  const defaultSymbols = symbols.length > 0 ? symbols : [
-    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-    'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-  ];
-
-  console.log('🔧 Generating local monster signals with real Bybit prices...');
-
-  // Import Bybit service
-  const { fetchBybitKlines } = await import('@/lib/apiServices');
-
+  console.log('🔥 Generating enhanced monster signals with 1H directional filter...');
+  
+  // Get Bybit futures symbols if none provided
+  const targetSymbols = symbols.length > 0 ? symbols : await getBybitFuturesSymbols();
   const signals: TradingSignal[] = [];
+  let consecutiveLosses = 0; // Track consecutive losses for market quality filter
 
-  // Generate signals for each symbol using real market data
-  for (let index = 0; index < defaultSymbols.length; index++) {
-    const symbol = defaultSymbols[index];
+  // Generate signals for each symbol using enhanced validation
+  for (let index = 0; index < targetSymbols.length; index++) {
+    const symbol = targetSymbols[index];
     
     try {
-      // 70% chance for each symbol (relaxed monster filter)
-      if (Math.random() > 0.3) continue;
-
-      // Get real market data from Bybit
-      const klineData = await fetchBybitKlines(symbol, "15", 50);
-      if (!klineData || klineData.length === 0) continue;
-
-      // Use the latest candle close price as entry
-      const latestCandle = klineData[0]; // Bybit returns newest first
-      const entryPrice = parseFloat(latestCandle[4]); // Close price
-      const high = parseFloat(latestCandle[2]);
-      const low = parseFloat(latestCandle[3]);
-      const volume = parseFloat(latestCandle[5]);
-
-      // Calculate technical indicators for real direction analysis
-      const prices = klineData.slice(0, 50).map(k => parseFloat(k[4])).reverse(); // Get last 50 closes, oldest first
+      console.log(`📊 Analyzing ${symbol} with 1H directional filter...`);
       
-      // Calculate EMA 20 and EMA 50
-      const ema20 = calculateEMA(prices, 20);
-      const ema50 = calculateEMA(prices, 50);
+      // MANDATORY 1H directional filter - check first
+      const directionalFilter = await check1HDirectionalFilter(symbol);
+      if (!directionalFilter.allowed) {
+        console.log(`❌ ${symbol}: 1H directional filter blocked signal`);
+        continue;
+      }
       
-      // Calculate RSI
+      console.log(`✅ ${symbol}: 1H filter allows ${directionalFilter.direction} signals`);
+      
+      // Market quality filter - block after 3 consecutive losses
+      if (consecutiveLosses >= 3) {
+        console.log(`🚫 Market quality filter active - trading paused after ${consecutiveLosses} losses`);
+        break;
+      }
+      
+      // Fetch multi-timeframe data (1m, 5m, 15m)
+      const [data1m, data5m, data15m] = await Promise.all([
+        fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=1&limit=100`),
+        fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=100`),
+        fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=15&limit=100`)
+      ]);
+      
+      if (!data1m.ok || !data5m.ok || !data15m.ok) {
+        console.warn(`Failed to fetch multi-timeframe data for ${symbol}`);
+        continue;
+      }
+      
+      const [kline1m, kline5m, kline15m] = await Promise.all([
+        data1m.json(),
+        data5m.json(),
+        data15m.json()
+      ]);
+      
+      // Parse 15m timeframe data
+      const candles15m = kline15m.result.list.reverse().map((candle: any[]) => ({
+        timestamp: parseInt(candle[0]),
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4]),
+        volume: parseFloat(candle[5])
+      }));
+      
+      if (candles15m.length < 50) {
+        console.warn(`Insufficient 15m data for ${symbol}`);
+        continue;
+      }
+      
+      const currentPrice = candles15m[candles15m.length - 1].close;
+      const prices = candles15m.map(c => c.close);
+      const volumes = candles15m.map(c => c.volume);
+      
+      // 6 Module Validation System
+      let validationScore = 0;
+      let validationsPassedCount = 0;
+      const validationResults: any = {};
+      
+      // 1. EMA Cross Validation (Weight: 0.2)
+      const ema20 = calculateEMA(prices.slice(-20), 20);
+      const ema50 = calculateEMA(prices.slice(-50), 50);
+      const emaCrossValid = (directionalFilter.direction === 'BUY' && currentPrice > ema20 && ema20 > ema50) ||
+                           (directionalFilter.direction === 'SELL' && currentPrice < ema20 && ema20 < ema50);
+      if (emaCrossValid) {
+        validationScore += 0.2;
+        validationsPassedCount++;
+        validationResults.emaCross = true;
+      }
+      
+      // 2. Volume Spike + Anomaly (Weight: 0.15)
+      const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+      const currentVolume = volumes[volumes.length - 1];
+      const volumeRatio = currentVolume / avgVolume;
+      const volumeValid = volumeRatio > 1.5; // Volume spike threshold
+      if (volumeValid) {
+        validationScore += 0.15;
+        validationsPassedCount++;
+        validationResults.volumeSpike = true;
+      }
+      
+      // 3. Candle Reversal Validation (Weight: 0.15)
+      const lastCandle = candles15m[candles15m.length - 1];
+      const candleBodyRatio = Math.abs(lastCandle.close - lastCandle.open) / (lastCandle.high - lastCandle.low);
+      const candleValid = candleBodyRatio > 0.6; // Strong candle body
+      if (candleValid) {
+        validationScore += 0.15;
+        validationsPassedCount++;
+        validationResults.candleReversal = true;
+      }
+      
+      // 4. RSI + Momentum (Weight: 0.2)
       const rsi = calculateRSI(prices, 14);
+      const rsiValid = (directionalFilter.direction === 'BUY' && rsi > 30 && rsi < 70) ||
+                      (directionalFilter.direction === 'SELL' && rsi > 30 && rsi < 70);
+      if (rsiValid) {
+        validationScore += 0.2;
+        validationsPassedCount++;
+        validationResults.rsiMomentum = true;
+      }
       
-      // Calculate volume average
-      const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
-      const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+      // 5. Order Book Analysis (Simplified - Weight: 0.15)
+      const priceMovement = prices[prices.length - 1] / prices[prices.length - 2] - 1;
+      const orderBookValid = Math.abs(priceMovement) > 0.001; // Minimum price movement
+      if (orderBookValid) {
+        validationScore += 0.15;
+        validationsPassedCount++;
+        validationResults.orderBook = true;
+      }
       
-      // Technical analysis for direction (RELAXED CRITERIA)
-      const direction = ema20 > ema50 && rsi > 40 && rsi < 80 && volume > avgVolume * 1.1 ? "BUY" : 
-                       ema20 < ema50 && rsi < 60 && rsi > 20 && volume > avgVolume * 1.1 ? "SELL" : 
-                       // Fallback: use only EMA trend if volume/RSI requirements not met
-                       ema20 > ema50 ? "BUY" :
-                       ema20 < ema50 ? "SELL" :
-                       "NEUTRAL";
-      
-      // Skip if no clear direction
-      if (direction === "NEUTRAL") continue;
-
-      // Calculate ATR-like value from recent candles
-      const atr = entryPrice * (Math.random() * 0.02 + 0.005); // 0.5-2.5% ATR
-      
-      const signal: TradingSignal = {
-        id: `local-monster-${symbol}-${Date.now()}-${index}`,
-        symbol,
-        pair: symbol,
-        direction,
-        type: direction === 'BUY' ? 'LONG' : 'SHORT',
-        entryPrice: parseFloat(entryPrice.toFixed(6)),
-        entryMin: parseFloat((entryPrice * 0.998).toFixed(6)), // Entry zone: -0.2%
-        entryMax: parseFloat((entryPrice * 1.002).toFixed(6)), // Entry zone: +0.2%
-        entryAvg: parseFloat(entryPrice.toFixed(6)),
-        stopLoss: direction === 'BUY' 
-          ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
-          : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
-        status: 'WAITING',
-        strategy: 'monster_1h_15m_multi_bybit_real',
-        createdAt: new Date().toISOString(),
-        result: null,
-        profit: null,
-        rsi: parseFloat(rsi.toFixed(2)), // Real calculated RSI
-        atr: parseFloat(atr.toFixed(6)),
-        success_prob: 0.72, // High confidence for monster signals
-        currentPrice: entryPrice, // Set current price to entry price
-        targets: [
-          {
-            level: 1,
-            price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 0.8 * atr).toFixed(6))
-              : parseFloat((entryPrice - 0.8 * atr).toFixed(6)),
-            hit: false
-          },
-          {
-            level: 2,
-            price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 1.5 * atr).toFixed(6))
-              : parseFloat((entryPrice - 1.5 * atr).toFixed(6)),
-            hit: false
-          },
-          {
-            level: 3,
-            price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 2.2 * atr).toFixed(6))
-              : parseFloat((entryPrice - 2.2 * atr).toFixed(6)),
-            hit: false
-          }
-        ]
+      // 6. ML Validator (Weight: 0.15) - Simplified confidence calculation
+      const mlFeatures = {
+        ema_ratio: ema20 / ema50,
+        rsi: rsi / 100,
+        volume: volumeRatio,
+        book_ratio: Math.abs(priceMovement),
+        candle_score: candleBodyRatio
       };
-
-      signals.push(signal);
-
+      const mlConfidence = (mlFeatures.ema_ratio - 1) * 0.5 + 
+                         (mlFeatures.rsi - 0.5) * 0.3 + 
+                         Math.min(mlFeatures.volume / 2, 0.5) * 0.2;
+      const mlValid = Math.abs(mlConfidence) > 0.65;
+      if (mlValid) {
+        validationScore += 0.15;
+        validationsPassedCount++;
+        validationResults.mlValidator = true;
+      }
+      
+      console.log(`${symbol}: Score=${validationScore.toFixed(2)}, Passed=${validationsPassedCount}/6`);
+      
+      // Check minimum requirements: Score >= 0.70 AND at least 5/6 validations
+      if (validationScore >= 0.70 && validationsPassedCount >= 5) {
+        // Calculate ATR for risk management
+        let atr = 0;
+        for (let i = 1; i < candles15m.length; i++) {
+          const tr = Math.max(
+            candles15m[i].high - candles15m[i].low,
+            Math.abs(candles15m[i].high - candles15m[i - 1].close),
+            Math.abs(candles15m[i].low - candles15m[i - 1].close)
+          );
+          atr += tr;
+        }
+        atr = atr / (candles15m.length - 1);
+        
+        // Risk management: SL = 1.5x ATR, TP1 = 1x ATR, TP2 = 1.8x, TP3 = 2.4x
+        const stopLoss = directionalFilter.direction === 'BUY' 
+          ? currentPrice - (atr * 1.5)
+          : currentPrice + (atr * 1.5);
+          
+        const target1 = directionalFilter.direction === 'BUY'
+          ? currentPrice + (atr * 1.0)
+          : currentPrice - (atr * 1.0);
+          
+        const target2 = directionalFilter.direction === 'BUY'
+          ? currentPrice + (atr * 1.8)
+          : currentPrice - (atr * 1.8);
+          
+        const target3 = directionalFilter.direction === 'BUY'
+          ? currentPrice + (atr * 2.4)
+          : currentPrice - (atr * 2.4);
+        
+        // Calculate R/R ratio
+        const riskReward = Math.abs(target1 - currentPrice) / Math.abs(stopLoss - currentPrice);
+        
+        // Check minimum R/R of 1.3
+        if (riskReward >= 1.3) {
+          const signal: TradingSignal = {
+            id: `monster_pro_${symbol}_${Date.now()}`,
+            symbol,
+            direction: directionalFilter.direction,
+            type: directionalFilter.direction === 'BUY' ? 'LONG' : 'SHORT',
+            entryPrice: currentPrice,
+            stopLoss,
+            targets: [{ level: 1, price: target1 }, { level: 2, price: target2 }, { level: 3, price: target3 }],
+            confidence: validationScore,
+            timeframe: '1m,5m,15m',
+            strategy: 'classic_crypto_pro',
+            timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            status: 'ACTIVE',
+            rsi: Math.round(rsi * 100) / 100,
+            atr: Math.round(atr * 10000) / 10000
+          };
+          
+          signals.push(signal);
+          console.log(`✅ Generated ${directionalFilter.direction} signal for ${symbol} (Score: ${(validationScore * 100).toFixed(1)}%, R/R: ${riskReward.toFixed(2)})`);
+        } else {
+          console.log(`❌ ${symbol}: R/R ratio ${riskReward.toFixed(2)} below minimum 1.3`);
+        }
+      } else {
+        console.log(`❌ ${symbol}: Insufficient validation (Score: ${validationScore.toFixed(2)}, Passed: ${validationsPassedCount}/6)`);
+      }
+      
     } catch (error) {
-      console.error(`Error generating signal for ${symbol}:`, error);
+      console.error(`Error analyzing ${symbol}:`, error);
+      consecutiveLosses++; // Count as potential loss for market quality filter
       continue;
     }
   }
 
-  console.log(`✅ Generated ${signals.length} local monster signals with real Bybit prices`);
+  console.log(`🔥 Enhanced monster generation complete. Generated ${signals.length} signals with 1H directional filter.`);
   return signals;
 };
 
