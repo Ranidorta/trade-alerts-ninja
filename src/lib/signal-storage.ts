@@ -14,8 +14,8 @@ export const saveSignalToHistory = (signal: TradingSignal) => {
   // Add the new/updated signal at the top
   updatedHistory.unshift(signal);
 
-  // Save all signals without limit
-  localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(updatedHistory));
+  // Keep only the latest 100 signals
+  localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(updatedHistory.slice(0, 100)));
   
   console.log(`Signal ${signal.id} saved to history. Total signals: ${updatedHistory.length}`);
 };
@@ -45,7 +45,8 @@ export const saveSignalsToHistory = (signals: TradingSignal[]) => {
     }
   });
   
-  // Save all signals without limit
+  // Keep only the latest 100 signals
+  combined = combined.slice(0, 100);
   
   localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(combined));
   

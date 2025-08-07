@@ -3,7 +3,6 @@
 import pandas as pd
 
 from ml.save_evaluation_result import save_evaluation_result
-from ml.continuous_learning import continuous_learning_agent
 
 def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
     """
@@ -36,9 +35,6 @@ def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
             if high >= tp3:
                 result = "WINNER"
                 save_evaluation_result(signal, result)
-                # Verificar se precisa retreinar após novo resultado
-                if continuous_learning_agent.should_retrain():
-                    continuous_learning_agent.continuous_train()
                 return result
             if high >= tp2:
                 hit_tp2 = True
@@ -52,17 +48,11 @@ def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
                 else:
                     result = "LOSER"
                 save_evaluation_result(signal, result)
-                # Verificar se precisa retreinar após novo resultado
-                if continuous_learning_agent.should_retrain():
-                    continuous_learning_agent.continuous_train()
                 return result
         elif direction == 'DOWN':
             if low <= tp3:
                 result = "WINNER"
                 save_evaluation_result(signal, result)
-                # Verificar se precisa retreinar após novo resultado
-                if continuous_learning_agent.should_retrain():
-                    continuous_learning_agent.continuous_train()
                 return result
             if low <= tp2:
                 hit_tp2 = True
@@ -76,15 +66,9 @@ def evaluate_signal(signal: dict, future_df: pd.DataFrame) -> str:
                 else:
                     result = "LOSER"
                 save_evaluation_result(signal, result)
-                # Verificar se precisa retreinar após novo resultado
-                if continuous_learning_agent.should_retrain():
-                    continuous_learning_agent.continuous_train()
                 return result
 
     # Se nenhum TP nem SL foi atingido no período analisado
     result = "FALSE"
     save_evaluation_result(signal, result)
-    # Verificar se precisa retreinar após novo resultado
-    if continuous_learning_agent.should_retrain():
-        continuous_learning_agent.continuous_train()
     return result

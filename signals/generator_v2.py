@@ -1,3 +1,4 @@
+
 ### generator_v2.py
 
 import logging
@@ -19,9 +20,6 @@ from utils.false_breakout_detector import FalseBreakoutDetector, check_rsi_diver
 from utils.macro_events_filter import check_fundamental_filter
 from ml.model_integration import AdvancedMLPredictor
 from core.risk_management import DynamicRiskManager, detect_market_stress
-from utils.performance_tracker import log_signal_opened, log_signal_closed
-from signals.intraday_signal_integrator import generate_intraday_signal
-from utils.quick_intraday_performance_alert import should_halt_intraday_trading
 
 logger = logging.getLogger("TradeAgent")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
@@ -239,10 +237,10 @@ class TradeAgent:
             from ta.trend import ADXIndicator
             adx = ADXIndicator(df_15m['high'], df_15m['low'], df_15m['close'], window=14).adx().iloc[-1]
             
-            # GESTÃO DE RISCO DINÂMICA MONSTER V2
+            # GESTÃO DE RISCO DINÂMICA
             market_volatility = self.risk_manager.is_acceptable_volatility(atr, atr)
             take_profits, stop_loss = self.risk_manager.calculate_targets(
-                entry, atr, direction, adx, symbol, agent_type="monster"
+                entry, atr, direction, adx, symbol
             )
 
             # 10. ADVANCED ML PREDICTION
@@ -267,14 +265,8 @@ class TradeAgent:
                     logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
                     return None
 
-            # 12. CREATE ENHANCED SIGNAL COM TRACKING DE R/R
-            # Calcula Risk/Reward esperado para logging
-            risk = abs(entry - stop_loss)
-            reward = abs(take_profits[2] - entry)  # TP3 como target principal
-            expected_rr = reward / risk if risk > 0 else 0
-            
+            # 12. CREATE ENHANCED SIGNAL
             signal = {
-                'id': f"{symbol}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
                 'symbol': symbol,
                 'direction': direction,
                 'entry_price': round(entry, 6),
@@ -297,23 +289,16 @@ class TradeAgent:
                 'market_stress': market_stress,
                 'breakout_valid': is_valid_breakout,
                 'rsi_divergence': has_favorable_divergence,
-                'ml_prediction': ml_result,
-                'expected_rr': round(expected_rr, 2),
-                'risk_amount': round(risk, 6),
-                'reward_amount': round(reward, 6)
+                'ml_prediction': ml_result
             }
 
-            # 13. SAVE TO DATABASE AND STORAGE + PERFORMANCE TRACKING
+            # 13. SAVE TO DATABASE AND STORAGE
             save_signal(signal)
-            
-            # Log no sistema de performance tracking
-            log_signal_opened(signal)
             
             logger.info(f"✅ SINAL MONSTER V2 gerado para {symbol}:")
             logger.info(f"   🎯 {signal['direction']} @ {signal['entry_price']}")
             logger.info(f"   📊 RSI: {rsi:.2f}, ADX: {adx:.2f}, ATR: {atr:.6f}")
             logger.info(f"   🤖 ML: {ml_result} ({ml_confidence:.3f})")
-            logger.info(f"   💰 R/R Esperado: {expected_rr:.2f} (Risco: {risk:.6f}, Reward: {reward:.6f})")
             logger.info(f"   🔄 Divergência: {has_favorable_divergence}, Stress: {market_stress}")
             
             return signal
@@ -322,49 +307,9 @@ class TradeAgent:
             logger.exception(f"Erro ao gerar sinal monster v2 para {symbol}")
             return None
 
-    def generate_signal_intraday(self, symbol):
-        """
-        NOVO: Geração de sinais para Day Trade com validações rápidas
-        """
-        logger.info(f"🏃‍♂️ [INTRADAY] Gerando sinal rápido para {symbol}")
-        
-        try:
-            # Verifica se deve parar trading intradiário
-            if should_halt_intraday_trading():
-                logger.warning("🛑 Trading intradiário suspenso por performance")
-                return None
-            
-            # Usa o novo sistema integrado
-            intraday_signal = generate_intraday_signal(symbol)
-            
-            if intraday_signal:
-                logger.info(f"✅ Sinal intradiário gerado: {symbol} {intraday_signal['direction']} @ {intraday_signal['entry_price']}")
-                return intraday_signal
-            else:
-                logger.info(f"🛑 Nenhum sinal intradiário aprovado para {symbol}")
-                return None
-                
-        except Exception as e:
-            logger.exception(f"Erro na geração de sinal intradiário para {symbol}")
-            return None
-
     def generate_signal(self, symbol: str) -> Optional[Dict]:
-        """
-        ATUALIZADO: Método principal que escolhe entre Monster e Intraday
-        """
-        try:
-            # Primeiro tenta gerar sinal intradiário (mais rápido)
-            intraday_signal = self.generate_signal_intraday(symbol)
-            if intraday_signal:
-                return intraday_signal
-            
-            # Se não gerar sinal intradiário, usa o Monster (estratégia principal)
-            monster_signal = self.generate_signal_monster(symbol)
-            return monster_signal
-            
-        except Exception as e:
-            logger.exception(f"Erro na geração de sinal para {symbol}")
-            return None
+        """Main signal generation entry point - now uses monster logic"""
+        return self.generate_signal_monster(symbol)
 
     def run(self, symbols: List[str]):
         """Run signal generation for multiple symbols"""

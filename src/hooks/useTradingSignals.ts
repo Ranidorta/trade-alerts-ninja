@@ -7,9 +7,8 @@ import {
   updateAllSignalsStatus,
   reprocessAllHistory
 } from "@/lib/signalHistoryService";
-// Removed Firebase dependency
+import { logTradeSignal } from "@/lib/firebase";
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
-import { generateMonsterSignals } from "@/lib/signalsApi";
 
 // Set up localStorage keys
 const SIGNALS_STORAGE_KEY = "archived_trading_signals";
@@ -67,13 +66,14 @@ export const useTradingSignals = () => {
     setError(null);
 
     try {
-      console.log('🚀 Starting signal generation process...');
+      console.log('Trying to fetch signals...');
       
+      // First try to fetch from any available API
       let newSignals: TradingSignal[] = [];
       let fetchedFromRemote = false;
       
       try {
-        // First try to fetch from backends
+        // Try multiple backend URLs if configured
         const backendUrls = [
           config.signalsApiUrl,
           'https://trade-alerts-backend.onrender.com',
@@ -83,7 +83,7 @@ export const useTradingSignals = () => {
         for (const backendUrl of backendUrls) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
             
             const response = await fetch(`${backendUrl}/signals?strategy=CLASSIC`, {
               signal: controller.signal
@@ -109,40 +109,49 @@ export const useTradingSignals = () => {
           }
         }
         
-      } catch (fetchError) {
-        console.warn(`Could not fetch from any backend: ${fetchError.message}`);
-      }
-      
-      // If no backend worked, generate monster signals locally
-      if (!fetchedFromRemote) {
-        console.log('📡 Backend unavailable, generating local monster signals...');
+        // If no backend worked, check localStorage
+        if (!fetchedFromRemote) {
+          const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+          if (cachedSignals) {
+            newSignals = JSON.parse(cachedSignals);
+            console.log("Using cached signals:", newSignals.length);
+            
+            toast({
+              title: "Using cached signals",
+              description: "Backend unavailable. Using locally stored signals.",
+            });
+          }
+        }
         
-        try {
-          // Use the monster signal generation from signalsApi
-          newSignals = await generateMonsterSignals([
-            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-          ]);
-          
-          console.log(`✅ Generated ${newSignals.length} local monster signals`);
-          
-          toast({
-            title: "Monster signals generated",
-            description: `Generated ${newSignals.length} high-quality signals using real market data`,
-          });
-          
-        } catch (monsterError) {
-          console.error('❌ Monster signal generation failed:', monsterError);
-          
-          // Final fallback to demo data
-          newSignals = generateMockSignals(10);
-          console.log("Generated fallback demo signals:", newSignals.length);
+        // If we still have no signals, generate demo data
+        if (newSignals.length === 0) {
+          newSignals = generateMockSignals(15);
+          console.log("Generated demo signals:", newSignals.length);
           
           toast({
             title: "Using demo data",
-            description: "Signal generation unavailable. Using demo data.",
+            description: "No backend available. Using generated demo signals.",
           });
         }
+        
+      } catch (fetchError) {
+        console.warn(`Could not fetch from any API: ${fetchError.message}`);
+        
+        // Try to use cached signals
+        const cachedSignals = localStorage.getItem(SIGNALS_STORAGE_KEY);
+        if (cachedSignals) {
+          newSignals = JSON.parse(cachedSignals);
+          console.log("Using cached signals:", newSignals.length);
+        } else {
+          // Generate demo data as last resort
+          newSignals = generateMockSignals(10);
+          console.log("Generated fallback demo signals:", newSignals.length);
+        }
+        
+        toast({
+          title: "Backend unavailable",
+          description: "Using cached or demo data. Backend connection will be retried automatically.",
+        });
       }
       
       // Process signals to ensure they have all required fields
@@ -196,7 +205,7 @@ export const useTradingSignals = () => {
       toast({
         variant: "destructive",
         title: "Error loading signals",
-        description: "Failed to load signals. Please try again.",
+        description: "Failed to load signals from any source. Please check your connection.",
       });
     } finally {
       setLoading(false);
@@ -232,6 +241,12 @@ export const useTradingSignals = () => {
       
       processedNewSignals.forEach(signal => {
         saveSignalToHistory(signal);
+        
+        logTradeSignal(signal)
+          .then(success => {
+            if (!success) console.warn(`Failed to log signal ${signal.id} to Firebase`);
+          })
+          .catch(err => console.error("Error logging signal to Firebase:", err));
       });
       
       return updatedSignals;
@@ -240,72 +255,8 @@ export const useTradingSignals = () => {
 
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
-      // First update statuses based on current prices
       const updatedSignals = await updateAllSignalsStatus(currentPrices);
       setSignals(updatedSignals);
-      
-      // Then validate signals against historical data for completed ones
-      const { validateSignalWithBybitData } = await import("@/lib/signalValidationService");
-      const { useFirebaseSignals } = await import("@/hooks/useFirebaseSignals");
-      const { updateSignalInFirebase, saveSignalToFirebase } = useFirebaseSignals();
-      
-      // Find signals that need validation:
-      // - Completed signals without final result
-      // - Signals with PARTIAL result (for re-evaluation)
-      const signalsToValidate = updatedSignals.filter(signal => 
-        (signal.status === "COMPLETED" && (!signal.result || signal.result === "PENDING")) ||
-        signal.result === "PARTIAL"
-      ).filter(signal => 
-        // Skip signals that already have final results
-        signal.result !== "WINNER" && 
-        signal.result !== "LOSER" && 
-        signal.result !== 1 && 
-        signal.result !== 0
-      );
-
-      if (signalsToValidate.length > 0) {
-        console.log(`🔍 Validating ${signalsToValidate.length} completed signals...`);
-        
-        // Validate each signal
-        for (const signal of signalsToValidate) {
-          try {
-            console.log(`🔍 Validating signal ${signal.id} with result: ${signal.result}`);
-            const validatedSignal = await validateSignalWithBybitData(signal);
-            
-            if (validatedSignal.result && validatedSignal.result !== "PENDING") {
-              console.log(`📈 Signal ${validatedSignal.id} validation result: ${validatedSignal.result}`);
-              
-              // Update signal in the array
-              const signalIndex = updatedSignals.findIndex(s => s.id === validatedSignal.id);
-              if (signalIndex !== -1) {
-                updatedSignals[signalIndex] = validatedSignal;
-              }
-              
-              // Update in local storage (signal-storage key)
-              saveSignalToHistory(validatedSignal);
-              
-              // Save to Supabase - try to save first, then update
-              let firebaseSuccess = await saveSignalToFirebase(validatedSignal);
-              if (!firebaseSuccess) {
-                // If save failed (signal might already exist), try to update
-                firebaseSuccess = await updateSignalInFirebase(validatedSignal);
-              }
-              
-              if (firebaseSuccess) {
-                console.log(`✅ Signal ${validatedSignal.id} saved to Supabase with result: ${validatedSignal.result}`);
-              } else {
-                console.warn(`⚠️ Failed to save signal ${validatedSignal.id} to Supabase`);
-              }
-            }
-          } catch (error) {
-            console.error(`❌ Error validating signal ${signal.id}:`, error);
-          }
-        }
-      }
-      
-      // Update state with validated signals
-      setSignals(updatedSignals);
-      
       toast({
         title: "Signals updated",
         description: `Updated ${updatedSignals.length} signals with current status`,
