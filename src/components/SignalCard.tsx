@@ -198,8 +198,13 @@ ${signal.targets ? signal.targets.map((t, i) => `🎯 TP${i+1}: ${t.price}`).joi
               )}
             >
               <Zap className="h-3 w-3 mr-1" />
-              {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
+              Confiança: {(confidence * 100).toFixed(0)}%
             </Badge>
+            {signal.strategy && (
+              <Badge variant="outline" className="text-xs">
+                {signal.strategy}
+              </Badge>
+            )}
             <Badge 
               variant={
                 signal.status === "COMPLETED" ? "secondary" : 
@@ -297,6 +302,16 @@ ${signal.targets ? signal.targets.map((t, i) => `🎯 TP${i+1}: ${t.price}`).joi
             ))}
           </div>
         </div>
+
+        {/* Validation Details */}
+        {signal.validationDetails && (
+          <div className="p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
+            <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">Estratégia</div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {signal.validationDetails}
+            </div>
+          </div>
+        )}
         
         {expanded && (
           <div className="mt-4 pt-4 border-t animate-fade-in">

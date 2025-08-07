@@ -339,6 +339,17 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
         
         // Check minimum R/R of 1.3
         if (riskReward >= 1.3) {
+          // Create validation details string
+          const passedValidations = [];
+          if (validationResults.emaCross) passedValidations.push('EMA Cross');
+          if (validationResults.volumeSpike) passedValidations.push('Volume Spike');
+          if (validationResults.candleReversal) passedValidations.push('Candle Reversal');
+          if (validationResults.rsiMomentum) passedValidations.push('RSI+Momentum');
+          if (validationResults.orderBook) passedValidations.push('Order Book');
+          if (validationResults.mlValidator) passedValidations.push('ML Validator');
+          
+          const validationDetails = `Monster Pro V3 (${validationsPassedCount}/6 validações: ${passedValidations.join(', ')})`;
+          
           const signal: TradingSignal = {
             id: `monster_pro_${symbol}_${Date.now()}`,
             symbol,
@@ -350,6 +361,7 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
             confidence: validationScore,
             timeframe: '1m,5m,15m',
             strategy: 'classic_crypto_pro',
+            validationDetails,
             timestamp: new Date().toISOString(),
             createdAt: new Date().toISOString(),
             status: 'ACTIVE',
