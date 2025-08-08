@@ -13,6 +13,7 @@ import traceback
 # Import our data services
 from api.fetch_data import fetch_data, get_current_price
 from api.market_data_service import market_data_service
+from signals.signal_generator import generate_signal as generate_classic_signal
 
 # Create blueprint for monster signals
 monster_signals_api = Blueprint('monster_signals', __name__)
@@ -103,84 +104,38 @@ def get_direction(df_1h, df_15m):
 
 def generate_monster_signal(symbol):
     """
-    Generate a monster signal with strict filtering criteria and real market data
+    Use the Classic (normal) agent logic under the Monster endpoint (backend-only swap)
     """
     try:
-        logger.info(f"🔍 Analyzing {symbol} with monster filters and real market data...")
-        
-        # Get current market price first
+        logger.info(f"🔁 MONSTER proxy: delegating generation to Classic agent for {symbol}...")
+
+        classic = generate_classic_signal(symbol)
+        if not classic:
+            logger.info(f"🛑 Classic agent returned no signal for {symbol}")
+            return None
+
+        # Normalize direction
+        classic_dir = str(classic.get("signal", "")).upper()
+        direction = "BUY" if classic_dir in ("BUY", "LONG") else "SELL"
+
+        entry = float(classic.get("entry_price", 0) or 0)
+        sl = float(classic.get("sl", 0) or 0)
+        tp1 = float(classic.get("tp1", 0) or 0)
+        tp2 = float(classic.get("tp2", 0) or 0)
+        tp3 = float(classic.get("tp3", 0) or 0)
+        atr = float(classic.get("atr", 0) or 0)
+        rsi = float(classic.get("rsi", 0) or 0)
+
+        # Prefer real-time price when available, fallback to entry
         current_price = get_current_price(symbol)
-        if current_price == 0:
-            logger.warning(f"Could not get current price for {symbol}")
-            current_price = None
-        else:
-            logger.info(f"Current market price for {symbol}: {current_price}")
-        
-        # Fetch multi-timeframe data from Bybit
-        df_15m = fetch_data(symbol, "15", limit=210)  # 15 minutes
-        df_1h = fetch_data(symbol, "60", limit=210)   # 1 hour
-        
-        if df_15m.empty or df_1h.empty:
-            logger.warning(f"Insufficient data for {symbol}")
-            return None
-        
-        # Use current market price if available, otherwise use latest close
-        entry = current_price if current_price else float(df_15m['close'].iloc[-1])
-        
-        # Determine direction based on trend alignment
-        direction = get_direction(df_1h, df_15m)
-        if direction is None:
-            logger.info(f"🛑 Trends not aligned for {symbol}")
-            return None
-        
-        # Calculate RSI for 15m timeframe
-        rsi = calculate_rsi(df_15m['close'], window=14).iloc[-1]
-        
-        # RSI filter based on direction
-        if direction == "BUY" and rsi < 50:
-            logger.info(f"🛑 RSI too low for BUY: {rsi:.2f}")
-            return None
-        elif direction == "SELL" and rsi > 50:
-            logger.info(f"🛑 RSI too high for SELL: {rsi:.2f}")
-            return None
-        
-        # Volume filter
-        if not has_high_volume(df_15m):
-            logger.info(f"🛑 Low volume for {symbol}")
-            return None
-        
-        # Strong candle filter
-        if not is_strong_candle(df_15m):
-            logger.info(f"🛑 Weak candle for {symbol}")
-            return None
-        
-        # ATR filter
-        if not atr_filter(df_15m):
-            logger.info(f"🛑 ATR out of range for {symbol}")
-            return None
-        
-        # Calculate ATR for risk management
-        atr = calculate_atr(df_15m['high'], df_15m['low'], df_15m['close'], window=14).iloc[-1]
-        
-        # Calculate targets based on ATR and direction
-        if direction == "BUY":
-            sl = entry - 1.2 * atr
-            tp1 = entry + 0.8 * atr
-            tp2 = entry + 1.5 * atr
-            tp3 = entry + 2.2 * atr
-        else:  # SELL
-            sl = entry + 1.2 * atr
-            tp1 = entry - 0.8 * atr
-            tp2 = entry - 1.5 * atr
-            tp3 = entry - 2.2 * atr
-        
-        # Create signal with real market data
+        current_price = current_price if current_price and current_price > 0 else entry
+
         signal = {
             'symbol': symbol,
             'direction': direction,
             'entry_price': round(entry, 6),
             'sl': round(sl, 6),
-            'tp': round(tp3, 6),  # Main target
+            'tp': round(tp3, 6),
             'tp1': round(tp1, 6),
             'tp2': round(tp2, 6),
             'tp3': round(tp3, 6),
@@ -189,19 +144,18 @@ def generate_monster_signal(symbol):
             'current_price': current_price,
             'timestamp': datetime.utcnow().isoformat(),
             'expires': (datetime.utcnow() + timedelta(minutes=5)).isoformat(),
-            'strategy': 'monster_1h_15m_multi_bybit',
-            'success_prob': 0.75  # High confidence for monster filter
+            # Keep original monster strategy label to avoid frontend changes
+            'strategy': 'monster_1h_15m_multi_bybit'
         }
-        
-        logger.info(f"✅ MONSTER signal generated {signal['direction']} @ {signal['entry_price']} ({symbol})")
-        logger.info(f"   RSI: {rsi:.2f}, ATR: {atr:.6f}, Current Price: {current_price}")
-        
+
+        logger.info(f"✅ MONSTER proxy (Classic) generated {signal['direction']} @ {signal['entry_price']} ({symbol})")
         return signal
-        
+
     except Exception as e:
-        logger.error(f"Error generating monster signal for {symbol}: {str(e)}")
+        logger.error(f"Error generating monster-proxy signal for {symbol}: {str(e)}")
         logger.error(traceback.format_exc())
         return None
+        
 
 @monster_signals_api.route('/api/signals/generate/monster', methods=['POST'])
 def generate_monster_signals():
@@ -250,7 +204,7 @@ def generate_monster_signals():
                         'profit': None,
                         'rsi': signal['rsi'],
                         'atr': signal['atr'],
-                        'success_prob': signal['success_prob'],
+                        'success_prob': signal.get('success_prob'),
                         'currentPrice': signal.get('current_price'),
                         'targets': [
                             {
