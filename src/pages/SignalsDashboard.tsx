@@ -404,10 +404,7 @@ const SignalsDashboard = () => {
               </div>
               
               <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
-                <Button onClick={handleManualRefresh} variant="outline" size={isMobile ? "sm" : "default"} className={isMobile ? "h-9 px-2" : ""} title="Atualizar sinais agora">
-                  <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
-                  {!isMobile && "Atualizar"}
-                </Button>
+                
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
