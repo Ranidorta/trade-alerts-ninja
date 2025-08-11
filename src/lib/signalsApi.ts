@@ -387,12 +387,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        data: {
-          symbols: symbols || [
-            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-          ]
-        }
+        data: symbols ? { symbols } : {}
       });
       
       console.log(`✅ Backend generated ${response.data.signals.length} monster signals`);
