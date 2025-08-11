@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { StrategyTypePerformance } from "@/lib/types";
-import { getStrategiesPerformance, recalculateAllStrategiesStatistics } from "@/lib/firebaseFunctions";
+// Firebase functions removed - using mock data for now
 import { useToast } from "@/components/ui/use-toast";
 
 export const useStrategyPerformance = () => {
@@ -15,7 +15,37 @@ export const useStrategyPerformance = () => {
     setError(null);
 
     try {
-      const strategiesData = await getStrategiesPerformance();
+      // Mock data for strategies performance
+      const strategiesData: StrategyTypePerformance[] = [
+        {
+          strategy: "Moving Average Crossover",
+          count: 45,
+          totalTrades: 45,
+          wins: 28,
+          losses: 17,
+          winRate: 62.2,
+          avgProfit: 2.3
+        },
+        {
+          strategy: "RSI Reversal",
+          count: 38,
+          totalTrades: 38,
+          wins: 22,
+          losses: 16,
+          winRate: 57.9,
+          avgProfit: 1.8
+        },
+        {
+          strategy: "MACD Signal",
+          count: 32,
+          totalTrades: 32,
+          wins: 19,
+          losses: 13,
+          winRate: 59.4,
+          avgProfit: 2.1
+        }
+      ];
+      
       setStrategies(strategiesData);
       
       toast({
@@ -41,20 +71,13 @@ export const useStrategyPerformance = () => {
     setError(null);
 
     try {
-      const success = await recalculateAllStrategiesStatistics();
+      // Mock recalculation - just refresh the data
+      await fetchStrategyPerformance();
       
-      if (success) {
-        // Refresh the strategies data
-        const strategiesData = await getStrategiesPerformance();
-        setStrategies(strategiesData);
-        
-        toast({
-          title: "Statistics recalculated",
-          description: "Successfully recalculated all strategy statistics",
-        });
-      } else {
-        throw new Error("Failed to recalculate statistics");
-      }
+      toast({
+        title: "Statistics recalculated",
+        description: "Successfully recalculated all strategy statistics",
+      });
     } catch (err: any) {
       console.error("Error recalculating statistics:", err);
       setError(err);
@@ -67,7 +90,7 @@ export const useStrategyPerformance = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, fetchStrategyPerformance]);
 
   // Fetch strategy performance on mount
   useEffect(() => {

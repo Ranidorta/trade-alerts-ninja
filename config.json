@@ -18,5 +18,6 @@
   },
   "db_path": "signals.db",
   "model_path": "models/model.pkl",
-  "log_file": "logs/agent.log"
+  "log_file": "logs/agent.log",
+  "api_football_key": "3128425d69msh381fd72b26b27fdp1827e4jsndc62713dde32"
 }

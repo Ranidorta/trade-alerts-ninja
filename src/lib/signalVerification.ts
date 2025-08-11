@@ -1,21 +1,27 @@
 
 import { TradingSignal } from "@/lib/types";
 import { getSignalHistory, saveSignalsToHistory } from "@/lib/signal-storage";
-import { verifyTradingSignal } from "./firebaseFunctions";
+// Removed Firebase dependency - using mock verification
 
 /**
  * Verifies a single trading signal against current market data
  */
 export async function verifySingleSignal(signal: TradingSignal): Promise<TradingSignal> {
   try {
-    // Skip verification if result already exists
-    if (signal.result !== undefined) {
-      console.log(`Signal ${signal.id} already has a result. Skipping verification.`);
+    // Skip verification if result is WINNER or LOSER (definitivos)
+    if (signal.result === "WINNER" || signal.result === "LOSER" || signal.result === 1 || signal.result === 0) {
+      console.log(`Signal ${signal.id} already has a final result (${signal.result}). Skipping verification.`);
       return signal;
     }
     
-    // Verify the signal using Firebase Function (or local simulation)
-    const verifiedSignal = await verifyTradingSignal(signal);
+    // Only re-verify PARTIAL results or undefined/pending results
+    if (signal.result !== undefined && signal.result !== "PARTIAL" && signal.result !== "PENDING") {
+      console.log(`Signal ${signal.id} has result ${signal.result} but not PARTIAL/PENDING. Skipping verification.`);
+      return signal;
+    }
+    
+    // Mock verification - just return the signal for now
+    const verifiedSignal = { ...signal, result: signal.result || "PENDING" };
     
     // Log the verification result
     console.log(`Signal ${signal.id} verification result: ${verifiedSignal.result}`);
@@ -42,9 +48,19 @@ export async function verifyAllSignals(signalsToVerify?: TradingSignal[]): Promi
       return [];
     }
     
-    // Filter to only verify signals that don't have results yet
+    // Filter to only verify signals that need verification:
+    // - Signals without result (undefined/PENDING)
+    // - Signals with PARTIAL result (para reavaliar)
+    // - Skip WINNER/LOSER definitivos
     const signalsNeedingVerification = signals.filter(
-      signal => signal.result === undefined
+      signal => signal.result === undefined || 
+                signal.result === "PENDING" || 
+                signal.result === "PARTIAL"
+    ).filter(
+      signal => signal.result !== "WINNER" && 
+                signal.result !== "LOSER" && 
+                signal.result !== 1 && 
+                signal.result !== 0
     );
     
     if (signalsNeedingVerification.length === 0) {

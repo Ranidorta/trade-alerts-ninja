@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getAuth } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, User, Phone, Mail, Edit, Save, X } from "lucide-react";
@@ -19,129 +17,79 @@ interface UserData {
 }
 
 const UserProfile = () => {
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<UserData>({
-    email: "",
-    displayName: "",
-    phone: "",
-    cpf: ""
-  });
+  const { user, loading } = useAuth();
   const { toast } = useToast();
-  const { user, updateUserSubscription } = useAuth();
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const auth = getAuth();
-        const currentUser = auth.currentUser;
-        
-        if (!currentUser) {
-          setLoading(false);
-          return;
-        }
-        
-        const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-          const userDataFromFirestore = userSnap.data();
-          const formattedUserData = {
-            ...userDataFromFirestore,
-            email: currentUser.email || "",
-            displayName: currentUser.displayName || "",
-          } as UserData;
-          
-          setUserData(formattedUserData);
-          setFormData(formattedUserData);
-        }
-      } catch (error) {
-        console.error("Erro ao buscar dados do usuário:", error);
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "Não foi possível carregar os dados do perfil."
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [toast]);
+    if (user) {
+      setUserData({
+        email: user.email || '',
+        displayName: user.user_metadata?.display_name || user.email || '',
+        phone: user.user_metadata?.phone || '',
+        cpf: user.user_metadata?.cpf || '',
+        role: 'user',
+        assinaturaAtiva: true
+      });
+      setIsLoading(false);
+    }
+  }, [user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value
-    }));
+    setUserData(prev => prev ? { ...prev, [name]: value } : null);
   };
 
   const handleSaveProfile = async () => {
+    if (!user || !userData) return;
+    
+    setIsSaving(true);
     try {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        toast({
-          variant: "destructive",
-          title: "Erro",
-          description: "Usuário não encontrado."
-        });
-        return;
-      }
-      
-      const userRef = doc(db, "users", currentUser.uid);
-      
-      await updateDoc(userRef, {
-        phone: formData.phone,
-        cpf: formData.cpf
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          display_name: userData.displayName,
+          phone: userData.phone,
+          cpf: userData.cpf
+        }
       });
-      
-      setUserData(formData);
-      
+
+      if (error) throw error;
+
       setIsEditing(false);
-      
       toast({
-        title: "Sucesso",
-        description: "Perfil atualizado com sucesso.",
+        title: "Perfil atualizado",
+        description: "Suas informações foram atualizadas com sucesso.",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao atualizar perfil:", error);
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Não foi possível atualizar seu perfil. Tente novamente mais tarde."
+        description: "Não foi possível atualizar seu perfil.",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleCancelEdit = () => {
-    setFormData(userData || { email: "", displayName: "" });
+    if (user) {
+      setUserData({
+        email: user.email || '',
+        displayName: user.user_metadata?.display_name || user.email || '',
+        phone: user.user_metadata?.phone || '',
+        cpf: user.user_metadata?.cpf || '',
+        role: 'user',
+        assinaturaAtiva: true
+      });
+    }
     setIsEditing(false);
   };
 
-  const handleCancelSubscription = async () => {
-    try {
-      await updateUserSubscription(false);
-      
-      setUserData({
-        ...userData as UserData,
-        assinaturaAtiva: false
-      });
-    } catch (error) {
-      console.error("Erro ao cancelar assinatura:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Não foi possível cancelar sua assinatura. Tente novamente mais tarde."
-      });
-    }
-  };
-
-  if (loading) {
+  if (loading || isLoading) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -150,7 +98,7 @@ const UserProfile = () => {
     );
   }
 
-  if (!userData && !user) {
+  if (!user || !userData) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
         <p>Você precisa estar logado para ver esta página.</p>
@@ -180,6 +128,7 @@ const UserProfile = () => {
               onClick={handleCancelEdit} 
               variant="outline"
               className="flex items-center gap-2"
+              disabled={isSaving}
             >
               <X size={18} />
               Cancelar
@@ -187,9 +136,10 @@ const UserProfile = () => {
             <Button 
               onClick={handleSaveProfile} 
               className="flex items-center gap-2"
+              disabled={isSaving}
             >
-              <Save size={18} />
-              Salvar
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={18} />}
+              {isSaving ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
         )}
@@ -207,29 +157,19 @@ const UserProfile = () => {
                     <Input 
                       id="displayName"
                       name="displayName"
-                      value={formData.displayName}
+                      value={userData.displayName}
                       onChange={handleInputChange}
                     />
                   ) : (
-                    <p className="text-lg py-2">{userData?.displayName || user?.name || "Não definido"}</p>
+                    <p className="text-lg py-2">{userData.displayName}</p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  {isEditing ? (
-                    <Input 
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      disabled
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 py-2">
-                      <Mail size={18} className="text-muted-foreground" />
-                      <p className="text-lg">{userData?.email || user?.email}</p>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 py-2">
+                    <Mail size={18} className="text-muted-foreground" />
+                    <p className="text-lg">{userData.email}</p>
+                  </div>
                 </div>
               </div>
 
@@ -240,14 +180,14 @@ const UserProfile = () => {
                     <Input 
                       id="phone"
                       name="phone"
-                      value={formData.phone || ""}
+                      value={userData.phone || ""}
                       onChange={handleInputChange}
                       placeholder="(XX) XXXXX-XXXX"
                     />
                   ) : (
                     <div className="flex items-center gap-2 py-2">
                       <Phone size={18} className="text-muted-foreground" />
-                      <p className="text-lg">{userData?.phone || "Não informado"}</p>
+                      <p className="text-lg">{userData.phone || "Não informado"}</p>
                     </div>
                   )}
                 </div>
@@ -257,12 +197,12 @@ const UserProfile = () => {
                     <Input 
                       id="cpf"
                       name="cpf"
-                      value={formData.cpf || ""}
+                      value={userData.cpf || ""}
                       onChange={handleInputChange}
                       placeholder="XXX.XXX.XXX-XX"
                     />
                   ) : (
-                    <p className="text-lg py-2">{userData?.cpf || "Não informado"}</p>
+                    <p className="text-lg py-2">{userData.cpf || "Não informado"}</p>
                   )}
                 </div>
               </div>
@@ -275,30 +215,18 @@ const UserProfile = () => {
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Plano</h4>
                 <p className="text-lg">
-                  {userData?.role === 'admin' ? "Admin" : userData?.assinaturaAtiva ? "Premium" : "Básico"}
+                  {userData.role === 'admin' ? "Admin" : userData.assinaturaAtiva ? "Premium" : "Básico"}
                 </p>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">Status</h4>
                 <p className="text-lg">
-                  {userData?.assinaturaAtiva ? 
+                  {userData.assinaturaAtiva ? 
                     <span className="text-green-600">Ativa</span> : 
                     <span className="text-yellow-600">Inativa</span>}
                 </p>
               </div>
             </div>
-          </div>
-
-          <div className="pt-6 flex flex-col sm:flex-row gap-4">
-            {userData?.assinaturaAtiva && (
-              <Button 
-                variant="outline" 
-                className="flex-1 border-red-500 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950 dark:border-red-700 dark:text-red-500"
-                onClick={handleCancelSubscription}
-              >
-                Cancelar Assinatura
-              </Button>
-            )}
           </div>
         </div>
       </div>
