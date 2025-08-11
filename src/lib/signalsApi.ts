@@ -82,12 +82,28 @@ export const checkBackendHealth = async () => {
 
 // Generate local monster signals using real Bybit prices when backend is unavailable
 const generateLocalMonsterSignals = async (symbols: string[] = []) => {
-  const defaultSymbols = symbols.length > 0 ? symbols : [
-    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-    'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-  ];
+  // Determine symbols dynamically from Bybit when not provided
+  let symbolsToUse = symbols;
+  if (!symbolsToUse || symbolsToUse.length === 0) {
+    try {
+      const resp = await axios.get('https://api.bybit.com/v5/market/instruments-info', {
+        params: { category: 'linear' },
+        timeout: 8000,
+      });
+      symbolsToUse = (resp.data?.result?.list || [])
+        .filter((i: any) => i.symbol?.endsWith('USDT') && i.status === 'Trading' && i.quoteCoin === 'USDT')
+        .map((i: any) => i.symbol)
+        .slice(0, 20);
+    } catch (e) {
+      console.warn('Failed to fetch Bybit symbols for local monster, using defaults:', e);
+      symbolsToUse = [
+        'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+        'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+      ];
+    }
+  }
 
-  console.log('🔧 Generating local monster signals with real Bybit prices...');
+  console.log(`🔧 Generating local monster signals with real Bybit prices for ${symbolsToUse.length} symbols...`);
 
   // Import Bybit service
   const { fetchBybitKlines } = await import('@/lib/apiServices');
@@ -95,8 +111,8 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
   const signals: TradingSignal[] = [];
 
   // Generate signals for each symbol using real market data
-  for (let index = 0; index < defaultSymbols.length; index++) {
-    const symbol = defaultSymbols[index];
+for (let index = 0; index < symbolsToUse.length; index++) {
+    const symbol = symbolsToUse[index];
     
     try {
       // 70% chance for each symbol (relaxed monster filter)
