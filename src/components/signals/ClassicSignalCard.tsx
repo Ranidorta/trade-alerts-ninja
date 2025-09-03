@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TradingSignal } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUp, ArrowDown, Target, Shield, Zap } from "lucide-react";
+import { ArrowUp, ArrowDown, Target, Shield, Zap, BarChart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -256,11 +256,12 @@ ${signal.risk_amount ? `💰 Risco: $${signal.risk_amount}` : ''}
               
               {signal.analysis && (
                 <div>
-                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Análise do Sinal
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+                    <BarChart className="h-4 w-4 text-primary" />
+                    Análise Técnica Detalhada
                   </div>
-                  <div className="text-sm p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
-                    {signal.analysis}
+                  <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-green-200 dark:border-slate-600">
+                    <pre className="text-sm whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-300 leading-relaxed">{signal.analysis}</pre>
                   </div>
                 </div>
               )}

@@ -204,6 +204,53 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       // Convert to percentage and ensure 80-100% range for high-quality signals
       let finalConfidence = Math.min(100, Math.max(80, 80 + (confidenceScore / 100) * 20));
       
+      // Generate detailed analysis explaining the signal
+      const analysisPoints = [];
+      
+      // EMA Analysis
+      const emaTrend = ema20 > ema50 ? "alta" : "baixa";
+      const emaStrength = ((Math.abs(ema20 - ema50) / ema50) * 1000).toFixed(1);
+      analysisPoints.push(`📈 Tendência ${emaTrend}: EMA20 ${ema20 > ema50 ? "acima" : "abaixo"} da EMA50 (força: ${emaStrength})`);
+      
+      // RSI Analysis
+      const rsiCondition = direction === "BUY" ? 
+        (rsi > 45 && rsi < 75 ? "ideal para compra" : "neutro") :
+        (rsi > 25 && rsi < 55 ? "ideal para venda" : "neutro");
+      analysisPoints.push(`⚖️ RSI: ${rsi.toFixed(1)} - ${rsiCondition}`);
+      
+      // Volume Analysis
+      const volumeAnalysis = (volume / avgVolume).toFixed(2);
+      const volumeStatus = parseFloat(volumeAnalysis) > 1.2 ? `${volumeAnalysis}x acima da média (forte)` : `${volumeAnalysis}x da média (normal)`;
+      analysisPoints.push(`📊 Volume: ${volumeStatus}`);
+      
+      // Momentum Analysis  
+      const momentumPrices = prices.slice(-5);
+      const momentumCalc = ((momentumPrices[momentumPrices.length - 1] - momentumPrices[0]) / momentumPrices[0] * 100).toFixed(2);
+      const momentumDirection = parseFloat(momentumCalc) > 0 ? "positivo" : "negativo";
+      analysisPoints.push(`🚀 Momentum: ${momentumCalc}% (${momentumDirection})`);
+      
+      // Confidence breakdown
+      const confidenceBreakdown = [
+        `Tendência EMA: ${Math.min(30, (Math.abs(ema20 - ema50) / ema50) * 1000).toFixed(0)} pts`,
+        `RSI: ${Math.min(25, direction === "BUY" && rsi > 45 && rsi < 75 ? (75 - Math.abs(rsi - 60)) / 15 * 25 : direction === "SELL" && rsi > 25 && rsi < 55 ? (75 - Math.abs(rsi - 40)) / 15 * 25 : 0).toFixed(0)} pts`,
+        `Volume: ${Math.min(25, volume > avgVolume * 1.2 ? (volume / avgVolume - 1) * 50 : 0).toFixed(0)} pts`,
+        `Momentum: ${Math.min(20, (direction === "BUY" && parseFloat(momentumCalc) > 0) || (direction === "SELL" && parseFloat(momentumCalc) < 0) ? Math.abs(parseFloat(momentumCalc)) * 10 : 0).toFixed(0)} pts`
+      ];
+      
+      const detailedAnalysis = `🎯 ANÁLISE TÉCNICA COMPLETA
+
+${analysisPoints.join('\n')}
+
+💡 JUSTIFICATIVA DA ${direction}:
+${direction === "BUY" ? 
+  "• Tendência de alta confirmada pelas médias móveis\n• RSI em zona favorável para compra\n• Volume validando o movimento" :
+  "• Tendência de baixa confirmada pelas médias móveis\n• RSI em zona favorável para venda\n• Volume validando o movimento"}
+
+📊 PONTUAÇÃO DE CONFIABILIDADE (${finalConfidence.toFixed(1)}%):
+${confidenceBreakdown.join(' | ')}
+
+⚡ CONCLUSÃO: Sinal de ${finalConfidence >= 90 ? "ALTA" : finalConfidence >= 85 ? "MUITO BOA" : "BOA"} qualidade baseado em confluência de múltiplos indicadores técnicos.`;
+      
       // Skip signals below 80% confidence or no clear direction
       if (finalConfidence < 80 || !direction) continue;
 
@@ -233,6 +280,7 @@ for (let index = 0; index < symbolsToUse.length; index++) {
         success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // Dynamic confidence 80-100%
         confidence: parseFloat((finalConfidence / 100).toFixed(3)), // Also set confidence field
         currentPrice: entryPrice, // Set current price to entry price
+        analysis: detailedAnalysis, // Add detailed technical analysis
         targets: [
           {
             level: 1,

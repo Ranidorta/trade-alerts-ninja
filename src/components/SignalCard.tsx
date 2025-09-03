@@ -428,9 +428,14 @@ ${signal.targets ? signal.targets.map((t, i) => `🎯 TP${i+1}: ${t.price}`).joi
             
             {signal.analysis && (
               <div className="mt-4 pt-4 border-t">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Análise do Sinal</div>
-                <div className="text-sm mt-1 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-md">
-                  <pre className="whitespace-pre-wrap font-sans">{signal.analysis}</pre>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <BarChart className="h-4 w-4 text-primary" />
+                    Análise Técnica do Sinal
+                  </div>
+                </div>
+                <div className="text-sm p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-blue-200 dark:border-slate-600">
+                  <pre className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-300 leading-relaxed">{signal.analysis}</pre>
                 </div>
               </div>
             )}
