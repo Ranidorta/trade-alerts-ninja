@@ -408,6 +408,12 @@ def generate_monster_signal(symbol):
 ⚡ SETUP DE ALTA QUALIDADE - APROVADO PARA EXECUÇÃO
 """
         
+        # IMPROVED: Add position sizing (2% risk per trade)
+        account_balance = 1000.0  # Default balance - should come from config  
+        risk_per_trade = 0.02  # 2% risk per trade
+        risk_amount = account_balance * risk_per_trade
+        position_size = risk_amount / risk if risk > 0 else 0
+        
         # Create professional signal
         signal = {
             'symbol': symbol,
@@ -426,6 +432,8 @@ def generate_monster_signal(symbol):
             'strategy': 'monster_professional_simplified',
             'success_prob': round(ml_confidence, 2),  # Realistic confidence
             'risk_reward_ratio': round(risk_reward_ratio, 2),
+            'position_size': round(position_size, 6),
+            'risk_amount': round(risk_amount, 2),
             'analysis': analysis_text
         }
         

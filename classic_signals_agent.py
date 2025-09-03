@@ -251,26 +251,43 @@ def generate_classic_signal():
             # Determine direction based on trend
             direction = "BUY" if trend == "BULLISH" else "SELL"
             
-            # Calculate stop loss and targets
+            # IMPROVED: Professional Risk Management with minimum R:R = 2:1
             if direction == "BUY":
-                stop_loss = current_price - (current_atr * 1.2)
+                stop_loss = current_price - (current_atr * 1.0)  # Tighter SL
                 targets = [
-                    current_price + (current_atr * 0.8),  # TP1
-                    current_price + (current_atr * 1.5),  # TP2
-                    current_price + (current_atr * 2.2)   # TP3
+                    current_price + (current_atr * 2.0),  # TP1 - 2:1 R:R
+                    current_price + (current_atr * 2.5),  # TP2 - 2.5:1 R:R
+                    current_price + (current_atr * 3.0)   # TP3 - 3:1 R:R
                 ]
             else:  # SELL
-                stop_loss = current_price + (current_atr * 1.2)
+                stop_loss = current_price + (current_atr * 1.0)  # Tighter SL
                 targets = [
-                    current_price - (current_atr * 0.8),  # TP1
-                    current_price - (current_atr * 1.5),  # TP2
-                    current_price - (current_atr * 2.2)   # TP3
+                    current_price - (current_atr * 2.0),  # TP1 - 2:1 R:R
+                    current_price - (current_atr * 2.5),  # TP2 - 2.5:1 R:R
+                    current_price - (current_atr * 3.0)   # TP3 - 3:1 R:R
                 ]
+            
+            # MANDATORY: Risk/Reward validation (minimum 2:1)
+            risk = abs(current_price - stop_loss)
+            reward = abs(targets[0] - current_price)
+            risk_reward_ratio = reward / risk if risk > 0 else 0
+            
+            if risk_reward_ratio < 2.0:
+                print(f"❌ Risk/Reward ratio too low: {risk_reward_ratio:.2f} (minimum: 2.0)")
+                return jsonify({"message": "No valid classic signal now - insufficient R:R"})
+            
+            print(f"✅ Risk/Reward ratio approved: {risk_reward_ratio:.2f}:1")
             
             # Calculate confidence
             confidence = calculate_confidence(
                 current_rsi, volume_spike, strong_candle, atr_ratio, trend
             )
+            
+            # IMPROVED: Add position sizing (2% risk per trade)
+            account_balance = 1000.0  # Default balance - should come from config
+            risk_per_trade = 0.02  # 2% risk per trade
+            risk_amount = account_balance * risk_per_trade
+            position_size = risk_amount / risk if risk > 0 else 0
             
             signal_data = {
                 "symbol": symbol,
@@ -279,7 +296,12 @@ def generate_classic_signal():
                 "stop_loss": round(stop_loss, 6),
                 "targets": [round(target, 6) for target in targets],
                 "confidence": round(confidence, 3),
-                "strategy": "classic_ai"
+                "strategy": "classic_professional",
+                "risk_reward_ratio": round(risk_reward_ratio, 2),
+                "position_size": round(position_size, 6),
+                "risk_amount": round(risk_amount, 2),
+                "atr": round(current_atr, 6),
+                "rsi": round(current_rsi, 2)
             }
             
             # Save to history

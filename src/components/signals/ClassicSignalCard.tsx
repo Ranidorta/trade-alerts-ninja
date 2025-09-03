@@ -39,6 +39,9 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
 🎯 TP2: ${signal.tp2}
 🎯 TP3: ${signal.tp3}
 ⭐ Confiança: ${(confidence * 100).toFixed(1)}%
+${signal.risk_reward_ratio ? `💎 Risk/Reward: ${signal.risk_reward_ratio}:1` : ''}
+${signal.position_size ? `📊 Tamanho: ${signal.position_size}` : ''}
+${signal.risk_amount ? `💰 Risco: $${signal.risk_amount}` : ''}
 📊 Estratégia: ${signal.strategy}
     `.trim();
     
@@ -114,6 +117,28 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
           </div>
         </div>
 
+        {/* Risk Management Info */}
+        {(signal.risk_reward_ratio || signal.position_size) && (
+          <div className="grid grid-cols-2 gap-3">
+            {signal.risk_reward_ratio && (
+              <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="text-xs text-green-600 dark:text-green-400 font-medium">Risk/Reward</div>
+                <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                  {signal.risk_reward_ratio}:1
+                </div>
+              </div>
+            )}
+            {signal.position_size && (
+              <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">Tamanho</div>
+                <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                  {signal.position_size}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stop Loss */}
         <div className="flex justify-between items-center p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
@@ -163,17 +188,59 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
         </div>
 
         {/* Expanded content */}
-        {expanded && signal.analysis && (
+        {expanded && (
           <div className="pt-4 border-t animate-fade-in">
             <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Análise do Sinal
+              {/* Technical Indicators */}
+              {(signal.rsi || signal.atr) && (
+                <div>
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Indicadores Técnicos
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {signal.rsi && (
+                      <div className="p-2 bg-white/50 dark:bg-slate-800/50 rounded">
+                        <div className="text-xs text-slate-600 dark:text-slate-400">RSI</div>
+                        <div className="font-bold">{signal.rsi}</div>
+                      </div>
+                    )}
+                    {signal.atr && (
+                      <div className="p-2 bg-white/50 dark:bg-slate-800/50 rounded">
+                        <div className="text-xs text-slate-600 dark:text-slate-400">ATR</div>
+                        <div className="font-bold">{signal.atr?.toFixed(6)}</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-sm p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
-                  {signal.analysis}
+              )}
+              
+              {/* Risk Management Details */}
+              {signal.risk_amount && (
+                <div>
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Gestão de Risco
+                  </div>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <div className="text-sm text-amber-700 dark:text-amber-300">
+                      💰 Valor em Risco: ${signal.risk_amount} (2% do capital)
+                    </div>
+                    <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      ✅ Gestão profissional aplicada
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+              
+              {signal.analysis && (
+                <div>
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Análise do Sinal
+                  </div>
+                  <div className="text-sm p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
+                    {signal.analysis}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
