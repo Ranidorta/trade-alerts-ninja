@@ -171,8 +171,36 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
     );
   }
 
-  // Filter signals by selected timeframe if needed
+  // Filter signals by selected timeframe and minimum 90% confidence
   let filteredSignals = hybridSignals;
+  
+  // Apply minimum 90% confidence filter
+  if (filteredSignals) {
+    filteredSignals = filteredSignals.filter(signal => {
+      // Normalize confidence from various possible fields
+      const normalizeConfidence = (signal: any): number | null => {
+        const confidenceFields = [
+          signal.confidence,
+          signal.success_prob,
+          signal.confidence_score,
+          signal.score,
+          signal.probability
+        ];
+        
+        for (const field of confidenceFields) {
+          if (typeof field === 'number' && field > 0) {
+            // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+            return field > 1 ? field / 100 : field;
+          }
+        }
+        
+        return null;
+      };
+      
+      const confidence = normalizeConfidence(signal);
+      return confidence !== null && confidence >= 0.9; // Only show signals with 90%+ confidence
+    });
+  }
   
   return (
     <div className="space-y-6">

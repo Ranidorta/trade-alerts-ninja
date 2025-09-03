@@ -199,6 +199,10 @@ export const useTradingSignals = () => {
           createdAt: signal.createdAt || new Date().toISOString(),
           confidence: normalizeConfidence(signal), // Normalize confidence
         };
+      }).filter(signal => {
+        // Only keep signals with >= 90% confidence
+        const confidence = signal.confidence;
+        return confidence !== undefined && confidence >= 0.9;
       });
       
       // Update state with processed signals

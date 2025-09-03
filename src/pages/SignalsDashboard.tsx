@@ -143,6 +143,33 @@ const SignalsDashboard = () => {
   // Apply filters and sort whenever signals, filters, or sort order changes
   useEffect(() => {
     let result = [...signals];
+    
+    // First apply minimum 90% confidence filter
+    result = result.filter(signal => {
+      // Normalize confidence from various possible fields
+      const normalizeConfidence = (signal: TradingSignal): number | null => {
+        const confidenceFields = [
+          signal.confidence,
+          signal.success_prob,
+          (signal as any).confidence_score,
+          signal.score,
+          (signal as any).probability
+        ];
+        
+        for (const field of confidenceFields) {
+          if (typeof field === 'number' && field > 0) {
+            // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+            return field > 1 ? field / 100 : field;
+          }
+        }
+        
+        return null;
+      };
+      
+      const confidence = normalizeConfidence(signal);
+      return confidence !== null && confidence >= 0.9; // Only show signals with 90%+ confidence
+    });
+    
     if (statusFilter !== "ALL") {
       result = result.filter(signal => signal.status === statusFilter);
     }
