@@ -16,8 +16,29 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
   const { toast } = useToast();
 
   const isBuy = signal.direction === "BUY";
-  const confidence = signal.confidence || 0;
-  const isHighConfidence = confidence >= 0.65;
+  
+  // Normalize confidence from various possible fields
+  const normalizeConfidence = (signal: TradingSignal): number | null => {
+    const confidenceFields = [
+      signal.confidence,
+      signal.success_prob,
+      (signal as any).confidence_score,
+      signal.score,
+      (signal as any).probability
+    ];
+    
+    for (const field of confidenceFields) {
+      if (typeof field === 'number' && field > 0) {
+        // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+        return field > 1 ? field / 100 : field;
+      }
+    }
+    
+    return null;
+  };
+  
+  const confidence = normalizeConfidence(signal);
+  const isHighConfidence = confidence ? confidence >= 0.65 : false;
 
   // Calculate confidence level
   const getConfidenceLevel = (conf: number) => {
@@ -26,7 +47,7 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
     return { label: "Baixa", color: "bg-red-500" };
   };
 
-  const confidenceInfo = getConfidenceLevel(confidence);
+  const confidenceInfo = confidence ? getConfidenceLevel(confidence) : { label: "N/A", color: "bg-slate-500" };
   const timeAgo = formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true });
 
   const copySignalDetails = () => {
@@ -38,7 +59,7 @@ const ClassicSignalCard = ({ signal }: ClassicSignalCardProps) => {
 🎯 TP1: ${signal.tp1}
 🎯 TP2: ${signal.tp2}
 🎯 TP3: ${signal.tp3}
-⭐ Confiança: ${(confidence * 100).toFixed(1)}%
+⭐ Confiança: ${confidence ? (confidence * 100).toFixed(1) + '%' : 'N/A'}
 ${signal.risk_reward_ratio ? `💎 Risk/Reward: ${signal.risk_reward_ratio}:1` : ''}
 ${signal.position_size ? `📊 Tamanho: ${signal.position_size}` : ''}
 ${signal.risk_amount ? `💰 Risco: $${signal.risk_amount}` : ''}
@@ -90,15 +111,17 @@ ${signal.risk_amount ? `💰 Risco: $${signal.risk_amount}` : ''}
           </div>
           
           <div className="flex flex-col items-end gap-2">
-            <Badge 
-              className={cn(
-                "text-white font-medium",
-                confidenceInfo.color
-              )}
-            >
-              <Zap className="h-3 w-3 mr-1" />
-              {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
-            </Badge>
+            {confidence !== null && (
+              <Badge 
+                className={cn(
+                  "text-white font-medium",
+                  confidenceInfo.color
+                )}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
+              </Badge>
+            )}
             {signal.strategy && (
               <Badge variant="outline" className="text-xs">
                 {signal.strategy}

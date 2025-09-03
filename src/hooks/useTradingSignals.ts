@@ -147,6 +147,26 @@ export const useTradingSignals = () => {
       
       // Process signals to ensure they have all required fields
       const processedSignals = newSignals.map((signal: TradingSignal) => {
+        // Normalize confidence from various possible fields
+        const normalizeConfidence = (signal: TradingSignal): number | undefined => {
+          const confidenceFields = [
+            signal.confidence,
+            signal.success_prob,
+            (signal as any).confidence_score,
+            signal.score,
+            (signal as any).probability
+          ];
+          
+          for (const field of confidenceFields) {
+            if (typeof field === 'number' && field > 0) {
+              // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+              return field > 1 ? field / 100 : field;
+            }
+          }
+          
+          return undefined;
+        };
+        
         if (signal.result === undefined) {
           if (signal.profit !== undefined) {
             signal.result = signal.profit > 0 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
@@ -177,6 +197,7 @@ export const useTradingSignals = () => {
           entryPrice: signal.entryPrice || signal.entryAvg || 0,
           targets: signal.targets || [],
           createdAt: signal.createdAt || new Date().toISOString(),
+          confidence: normalizeConfidence(signal), // Normalize confidence
         };
       });
       

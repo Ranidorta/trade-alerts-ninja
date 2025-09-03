@@ -28,8 +28,29 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
   
   const isShort = signal.type === "SHORT";
   const isBuy = !isShort;
-  const confidence = signal.confidence || 0.75;
-  const isHighConfidence = confidence >= 0.65;
+  
+  // Normalize confidence from various possible fields
+  const normalizeConfidence = (signal: TradingSignal): number | null => {
+    const confidenceFields = [
+      signal.confidence,
+      signal.success_prob,
+      (signal as any).confidence_score,
+      signal.score,
+      (signal as any).probability
+    ];
+    
+    for (const field of confidenceFields) {
+      if (typeof field === 'number' && field > 0) {
+        // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+        return field > 1 ? field / 100 : field;
+      }
+    }
+    
+    return null;
+  };
+  
+  const confidence = normalizeConfidence(signal);
+  const isHighConfidence = confidence ? confidence >= 0.65 : false;
   
   // Effect to periodically check if targets are hit based on current price
   useEffect(() => {
@@ -127,7 +148,7 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
     return { label: "Baixa", color: "bg-red-500" };
   };
 
-  const confidenceInfo = getConfidenceLevel(confidence);
+  const confidenceInfo = confidence ? getConfidenceLevel(confidence) : { label: "N/A", color: "bg-slate-500" };
 
   const copySignalDetails = () => {
     const details = `
@@ -191,15 +212,17 @@ ${signal.targets ? signal.targets.map((t, i) => `🎯 TP${i+1}: ${t.price}`).joi
           </div>
           
           <div className="flex flex-col items-end gap-2">
-            <Badge 
-              className={cn(
-                "text-white font-medium",
-                confidenceInfo.color
-              )}
-            >
-              <Zap className="h-3 w-3 mr-1" />
-              {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
-            </Badge>
+            {confidence !== null && (
+              <Badge 
+                className={cn(
+                  "text-white font-medium",
+                  confidenceInfo.color
+                )}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
+              </Badge>
+            )}
             <Badge 
               variant={
                 signal.status === "COMPLETED" ? "secondary" : 
