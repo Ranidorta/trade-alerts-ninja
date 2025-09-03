@@ -145,7 +145,7 @@ export const useTradingSignals = () => {
         }
       }
       
-      // Process signals to ensure they have all required fields
+      // Process signals to ensure they have all required fields and apply confidence filter
       const processedSignals = newSignals.map((signal: TradingSignal) => {
         // Normalize confidence from various possible fields
         const normalizeConfidence = (signal: TradingSignal): number | undefined => {
@@ -200,9 +200,22 @@ export const useTradingSignals = () => {
           confidence: normalizeConfidence(signal), // Normalize confidence
         };
       }).filter(signal => {
-        // Only keep signals with >= 90% confidence
+        // Filter signals with confidence between 80% and 100%
         const confidence = signal.confidence;
-        return confidence !== undefined && confidence >= 0.9;
+        if (confidence === undefined || confidence === null) {
+          console.log(`❌ Signal ${signal.symbol} rejected: no confidence data`);
+          return false;
+        }
+        
+        const isValidConfidence = confidence >= 0.8 && confidence <= 1.0;
+        
+        if (isValidConfidence) {
+          console.log(`✅ Signal ${signal.symbol} accepted: ${(confidence * 100).toFixed(1)}% confidence`);
+        } else {
+          console.log(`❌ Signal ${signal.symbol} rejected: ${(confidence * 100).toFixed(1)}% confidence (outside 80-100% range)`);
+        }
+        
+        return isValidConfidence;
       });
       
       // Update state with processed signals

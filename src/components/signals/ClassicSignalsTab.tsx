@@ -65,13 +65,6 @@ const ClassicSignalsTab = () => {
     console.log("🔍 Current filters - Direction:", directionFilter, "Confidence:", confidenceFilter, "Search:", searchQuery);
     let result = [...signals];
     
-    // First apply minimum 90% confidence filter
-    result = result.filter(signal => {
-      if (!signal.confidence) return false;
-      return signal.confidence >= 0.9; // Only show signals with 90%+ confidence
-    });
-    console.log("🔍 After 90% confidence filter:", result.length);
-    
     if (directionFilter !== "ALL") {
       result = result.filter(signal => signal.direction === directionFilter);
       console.log("🔍 After direction filter:", result.length);
@@ -90,7 +83,7 @@ const ClassicSignalsTab = () => {
             return true;
         }
       });
-      console.log("🔍 After additional confidence filter:", result.length);
+      console.log("🔍 After confidence filter:", result.length);
     }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
