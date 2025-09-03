@@ -142,6 +142,16 @@ const SignalsDashboard = () => {
 
   // Apply filters and sort whenever signals, filters, or sort order changes
   useEffect(() => {
+    console.log("🔍 DEBUG: Starting filtering process");
+    console.log("🔍 DEBUG: Raw signals count:", signals.length);
+    console.log("🔍 DEBUG: Raw signals:", signals.map(s => ({ 
+      id: s.id, 
+      symbol: s.symbol, 
+      confidence: s.confidence,
+      success_prob: s.success_prob,
+      score: s.score
+    })));
+    
     let result = [...signals];
     
     // First apply minimum 90% confidence filter
@@ -167,8 +177,14 @@ const SignalsDashboard = () => {
       };
       
       const confidence = normalizeConfidence(signal);
-      return confidence !== null && confidence >= 0.9; // Only show signals with 90%+ confidence
+      const passed = confidence !== null && confidence >= 0.9;
+      
+      console.log(`🔍 DEBUG: Signal ${signal.symbol} - confidence: ${confidence}, passed 90% filter: ${passed}`);
+      
+      return passed; // Only show signals with 90%+ confidence
     });
+    
+    console.log("🔍 DEBUG: After 90% confidence filter:", result.length);
     
     if (statusFilter !== "ALL") {
       result = result.filter(signal => signal.status === statusFilter);
@@ -184,6 +200,9 @@ const SignalsDashboard = () => {
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
     });
+    
+    console.log("🔍 DEBUG: Final filtered signals:", result.length);
+    
     setFilteredSignals(result);
     if (activeSignal && !result.some(s => s.id === activeSignal.id) && result.length > 0) {
       setActiveSignal(result[0]);
