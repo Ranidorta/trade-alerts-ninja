@@ -57,6 +57,57 @@ export const getSignalHistory = (): TradingSignal[] => {
   return JSON.parse(localStorage.getItem(SIGNAL_HISTORY_KEY) || "[]");
 };
 
+/**
+ * Updates a single signal in the signal history and saves to localStorage
+ */
+export function updateSignalInHistory(signalId: string, updates: Partial<TradingSignal>): void {
+  try {
+    const signals = getSignalHistory();
+    const updatedSignals = signals.map(signal =>
+      signal.id === signalId ? { ...signal, ...updates } : signal
+    );
+    
+    localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(updatedSignals));
+    console.log(`✅ [STORAGE] Signal ${signalId} updated with:`, updates);
+  } catch (error) {
+    console.error('❌ [STORAGE] Error updating signal in history:', error);
+  }
+}
+
+/**
+ * Forces immediate save of evaluation results to localStorage
+ */
+export function saveEvaluationResults(results: Array<{ signalId: string; result: string | number; profit?: number }>): void {
+  try {
+    const signals = getSignalHistory();
+    const updatedSignals = signals.map(signal => {
+      const result = results.find(r => r.signalId === signal.id);
+      if (result) {
+        return {
+          ...signal,
+          result: result.result,
+          profit: result.profit,
+          status: 'COMPLETED',
+          completedAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString()
+        };
+      }
+      return signal;
+    });
+    
+    localStorage.setItem(SIGNAL_HISTORY_KEY, JSON.stringify(updatedSignals));
+    console.log(`✅ [STORAGE] Saved ${results.length} evaluation results to localStorage`);
+    
+    // Log each saved result for verification
+    results.forEach(r => {
+      console.log(`✅ [STORAGE] Result saved - Signal ${r.signalId}: ${r.result}`);
+    });
+    
+  } catch (error) {
+    console.error('❌ [STORAGE] Error saving evaluation results:', error);
+  }
+}
+
 // Updates a signal's targets with current price information
 export const updateSignalTargets = (signal: TradingSignal, currentPrice: number): TradingSignal => {
   if (!signal || !signal.targets || !currentPrice) return signal;

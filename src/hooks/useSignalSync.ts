@@ -62,12 +62,20 @@ export const useSignalSync = () => {
 
   const updateMultipleSignals = async (updatedSignals: TradingSignal[]) => {
     try {
-      // Update localStorage
+      // Update localStorage immediately
       localStorage.setItem('trade_signal_history', JSON.stringify(updatedSignals));
       setSignals(updatedSignals);
-      console.log('✅ Multiple signals updated in localStorage');
+      
+      // Log each signal's result for verification
+      updatedSignals.forEach(signal => {
+        if (signal.result && signal.result !== "PENDING") {
+          console.log(`✅ [SYNC] Signal ${signal.id} (${signal.symbol}) result saved: ${signal.result}`);
+        }
+      });
+      
+      console.log('✅ [SYNC] Multiple signals updated and results persisted in localStorage');
     } catch (error) {
-      console.error('Error updating multiple signals:', error);
+      console.error('❌ [SYNC] Error updating multiple signals:', error);
     }
   };
 

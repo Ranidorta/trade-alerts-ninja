@@ -255,23 +255,36 @@ const SignalsHistory = () => {
         return signal;
       });
 
-      // GARANTIR SALVAMENTO IMEDIATO E PERSISTENTE
-      console.log('💾 [SAVE] Salvando sinais validados...');
+      // GARANTIR SALVAMENTO IMEDIATO E PERSISTENTE DOS RESULTADOS
+      console.log('💾 [SAVE] Salvando sinais validados com resultados...');
       
-      // 1. Atualizar estado local imediatamente
+      // 1. Primeiro, força o salvamento individual de cada resultado
+      const evaluationResults = validationResults.map(v => ({
+        signalId: v.id,
+        result: String(v.result), // Convert to string for consistency
+        profit: v.profit
+      }));
+      
+      // Importar função de salvamento forçado
+      const { saveEvaluationResults } = await import('@/lib/signal-storage');
+      saveEvaluationResults(evaluationResults);
+      
+      // 2. Atualizar estado local imediatamente
       setSignals(updatedSignals);
       setFilteredSignals(updatedSignals);
       
-      // 2. Salvar no localStorage como backup imediato
+      // 3. Salvar no localStorage completo como backup
       saveSignalsToHistory(updatedSignals);
-      console.log('✅ [SAVE] Sinais salvos no localStorage');
+      console.log('✅ [SAVE] Sinais com resultados salvos no localStorage');
       
-      // 3. Salvar no Firebase/backend se possível
+      // 4. Salvar no Firebase/backend se possível
       try {
         await updateMultipleSignals(updatedSignals);
         console.log('✅ [SAVE] Sinais salvos no Firebase/backend');
       } catch (saveError) {
         console.warn('⚠️ [SAVE] Erro ao salvar no Firebase, mantendo localStorage:', saveError);
+        // Força salvamento adicional se falhou no Firebase
+        saveSignalsToHistory(updatedSignals);
       }
 
       // Performance data will be recalculated on next load
