@@ -93,30 +93,54 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
       symbolsToUse = (resp.data?.result?.list || [])
         .filter((i: any) => i.symbol?.endsWith('USDT') && i.status === 'Trading' && i.quoteCoin === 'USDT')
         .map((i: any) => i.symbol)
-        .slice(0, 20);
+        .slice(0, 100); // Aumentado de 20 para 100 símbolos
     } catch (e) {
       console.warn('Failed to fetch Bybit symbols for local monster, using defaults:', e);
       symbolsToUse = [
-        'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
-        'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+        // Major cryptos
+        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT',
+        'MATICUSDT', 'LINKUSDT', 'AVAXUSDT', 'UNIUSDT', 'LTCUSDT', 'ATOMUSDT',
+        
+        // Mid caps
+        'DOTUSDT', 'NEARUSDT', 'ICPUSDT', 'APTUSDT', 'FILUSDT', 'VETUSDT', 'SANDUSDT',
+        'MANAUSDT', 'AXSUSDT', 'CHZUSDT', 'GALAUSDT', 'ENJUSDT', 'HBARUSDT',
+        
+        // Small/Trending caps  
+        'PEPEUSDT', 'SHIBUSDT', 'FLOKIUSDT', 'BONKUSDT', 'WIFUSDT', 'BOMEUSDT',
+        '1000RATSUSDT', 'ORDIUSDT', 'SATSUSDT', 'INJUSDT', 'TIAUSDT', 'SUIUSDT',
+        
+        // DeFi tokens
+        'AAVEUSDT', 'COMPUSDT', 'MKRUSDT', 'SNXUSDT', 'CRVUSDT', 'YFIUSDT',
+        'SUSHIUSDT', 'BALAUSDT', '1INCHUSDT', 'ALPHAUSDT',
+        
+        // Layer 2 & Scaling
+        'OPUSDT', 'ARBUSDT', 'STRKUSDT', 'POLYUSDT', 'LDOUSDT', 'IMXUSDT'
       ];
     }
   }
 
   console.log(`🔧 Generating local monster signals with real Bybit prices for ${symbolsToUse.length} symbols...`);
+  console.log(`📊 Testing symbols: ${symbolsToUse.slice(0, 10).join(', ')}${symbolsToUse.length > 10 ? ` and ${symbolsToUse.length - 10} more...` : ''}`);
 
   // Import Bybit service
   const { fetchBybitKlines } = await import('@/lib/apiServices');
 
   const signals: TradingSignal[] = [];
+  let analyzedCount = 0;
+  let passedInitialFilter = 0;
+  let finalSignalsCount = 0;
 
   // Generate signals for each symbol using real market data
 for (let index = 0; index < symbolsToUse.length; index++) {
     const symbol = symbolsToUse[index];
+    analyzedCount++;
     
     try {
-      // Enhanced filtering: only 20% chance for each symbol to generate high-quality signals
-      if (Math.random() > 0.2) continue;
+      // Aumentado de 20% para 40% chance para mais diversidade
+      if (Math.random() > 0.4) continue;
+      
+      passedInitialFilter++;
+      console.log(`🔍 Analyzing ${symbol} (${analyzedCount}/${symbolsToUse.length}) - passed initial filter: ${passedInitialFilter}`);
 
       // Get real market data from Bybit
       const klineData = await fetchBybitKlines(symbol, "15", 50);
@@ -235,6 +259,8 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       };
 
       signals.push(signal);
+      finalSignalsCount++;
+      console.log(`✅ Signal ${finalSignalsCount} generated: ${symbol} ${direction} with ${finalConfidence.toFixed(1)}% confidence`);
 
     } catch (error) {
       console.error(`Error generating signal for ${symbol}:`, error);
@@ -243,6 +269,12 @@ for (let index = 0; index < symbolsToUse.length; index++) {
   }
 
   console.log(`✅ Generated ${signals.length} local monster signals with real Bybit prices`);
+  console.log(`📈 Analysis Summary:`);
+  console.log(`   • Total symbols analyzed: ${analyzedCount}`);
+  console.log(`   • Passed initial filter: ${passedInitialFilter}`);
+  console.log(`   • Final high-quality signals: ${finalSignalsCount}`);
+  console.log(`   • Success rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}%`);
+  
   return signals;
 };
 
