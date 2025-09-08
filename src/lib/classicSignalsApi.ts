@@ -18,18 +18,80 @@ import { getSignalHistory } from '@/lib/signal-storage';
 // Bybit API for Classic v2 signals
 const BYBIT_API_BASE = 'https://api.bybit.com/v5';
 
-// Configuration parameters
-const CONFIG = {
-  MIN_24H_TURNOVER: 10_000_000, // 10M USDT minimum
-  TOP_VOLUME_COUNT: 40,
-  MIN_RR_RATIO: 1.6,
-  ATR_SL_COEFF: 0.8,
-  MIN_VOLUME_ZSCORE: 1.0,
-  MIN_VOLUME_MULTIPLE: 1.2,
-  COOLDOWN_CANDLES: 5,
-  MIN_CONFIDENCE_SCORE: 60,
-  EXECUTABLE_SCORE: 75
-};
+// Scanning profiles for adaptive relaxation
+interface ScanProfile {
+  name: string;
+  MIN_24H_TURNOVER: number;
+  TOP_VOLUME_COUNT: number;
+  MIN_RR_RATIO: number;
+  ATR_SL_COEFF: number;
+  MIN_VOLUME_ZSCORE: number;
+  MIN_VOLUME_MULTIPLE: number;
+  PULLBACK_VOLUME_ZSCORE: number; // Separate for pullbacks
+  EMA21_TOUCH_TOLERANCE: number;
+  MIN_SR_DISTANCE_MULTIPLIER: number; // Multiplier for SR distance check
+  MIN_CONFIDENCE_SCORE: number;
+  EXECUTABLE_SCORE: number;
+  BLOCK_ON_DIVERGENCE: boolean;
+  MAX_SIGNALS: number;
+}
+
+// Three-stage adaptive scanning
+const SCAN_PROFILES: ScanProfile[] = [
+  // Stage 1: Strict (original rules)
+  {
+    name: 'strict',
+    MIN_24H_TURNOVER: 10_000_000,
+    TOP_VOLUME_COUNT: 40,
+    MIN_RR_RATIO: 1.6,
+    ATR_SL_COEFF: 0.8,
+    MIN_VOLUME_ZSCORE: 1.0,
+    MIN_VOLUME_MULTIPLE: 1.2,
+    PULLBACK_VOLUME_ZSCORE: 1.0,
+    EMA21_TOUCH_TOLERANCE: 0.002, // 0.2%
+    MIN_SR_DISTANCE_MULTIPLIER: 0.5,
+    MIN_CONFIDENCE_SCORE: 60,
+    EXECUTABLE_SCORE: 75,
+    BLOCK_ON_DIVERGENCE: true,
+    MAX_SIGNALS: 3
+  },
+  // Stage 2: Balanced (moderate relaxation)
+  {
+    name: 'balanced',
+    MIN_24H_TURNOVER: 7_500_000,
+    TOP_VOLUME_COUNT: 60,
+    MIN_RR_RATIO: 1.6,
+    ATR_SL_COEFF: 0.7,
+    MIN_VOLUME_ZSCORE: 1.0,
+    MIN_VOLUME_MULTIPLE: 1.2,
+    PULLBACK_VOLUME_ZSCORE: 0.0, // Relaxed for pullbacks
+    EMA21_TOUCH_TOLERANCE: 0.004, // 0.4%
+    MIN_SR_DISTANCE_MULTIPLIER: 0.25,
+    MIN_CONFIDENCE_SCORE: 55,
+    EXECUTABLE_SCORE: 75,
+    BLOCK_ON_DIVERGENCE: false, // Penalty only
+    MAX_SIGNALS: 2
+  },
+  // Stage 3: Exploratory (maximum relaxation)
+  {
+    name: 'exploratory',
+    MIN_24H_TURNOVER: 5_000_000,
+    TOP_VOLUME_COUNT: 80,
+    MIN_RR_RATIO: 1.5, // Lower for watchlist signals
+    ATR_SL_COEFF: 0.6,
+    MIN_VOLUME_ZSCORE: 0.5,
+    MIN_VOLUME_MULTIPLE: 1.0,
+    PULLBACK_VOLUME_ZSCORE: -0.5, // Very relaxed
+    EMA21_TOUCH_TOLERANCE: 0.006, // 0.6%
+    MIN_SR_DISTANCE_MULTIPLIER: 0.1,
+    MIN_CONFIDENCE_SCORE: 45,
+    EXECUTABLE_SCORE: 70,
+    BLOCK_ON_DIVERGENCE: false,
+    MAX_SIGNALS: 3
+  }
+];
+
+const COOLDOWN_CANDLES = 5;
 
 // Create axios instance for API calls
 const classicCryptoApi = axios.create({
@@ -69,10 +131,10 @@ interface ClassicV2Signal {
   reasons: string[];
 }
 
-// Get Bybit tickers with 24h turnover for prioritization
-const getBybitTickersWithTurnover = async (): Promise<SymbolInfo[]> => {
+// Get Bybit tickers with 24h turnover for prioritization (profile-aware)
+const getBybitTickersWithTurnover = async (profile: ScanProfile): Promise<SymbolInfo[]> => {
   try {
-    console.log('🔍 Fetching Bybit USDT perpetual symbols with turnover data...');
+    console.log(`🔍 Fetching Bybit USDT perpetual symbols with turnover data [${profile.name}]...`);
     
     const response = await classicCryptoApi.get(`${BYBIT_API_BASE}/market/tickers`, {
       params: { category: 'linear' }
@@ -85,7 +147,7 @@ const getBybitTickersWithTurnover = async (): Promise<SymbolInfo[]> => {
     const symbols = response.data.result.list
       .filter((ticker: any) => 
         ticker.symbol?.endsWith('USDT') && 
-        parseFloat(ticker.turnover24h || '0') >= CONFIG.MIN_24H_TURNOVER
+        parseFloat(ticker.turnover24h || '0') >= profile.MIN_24H_TURNOVER
       )
       .map((ticker: any) => ({
         symbol: ticker.symbol,
@@ -93,7 +155,7 @@ const getBybitTickersWithTurnover = async (): Promise<SymbolInfo[]> => {
       }))
       .sort((a: SymbolInfo, b: SymbolInfo) => b.turnover24h - a.turnover24h);
     
-    console.log(`✅ Found ${symbols.length} qualifying symbols (turnover >= ${CONFIG.MIN_24H_TURNOVER.toLocaleString()} USDT)`);
+    console.log(`✅ Found ${symbols.length} qualifying symbols (turnover >= ${profile.MIN_24H_TURNOVER.toLocaleString()} USDT) [${profile.name}]`);
     return symbols;
   } catch (error) {
     console.warn('⚠️ Failed to fetch Bybit tickers, using fallback symbols:', error);
@@ -106,7 +168,7 @@ const getBybitTickersWithTurnover = async (): Promise<SymbolInfo[]> => {
       { symbol: 'DOGEUSDT', turnover24h: 50000000 },
       { symbol: 'XRPUSDT', turnover24h: 45000000 },
       { symbol: 'AVAXUSDT', turnover24h: 40000000 }
-    ];
+    ].filter(s => s.turnover24h >= profile.MIN_24H_TURNOVER);
   }
 };
 
@@ -152,10 +214,10 @@ const isSymbolInCooldown = (symbol: string): boolean => {
   return Date.now() < cooldownEnd;
 };
 
-// Analyze single symbol for Classic v2 signal
-const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal | null> => {
+// Analyze single symbol for Classic v2 signal with adaptive profile
+const analyzeSymbolForSignal = async (symbol: string, profile: ScanProfile): Promise<ClassicV2Signal | null> => {
   try {
-    console.log(`🔍 Analyzing ${symbol} for Classic v2 signal...`);
+    console.log(`🔍 Analyzing ${symbol} for Classic v2 signal [${profile.name}]...`);
     
     // Check cooldown first
     if (isSymbolInCooldown(symbol)) {
@@ -244,8 +306,8 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       vwapState = vwapData.rejected ? 'rejected' : (!vwapData.priceAbove ? 'below' : 'above');
     }
     
-    // If EMA stack doesn't agree, only allow VWAP reclaim/reject
-    if (!emaStackValid5m && !vwapData.reclaimed && !vwapData.rejected) {
+    // If EMA stack doesn't agree, only allow VWAP reclaim/reject (relaxed in exploratory)
+    if (!emaStackValid5m && !vwapData.reclaimed && !vwapData.rejected && profile.name !== 'exploratory') {
       console.log(`❌ ${symbol}: 5m timeframe diverges without valid VWAP reclaim/reject`);
       return null;
     }
@@ -254,36 +316,38 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     const macdData = calculateMACD(prices5m);
     const macdFavor = trendDirection === 'LONG' ? macdData.slope > 0 : macdData.slope < 0;
     
-    // 5. VOLUME ANALYSIS
+    // 5. VOLUME ANALYSIS (using profile-specific thresholds)
     const volumes5m = data5m.map(k => k.volume);
     const volumeMetrics = calculateVolumeMetrics(volumes5m);
-    const volumeOk = volumeMetrics.zScore >= CONFIG.MIN_VOLUME_ZSCORE || 
-                     volumeMetrics.current >= volumeMetrics.sma20 * CONFIG.MIN_VOLUME_MULTIPLE;
     
     // 6. ENTRY TRIGGERS
     let setupType = '';
     let entryValid = false;
     
-    // A) Pullback entry (preferencial)
+    // A) Pullback entry (preferencial) - relaxed volume for pullbacks
     const lastKline5m = data5m[data5m.length - 1];
     if (trendDirection === 'LONG') {
-      const touchedEMA21 = lastKline5m.low <= currentEMA21_5m * 1.002; // Small tolerance
+      const touchedEMA21 = lastKline5m.low <= currentEMA21_5m * (1 + profile.EMA21_TOUCH_TOLERANCE);
       const closedAboveEMA9 = lastKline5m.close > currentEMA9_5m;
-      if (touchedEMA21 && closedAboveEMA9 && macdFavor && volumeOk) {
+      const pullbackVolumeOk = volumeMetrics.zScore >= profile.PULLBACK_VOLUME_ZSCORE || 
+                               volumeMetrics.current >= volumeMetrics.sma20 * profile.MIN_VOLUME_MULTIPLE;
+      if (touchedEMA21 && closedAboveEMA9 && macdFavor && pullbackVolumeOk) {
         setupType = 'pullback_ema21';
         entryValid = true;
       }
     } else {
-      const touchedEMA21 = lastKline5m.high >= currentEMA21_5m * 0.998;
+      const touchedEMA21 = lastKline5m.high >= currentEMA21_5m * (1 - profile.EMA21_TOUCH_TOLERANCE);
       const closedBelowEMA9 = lastKline5m.close < currentEMA9_5m;
-      if (touchedEMA21 && closedBelowEMA9 && macdFavor && volumeOk) {
+      const pullbackVolumeOk = volumeMetrics.zScore >= profile.PULLBACK_VOLUME_ZSCORE || 
+                               volumeMetrics.current >= volumeMetrics.sma20 * profile.MIN_VOLUME_MULTIPLE;
+      if (touchedEMA21 && closedBelowEMA9 && macdFavor && pullbackVolumeOk) {
         setupType = 'pullback_ema21';
         entryValid = true;
       }
     }
     
-    // B) Breakout + Retest (conservative)
-    if (!entryValid && volumeMetrics.zScore >= CONFIG.MIN_VOLUME_ZSCORE) {
+    // B) Breakout + Retest (conservative) - stricter volume for breakouts
+    if (!entryValid && volumeMetrics.zScore >= profile.MIN_VOLUME_ZSCORE) {
       // Simplified breakout logic - look for range breakout with retest
       const recentHighs = data5m.slice(-10).map(k => k.high);
       const recentLows = data5m.slice(-10).map(k => k.low);
@@ -313,17 +377,18 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     
     const divergence = detectDivergence(prices5m.slice(-20), macdValues.slice(-20));
     
-    // Block signal if divergence is against the trend
-    if ((trendDirection === 'LONG' && divergence.bearish) || (trendDirection === 'SHORT' && divergence.bullish)) {
-      console.log(`❌ ${symbol}: divergence against trend`);
+    // Block signal if divergence is against the trend (only in strict mode)
+    if (profile.BLOCK_ON_DIVERGENCE && 
+        ((trendDirection === 'LONG' && divergence.bearish) || (trendDirection === 'SHORT' && divergence.bullish))) {
+      console.log(`❌ ${symbol}: divergence against trend (blocked in ${profile.name} mode)`);
       return null;
     }
     
-    // 8. SUPPORT/RESISTANCE CHECK
+    // 8. SUPPORT/RESISTANCE CHECK (relaxed distance)
     const pivots = calculatePivots(data5m);
     const allSRLevels = [...pivots.resistance, ...pivots.support];
     const atr = calculateATR(data5m);
-    const minSRDistance = atr * CONFIG.ATR_SL_COEFF * 0.5; // Half of SL distance
+    const minSRDistance = atr * profile.ATR_SL_COEFF * profile.MIN_SR_DISTANCE_MULTIPLIER;
     
     const srCheck = checkSRProximity(currentPrice5m, allSRLevels, minSRDistance);
     if (srCheck.tooClose) {
@@ -331,15 +396,15 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       return null;
     }
     
-    // 9. RISK/REWARD CALCULATION
+    // 9. RISK/REWARD CALCULATION (using profile ATR coefficient)
     const dynamicSL = trendDirection === 'LONG'
       ? Math.max(
           data5m.slice(-5).reduce((min, k) => Math.min(min, k.low), Infinity),
-          currentEMA21_5m - (CONFIG.ATR_SL_COEFF * atr)
+          currentEMA21_5m - (profile.ATR_SL_COEFF * atr)
         )
       : Math.min(
           data5m.slice(-5).reduce((max, k) => Math.max(max, k.high), -Infinity),
-          currentEMA21_5m + (CONFIG.ATR_SL_COEFF * atr)
+          currentEMA21_5m + (profile.ATR_SL_COEFF * atr)
         );
     
     const entryPrice = currentPrice5m;
@@ -349,17 +414,17 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     const tp2 = trendDirection === 'LONG' ? entryPrice + (2 * atr) : entryPrice - (2 * atr);
     const tp3 = trendDirection === 'LONG' ? entryPrice + (3 * atr) : entryPrice - (3 * atr);
     
-    // Check minimum R/R ratio
+    // Check minimum R/R ratio (profile-specific)
     const riskAmount = Math.abs(entryPrice - dynamicSL);
     const rewardAmount = Math.abs(tp1 - entryPrice);
     const rrRatio = riskAmount > 0 ? rewardAmount / riskAmount : 0;
     
-    if (rrRatio < CONFIG.MIN_RR_RATIO) {
-      console.log(`❌ ${symbol}: R/R ratio ${rrRatio.toFixed(2)} below minimum ${CONFIG.MIN_RR_RATIO}`);
+    if (rrRatio < profile.MIN_RR_RATIO) {
+      console.log(`❌ ${symbol}: R/R ratio ${rrRatio.toFixed(2)} below minimum ${profile.MIN_RR_RATIO}`);
       return null;
     }
     
-    // 10. CONFIDENCE SCORING (0-100)
+    // 10. CONFIDENCE SCORING (0-100) - same logic but different thresholds
     let score = 0;
     const reasons: string[] = [];
     
@@ -381,7 +446,9 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       reasons.push(`MACD ${trendDirection === 'LONG' ? 'abrindo para cima' : 'abrindo para baixo'}`);
     }
     
-    // +15 Volume
+    // +15 Volume (adjusted for profile)
+    const volumeOk = volumeMetrics.zScore >= profile.MIN_VOLUME_ZSCORE || 
+                     volumeMetrics.current >= volumeMetrics.sma20 * profile.MIN_VOLUME_MULTIPLE;
     if (volumeOk) {
       score += 15;
       reasons.push(`Volume ${volumeMetrics.zScore >= 1.0 ? 'elevado (z-score)' : 'acima da média'}`);
@@ -402,7 +469,7 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       reasons.push(`R/R >= 2.0 (${rrRatio.toFixed(1)}:1)`);
     }
     
-    // -10 penalties
+    // Penalties (not blocks in balanced/exploratory)
     if (divergence.confirmed) {
       score -= 10;
       reasons.push(`Divergência detectada`);
@@ -413,14 +480,19 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       reasons.push(`Próximo a S/R`);
     }
     
-    // Only publish signals with score >= 60
-    if (score < CONFIG.MIN_CONFIDENCE_SCORE) {
-      console.log(`❌ ${symbol}: confidence score ${score} below minimum ${CONFIG.MIN_CONFIDENCE_SCORE}`);
+    // Only publish signals with profile-specific minimum score
+    if (score < profile.MIN_CONFIDENCE_SCORE) {
+      console.log(`❌ ${symbol}: confidence score ${score} below minimum ${profile.MIN_CONFIDENCE_SCORE} [${profile.name}]`);
       return null;
     }
     
     // Calculate cooldown timestamp
-    const cooldownUntil = new Date(Date.now() + (CONFIG.COOLDOWN_CANDLES * 5 * 60 * 1000)).toISOString();
+    const cooldownUntil = new Date(Date.now() + (COOLDOWN_CANDLES * 5 * 60 * 1000)).toISOString();
+    
+    // Add profile tag to reasons
+    const profileTag = profile.name === 'strict' ? 'Executável' : 
+                       profile.name === 'balanced' ? 'Balanceado' : 'Watchlist';
+    reasons.unshift(`[${profileTag}]`);
     
     const signal: ClassicV2Signal = {
       symbol,
@@ -429,7 +501,7 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       entry_zone: entryZone,
       stop_loss: dynamicSL,
       take_profits: [tp1, tp2, tp3],
-      rr_min: CONFIG.MIN_RR_RATIO,
+      rr_min: profile.MIN_RR_RATIO,
       indicators: {
         ema9: currentEMA9_5m,
         ema14: currentEMA14_5m,
@@ -462,7 +534,7 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       reasons
     };
     
-    console.log(`✅ ${symbol}: Classic v2 signal generated (score: ${score})`);
+    console.log(`✅ ${symbol}: Classic v2 signal generated [${profile.name}] (score: ${score})`);
     return signal;
     
   } catch (error) {
@@ -509,57 +581,106 @@ const convertToTradingSignal = (classicSignal: ClassicV2Signal): TradingSignal =
   };
 };
 
-// Main signal generation function
+// Adaptive Classic v2 signal generation with staged relaxation
 const generateClassicV2Signals = async (): Promise<TradingSignal[]> => {
-  console.log('🚀 Starting Classic v2 signal generation...');
+  console.log('🚀 Starting Classic v2 signal generation with adaptive approach...');
   
   try {
-    // 1. Get symbols prioritized by volume
-    const symbolsInfo = await getBybitTickersWithTurnover();
-    const topSymbols = symbolsInfo.slice(0, CONFIG.TOP_VOLUME_COUNT);
+    const allSignals: ClassicV2Signal[] = [];
+    let totalScanned = 0;
+    let totalErrors = 0;
     
-    console.log(`📊 Scanning top ${topSymbols.length} symbols by 24h turnover`);
-    
-    const classicSignals: ClassicV2Signal[] = [];
-    const errors: string[] = [];
-    
-    // 2. Scan symbols in priority order
-    for (const symbolInfo of topSymbols) {
-      try {
-        const signal = await analyzeSymbolForSignal(symbolInfo.symbol);
-        if (signal) {
-          classicSignals.push(signal);
-          
-          // Limit concurrent signals
-          if (classicSignals.length >= 8) break;
-        }
-      } catch (error) {
-        errors.push(`${symbolInfo.symbol}: ${error}`);
-        console.error(`❌ Error scanning ${symbolInfo.symbol}:`, error);
+    // Try each scanning profile in sequence until we get enough signals
+    for (const profile of SCAN_PROFILES) {
+      console.log(`\n📊 === STAGE ${profile.name.toUpperCase()} ===`);
+      console.log(`Min Turnover: ${profile.MIN_24H_TURNOVER.toLocaleString()}, Top: ${profile.TOP_VOLUME_COUNT}, Min Score: ${profile.MIN_CONFIDENCE_SCORE}`);
+      
+      // 1. Get symbols for this profile
+      const symbolsInfo = await getBybitTickersWithTurnover(profile);
+      const topSymbols = symbolsInfo.slice(0, profile.TOP_VOLUME_COUNT);
+      
+      if (topSymbols.length === 0) {
+        console.log(`⚠️ No symbols found for ${profile.name} profile, moving to next...`);
+        continue;
       }
+      
+      console.log(`🎯 Scanning ${topSymbols.length} symbols in ${profile.name} mode`);
+      
+      const stageSignals: ClassicV2Signal[] = [];
+      let stageErrors = 0;
+      
+      // 2. Scan symbols for this stage
+      for (const symbolInfo of topSymbols) {
+        try {
+          const signal = await analyzeSymbolForSignal(symbolInfo.symbol, profile);
+          if (signal) {
+            stageSignals.push(signal);
+            
+            // Limit signals per stage
+            if (stageSignals.length >= profile.MAX_SIGNALS) {
+              console.log(`✅ Reached max ${profile.MAX_SIGNALS} signals for ${profile.name} stage`);
+              break;
+            }
+          }
+          totalScanned++;
+        } catch (error) {
+          stageErrors++;
+          totalErrors++;
+          console.error(`❌ Error scanning ${symbolInfo.symbol} [${profile.name}]:`, error);
+        }
+      }
+      
+      console.log(`📈 ${profile.name.toUpperCase()} STAGE RESULTS: ${stageSignals.length} signals from ${topSymbols.length} symbols (${stageErrors} errors)`);
+      
+      // Add stage signals to total
+      allSignals.push(...stageSignals);
+      
+      // If we have good signals from strict or balanced, we might stop early
+      if (profile.name === 'strict' && stageSignals.length >= 2) {
+        console.log('✅ Found sufficient high-quality signals in strict mode, stopping early');
+        break;
+      }
+      
+      if (profile.name === 'balanced' && allSignals.length >= 3) {
+        console.log('✅ Found sufficient signals up to balanced mode, stopping early');
+        break;
+      }
+      
+      // Always continue to exploratory if we don't have enough signals
     }
     
-    // 3. Sort by confidence score (descending)
-    classicSignals.sort((a, b) => b.confidence_score - a.confidence_score);
+    // 3. Sort all signals by confidence score
+    const sortedSignals = allSignals.sort((a, b) => b.confidence_score - a.confidence_score);
     
     // 4. Convert to TradingSignal format
-    const tradingSignals = classicSignals.map(convertToTradingSignal);
+    const tradingSignals = sortedSignals.map(convertToTradingSignal);
     
-    console.log(`✅ Classic v2 generation complete:`);
-    console.log(`- Scanned: ${topSymbols.length} symbols`);
-    console.log(`- Generated: ${classicSignals.length} signals`);
-    console.log(`- Errors: ${errors.length}`);
+    // 5. Log final results
+    console.log('\n🎯 === CLASSIC v2 GENERATION COMPLETE ===');
+    console.log(`📊 Total Scanned: ${totalScanned} symbols`);
+    console.log(`✅ Generated Signals: ${tradingSignals.length}`);
+    console.log(`❌ Errors: ${totalErrors}`);
     
-    if (classicSignals.length > 0) {
-      console.log('📋 Generated signals:', classicSignals.map(s => 
-        `${s.symbol} ${s.side} (${s.confidence_score})`
-      ).join(', '));
+    if (tradingSignals.length > 0) {
+      console.log('📈 Signal Distribution:');
+      const executables = tradingSignals.filter(s => s.confidence >= 0.75).length;
+      const balanced = tradingSignals.filter(s => s.confidence >= 0.55 && s.confidence < 0.75).length;
+      const watchlist = tradingSignals.filter(s => s.confidence < 0.55).length;
+      console.log(`   Executáveis (≥75%): ${executables}`);
+      console.log(`   Balanceados (55-74%): ${balanced}`);
+      console.log(`   Watchlist (<55%): ${watchlist}`);
+      
+      tradingSignals.forEach((signal, i) => {
+        console.log(`   ${i + 1}. ${signal.symbol} ${signal.direction} - ${Math.round(signal.confidence * 100)}% ${signal.analysis?.slice(0, 50) || ''}`);
+      });
+    } else {
+      console.log('⚠️ No signals generated - market conditions may be unfavorable');
     }
     
     return tradingSignals;
     
   } catch (error) {
-    console.error('❌ Critical error in Classic v2 generation:', error);
+    console.error('❌ Fatal error in Classic v2 generation:', error);
     return [];
   }
 };
