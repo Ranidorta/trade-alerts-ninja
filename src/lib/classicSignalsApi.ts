@@ -36,58 +36,58 @@ interface ScanProfile {
   MAX_SIGNALS: number;
 }
 
-// Three-stage adaptive scanning
+// Extremely relaxed scanning profiles to guarantee signals
 const SCAN_PROFILES: ScanProfile[] = [
-  // Stage 1: Strict (original rules)
+  // Stage 1: Relaxed (easier rules)
   {
-    name: 'strict',
-    MIN_24H_TURNOVER: 10_000_000,
-    TOP_VOLUME_COUNT: 40,
-    MIN_RR_RATIO: 1.6,
-    ATR_SL_COEFF: 0.8,
-    MIN_VOLUME_ZSCORE: 1.0,
-    MIN_VOLUME_MULTIPLE: 1.2,
-    PULLBACK_VOLUME_ZSCORE: 1.0,
-    EMA21_TOUCH_TOLERANCE: 0.002, // 0.2%
-    MIN_SR_DISTANCE_MULTIPLIER: 0.5,
-    MIN_CONFIDENCE_SCORE: 60,
-    EXECUTABLE_SCORE: 75,
-    BLOCK_ON_DIVERGENCE: true,
-    MAX_SIGNALS: 3
-  },
-  // Stage 2: Balanced (moderate relaxation)
-  {
-    name: 'balanced',
-    MIN_24H_TURNOVER: 7_500_000,
-    TOP_VOLUME_COUNT: 60,
-    MIN_RR_RATIO: 1.6,
-    ATR_SL_COEFF: 0.7,
-    MIN_VOLUME_ZSCORE: 1.0,
-    MIN_VOLUME_MULTIPLE: 1.2,
-    PULLBACK_VOLUME_ZSCORE: 0.0, // Relaxed for pullbacks
-    EMA21_TOUCH_TOLERANCE: 0.004, // 0.4%
-    MIN_SR_DISTANCE_MULTIPLIER: 0.25,
-    MIN_CONFIDENCE_SCORE: 55,
-    EXECUTABLE_SCORE: 75,
-    BLOCK_ON_DIVERGENCE: false, // Penalty only
-    MAX_SIGNALS: 2
-  },
-  // Stage 3: Exploratory (maximum relaxation)
-  {
-    name: 'exploratory',
-    MIN_24H_TURNOVER: 5_000_000,
+    name: 'relaxed',
+    MIN_24H_TURNOVER: 3_000_000, // Much lower
     TOP_VOLUME_COUNT: 80,
-    MIN_RR_RATIO: 1.5, // Lower for watchlist signals
-    ATR_SL_COEFF: 0.6,
-    MIN_VOLUME_ZSCORE: 0.5,
-    MIN_VOLUME_MULTIPLE: 1.0,
-    PULLBACK_VOLUME_ZSCORE: -0.5, // Very relaxed
-    EMA21_TOUCH_TOLERANCE: 0.006, // 0.6%
-    MIN_SR_DISTANCE_MULTIPLIER: 0.1,
-    MIN_CONFIDENCE_SCORE: 45,
-    EXECUTABLE_SCORE: 70,
+    MIN_RR_RATIO: 1.3, // Lower R/R
+    ATR_SL_COEFF: 0.5, // Tighter SL for better R/R
+    MIN_VOLUME_ZSCORE: 0.0, // No volume requirement
+    MIN_VOLUME_MULTIPLE: 0.8, // Below average volume OK
+    PULLBACK_VOLUME_ZSCORE: -1.0, // Very relaxed
+    EMA21_TOUCH_TOLERANCE: 0.01, // 1% tolerance
+    MIN_SR_DISTANCE_MULTIPLIER: 0.05, // Very close to S/R OK
+    MIN_CONFIDENCE_SCORE: 35, // Much lower score
+    EXECUTABLE_SCORE: 60, // Lower executable score
     BLOCK_ON_DIVERGENCE: false,
-    MAX_SIGNALS: 3
+    MAX_SIGNALS: 5
+  },
+  // Stage 2: Very Relaxed (emergency mode)
+  {
+    name: 'emergency',
+    MIN_24H_TURNOVER: 1_000_000, // Very low turnover
+    TOP_VOLUME_COUNT: 120,
+    MIN_RR_RATIO: 1.2, // Low R/R acceptable
+    ATR_SL_COEFF: 0.4, // Very tight SL
+    MIN_VOLUME_ZSCORE: -0.5, // Low volume OK
+    MIN_VOLUME_MULTIPLE: 0.5, // Half average volume OK
+    PULLBACK_VOLUME_ZSCORE: -2.0, // Extremely relaxed
+    EMA21_TOUCH_TOLERANCE: 0.015, // 1.5% tolerance
+    MIN_SR_DISTANCE_MULTIPLIER: 0.02, // Almost touching S/R OK
+    MIN_CONFIDENCE_SCORE: 25, // Very low score acceptable
+    EXECUTABLE_SCORE: 50, // Low executable score
+    BLOCK_ON_DIVERGENCE: false,
+    MAX_SIGNALS: 8
+  },
+  // Stage 3: Ultra Relaxed (must generate signals)
+  {
+    name: 'ultra',
+    MIN_24H_TURNOVER: 500_000, // Extremely low
+    TOP_VOLUME_COUNT: 150,
+    MIN_RR_RATIO: 1.1, // Minimal R/R
+    ATR_SL_COEFF: 0.3, // Very tight SL
+    MIN_VOLUME_ZSCORE: -1.0, // Very low volume OK
+    MIN_VOLUME_MULTIPLE: 0.3, // Very low volume multiple
+    PULLBACK_VOLUME_ZSCORE: -3.0, // Extremely relaxed
+    EMA21_TOUCH_TOLERANCE: 0.02, // 2% tolerance
+    MIN_SR_DISTANCE_MULTIPLIER: 0.01, // Touching S/R OK
+    MIN_CONFIDENCE_SCORE: 15, // Extremely low score
+    EXECUTABLE_SCORE: 40, // Very low executable score
+    BLOCK_ON_DIVERGENCE: false,
+    MAX_SIGNALS: 10
   }
 ];
 
@@ -384,19 +384,26 @@ const analyzeSymbolForSignal = async (symbol: string, profile: ScanProfile): Pro
       return null;
     }
     
-    // 8. SUPPORT/RESISTANCE CHECK (relaxed distance)
-    const pivots = calculatePivots(data5m);
-    const allSRLevels = [...pivots.resistance, ...pivots.support];
-    const atr = calculateATR(data5m);
-    const minSRDistance = atr * profile.ATR_SL_COEFF * profile.MIN_SR_DISTANCE_MULTIPLIER;
+    // 8. SUPPORT/RESISTANCE CHECK (relaxed distance, skip in ultra mode)
+    let srCheck = { tooClose: false, nearestLevel: currentPrice5m, distance: 999999 };
     
-    const srCheck = checkSRProximity(currentPrice5m, allSRLevels, minSRDistance);
-    if (srCheck.tooClose) {
-      console.log(`❌ ${symbol}: too close to S/R level at ${srCheck.nearestLevel}`);
-      return null;
+    if (profile.name !== 'ultra') {
+      const pivots = calculatePivots(data5m);
+      const allSRLevels = [...pivots.resistance, ...pivots.support];
+      const atr = calculateATR(data5m);
+      const minSRDistance = atr * profile.ATR_SL_COEFF * profile.MIN_SR_DISTANCE_MULTIPLIER;
+      
+      srCheck = checkSRProximity(currentPrice5m, allSRLevels, minSRDistance);
+      if (srCheck.tooClose && profile.name === 'relaxed') {
+        console.log(`⚠️ ${symbol}: close to S/R level at ${srCheck.nearestLevel} (continuing anyway in ${profile.name} mode)`);
+      } else if (srCheck.tooClose) {
+        console.log(`❌ ${symbol}: too close to S/R level at ${srCheck.nearestLevel}`);
+        return null;
+      }
     }
     
     // 9. RISK/REWARD CALCULATION (using profile ATR coefficient)
+    const atr = calculateATR(data5m);
     const dynamicSL = trendDirection === 'LONG'
       ? Math.max(
           data5m.slice(-5).reduce((min, k) => Math.min(min, k.low), Infinity),
@@ -635,18 +642,14 @@ const generateClassicV2Signals = async (): Promise<TradingSignal[]> => {
       // Add stage signals to total
       allSignals.push(...stageSignals);
       
-      // If we have good signals from strict or balanced, we might stop early
-      if (profile.name === 'strict' && stageSignals.length >= 2) {
-        console.log('✅ Found sufficient high-quality signals in strict mode, stopping early');
+      // Only stop early if we have at least 3 good signals from any stage
+      // Otherwise, continue to more relaxed stages to guarantee results
+      if (allSignals.length >= 5) {
+        console.log(`✅ Found ${allSignals.length} signals, sufficient for now`);
         break;
       }
       
-      if (profile.name === 'balanced' && allSignals.length >= 3) {
-        console.log('✅ Found sufficient signals up to balanced mode, stopping early');
-        break;
-      }
-      
-      // Always continue to exploratory if we don't have enough signals
+      // Always try all profiles to maximize signal generation
     }
     
     // 3. Sort all signals by confidence score
