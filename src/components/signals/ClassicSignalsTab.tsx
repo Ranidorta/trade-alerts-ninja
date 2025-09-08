@@ -18,6 +18,7 @@ const ClassicSignalsTab = () => {
   const [directionFilter, setDirectionFilter] = useState<"ALL" | "BUY" | "SELL">("ALL");
   const [confidenceFilter, setConfidenceFilter] = useState<"ALL" | "HIGH" | "MEDIUM" | "LOW">("ALL");
   const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isMobile = useIsMobile();
   const {
@@ -39,8 +40,9 @@ const ClassicSignalsTab = () => {
         console.log("🔄 Carregando sinais Classic existentes...");
         const existingSignals = await getSignalsFromFirebase();
         
-        // Filtrar apenas sinais Classic Crypto
+        // Filtrar apenas sinais Classic v2
         const classicSignals = existingSignals.filter(signal => 
+          signal.strategy === 'classic_v2' || 
           signal.strategy === 'classic_crypto_15m' || 
           signal.strategy === 'classic_ai' || 
           signal.strategy === 'Classic Strategy' || 
@@ -96,76 +98,48 @@ const ClassicSignalsTab = () => {
     console.log("📋 Final filtered signals:", result.length);
     setFilteredSignals(result);
   }, [signals, directionFilter, confidenceFilter, searchQuery]);
-  const generateClassicSignals = async () => {
-    setIsLoading(true);
-    try {
-      console.log("🔄 Generating classic signals...");
-      const classicSignals = await fetchClassicSignals();
-      console.log("📊 Received signals:", classicSignals);
-      if (classicSignals.length > 0) {
-        console.log("✅ Setting signals state with:", classicSignals.length, "signals");
+    const generateClassicSignals = async () => {
+      try {
+        setIsGenerating(true);
+        toast({
+          title: "Gerando novos sinais Classic v2...",
+          description: "Analisando mercado com critérios rigorosos"
+        });
         
-        // Combinar com sinais existentes, evitando duplicatas
-        setSignals(prevSignals => {
-          const existingIds = new Set(prevSignals.map(s => s.id));
-          const newSignals = classicSignals.filter(s => !existingIds.has(s.id));
-          return [...prevSignals, ...newSignals];
-        });
-
-        // Save signals to Supabase
-        const savedCount = await saveSignalsToFirebase(classicSignals);
-        console.log(`💾 Saved ${savedCount} signals to Supabase`);
-
-        // Start validation process
-        console.log("🔍 Starting signal validation...");
-        try {
-          const validatedSignals = await verifyAllSignals(classicSignals);
+        const newSignals = await fetchClassicSignals();
+        
+        if (newSignals && newSignals.length > 0) {
+          // Save new signals to Firebase
+          await saveSignalsToFirebase(newSignals);
           
-          // Atualizar apenas os novos sinais validados
-          setSignals(prevSignals => {
-            const updatedSignals = [...prevSignals];
-            validatedSignals.forEach(validatedSignal => {
-              const index = updatedSignals.findIndex(s => s.id === validatedSignal.id);
-              if (index !== -1) {
-                updatedSignals[index] = validatedSignal;
-              }
-            });
-            return updatedSignals;
+          // Validate and verify signals
+          const validatedSignals = await verifyAllSignals(newSignals);
+          
+          // Update signals state with validated signals
+          setSignals(validatedSignals);
+          
+          toast({
+            title: `${newSignals.length} novos sinais Classic v2 gerados!`,
+            description: "Sinais gerados com alta precisão técnica"
           });
-
-          // Update validated signals in Supabase
-          for (const validatedSignal of validatedSignals) {
-            if (validatedSignal.result || validatedSignal.verifiedAt) {
-              await updateSignalInFirebase(validatedSignal);
-            }
-          }
-          console.log("✅ Signal validation completed");
-        } catch (validationError) {
-          console.error("⚠️ Signal validation failed:", validationError);
+        } else {
+          toast({
+            title: "Nenhum sinal Classic v2 encontrado",
+            description: "Critérios rigorosos não foram atendidos no momento"
+          });
         }
+        
+      } catch (error) {
+        console.error("Erro ao gerar sinais Classic v2:", error);
         toast({
-          title: "🚀 Sinais Classic Crypto gerados",
-          description: `${classicSignals.length} novos sinais de criptoativos foram analisados e salvos`
+          title: "Erro ao gerar sinais Classic v2",
+          description: "Falha na análise técnica ou conexão",
+          variant: "destructive"
         });
-      } else {
-        console.log("⚠️ No signals received");
-        toast({
-          title: "⚠️ Nenhum sinal crypto gerado",
-          description: "Mercado não apresenta condições ideais no momento. Tente novamente."
-        });
+      } finally {
+        setIsGenerating(false);
       }
-    } catch (error) {
-      console.error("❌ Error generating classic signals:", error);
-      toast({
-        title: "❌ Erro ao gerar sinais crypto",
-        description: "Falha na conexão com Bybit ou análise técnica",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-      setLastUpdated(new Date());
-    }
-  };
+    };
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
@@ -200,9 +174,9 @@ const ClassicSignalsTab = () => {
           </div>
         </div>
 
-        <Button onClick={generateClassicSignals} variant="default" disabled={isLoading} className="w-full md:w-auto">
-          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {isLoading ? 'Analisando Crypto...' : 'Gerar Sinais Crypto'}
+        <Button onClick={generateClassicSignals} variant="default" disabled={isGenerating} className="w-full md:w-auto">
+          <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
+          {isGenerating ? 'Analisando Classic v2...' : 'Gerar Sinais Classic v2'}
         </Button>
       </div>
 
