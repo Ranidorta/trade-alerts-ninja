@@ -24,22 +24,24 @@ const CLASSIC_V2_CONFIG = {
   TREND_TIMEFRAME: '15',     // 15m for trend analysis
   EXECUTION_TIMEFRAME: '5',  // 5m for execution
   
-  // Asset filtering
-  MIN_24H_TURNOVER: 10_000_000, // 10 million USDT minimum
-  TOP_VOLUME_COUNT: 40,          // Prioritize top 40 by volume
+  // Asset filtering (relaxed for more opportunities)
+  MIN_24H_TURNOVER: 5_000_000,   // 5 million USDT minimum (relaxed)
+  TOP_VOLUME_COUNT: 100,         // Expanded universe to top 100 by volume
   
-  // Volume requirements
-  MIN_VOLUME_ZSCORE: 1.0,        // Z-Score ≥ +1.0 OU 
-  MIN_VOLUME_MULTIPLE: 1.2,      // Volume ≥ 1.2 × SMA(20)
+  // Volume requirements (flexible for different setups)
+  MIN_VOLUME_ZSCORE: 1.0,        // Z-Score ≥ +1.0 (strict for breakouts)
+  MIN_VOLUME_MULTIPLE: 1.2,      // Volume ≥ 1.2 × SMA(20) (strict for breakouts)
+  PULLBACK_VOLUME_ZSCORE: 0.0,   // Relaxed for pullbacks (≥ 0.0)
+  PULLBACK_VOLUME_MULTIPLE: 1.0, // Normal volume OK for pullbacks (≥ 1.0×SMA)
   
   // Risk management
   MIN_RR_RATIO: 1.6,             // Minimum 1.6:1 R/R
   ATR_SL_COEFF: 0.8,             // Stop Loss = 0.8 × ATR(14)
   COOLDOWN_CANDLES: 5,           // 5 candles after STOP or TP2
   
-  // Entry validation
-  EMA21_TOUCH_TOLERANCE: 0.005,  // 0.5% tolerance for EMA21 touch
-  MIN_SR_DISTANCE: 0.5,          // Minimum 0.5×SL distance from S/R
+  // Entry validation (slightly relaxed)
+  EMA21_TOUCH_TOLERANCE: 0.01,   // 1.0% tolerance for EMA21 touch (relaxed)
+  MIN_SR_DISTANCE: 0.4,          // Minimum 0.4×SL distance from S/R (relaxed)
   
   // Confidence scoring
   MIN_CONFIDENCE_SCORE: 60,      // Minimum score to publish
@@ -283,39 +285,47 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     const volumes5m = data5m.map(k => k.volume);
     const volumeMetrics = calculateVolumeMetrics(volumes5m);
     
-    // Volume validation: Z-Score ≥ +1.0 OU Volume ≥ 1.2 × SMA(20)
-    const volumeValid = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.MIN_VOLUME_ZSCORE || 
-                        volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.MIN_VOLUME_MULTIPLE;
-    
-    if (!volumeValid) {
-      console.log(`❌ ${symbol}: volume requirements not met (z-score: ${volumeMetrics.zScore.toFixed(2)}, multiple: ${(volumeMetrics.current / volumeMetrics.sma20).toFixed(2)})`);
-      return null;
-    }
+    // Volume validation will be checked per setup type (more flexible approach)
     
     // === 6. ENTRY TRIGGERS ===
     let setupType = '';
     let entryValid = false;
     
-    // A) Pullback entry (preferred)
+    // A) Pullback entry (preferred) - relaxed volume requirements
     const lastKline5m = data5m[data5m.length - 1];
     if (trendDirection === 'LONG') {
       const touchedEMA21 = lastKline5m.low <= currentEMA21_5m * (1 + CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE);
       const closedAboveEMA9 = lastKline5m.close > currentEMA9_5m;
-      if (touchedEMA21 && closedAboveEMA9 && macdFavor) {
+      const pullbackVolumeOk = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.PULLBACK_VOLUME_ZSCORE || 
+                               volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.PULLBACK_VOLUME_MULTIPLE;
+      
+      if (touchedEMA21 && closedAboveEMA9 && macdFavor && pullbackVolumeOk) {
         setupType = 'Pullback EMA21 + fechamento acima EMA9';
         entryValid = true;
       }
     } else {
       const touchedEMA21 = lastKline5m.high >= currentEMA21_5m * (1 - CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE);
       const closedBelowEMA9 = lastKline5m.close < currentEMA9_5m;
-      if (touchedEMA21 && closedBelowEMA9 && macdFavor) {
+      const pullbackVolumeOk = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.PULLBACK_VOLUME_ZSCORE || 
+                               volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.PULLBACK_VOLUME_MULTIPLE;
+      
+      if (touchedEMA21 && closedBelowEMA9 && macdFavor && pullbackVolumeOk) {
         setupType = 'Pullback EMA21 + fechamento abaixo EMA9';
         entryValid = true;
       }
     }
     
-    // B) Breakout + Retest (if pullback not found)
+    // B) Breakout + Retest (if pullback not found) - strict volume requirements
     if (!entryValid) {
+      // Strict volume validation for breakouts
+      const breakoutVolumeOk = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.MIN_VOLUME_ZSCORE || 
+                               volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.MIN_VOLUME_MULTIPLE;
+      
+      if (!breakoutVolumeOk) {
+        console.log(`❌ ${symbol}: volume requirements not met for breakout (z-score: ${volumeMetrics.zScore.toFixed(2)}, multiple: ${(volumeMetrics.current / volumeMetrics.sma20).toFixed(2)})`);
+        return null;
+      }
+      
       // Look for range breakout with volume confirmation
       const recentHighs = data5m.slice(-10).map(k => k.high);
       const recentLows = data5m.slice(-10).map(k => k.low);
@@ -388,11 +398,12 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     const tp2 = trendDirection === 'LONG' ? entryPrice + (2 * riskAmount) : entryPrice - (2 * riskAmount);
     const tp3 = trendDirection === 'LONG' ? entryPrice + (3 * riskAmount) : entryPrice - (3 * riskAmount);
     
-    // Check minimum R/R ratio
-    const rrRatio = riskAmount > 0 ? riskAmount / riskAmount : 0; // Always 1:1 for TP1, but we check overall setup
+    // Check minimum R/R ratio using TP2 (FIXED BUG)
+    const rewardTP2 = Math.abs(tp2 - entryPrice); // TP2 = 2R
+    const rrRatio = riskAmount > 0 ? rewardTP2 / riskAmount : 0; // Should be 2:1 for TP2
     
-    if (riskAmount <= 0 || (Math.abs(tp1 - entryPrice) / riskAmount) < CLASSIC_V2_CONFIG.MIN_RR_RATIO) {
-      console.log(`❌ ${symbol}: R/R ratio below minimum ${CLASSIC_V2_CONFIG.MIN_RR_RATIO}`);
+    if (riskAmount <= 0 || rrRatio < CLASSIC_V2_CONFIG.MIN_RR_RATIO) {
+      console.log(`❌ ${symbol}: R/R ratio ${rrRatio.toFixed(2)} below minimum ${CLASSIC_V2_CONFIG.MIN_RR_RATIO}`);
       return null;
     }
     
@@ -418,12 +429,18 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       reasons.push(`MACD slope ${trendDirection === 'LONG' ? 'positivo' : 'negativo'}`);
     }
     
-    // +15 Volume conditions met
-    if (volumeValid) {
+    // +15 Volume conditions met (adjusted for setup type)
+    const volumeScore = setupType.includes('Pullback') ? 
+      (volumeMetrics.zScore >= CLASSIC_V2_CONFIG.PULLBACK_VOLUME_ZSCORE || 
+       volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.PULLBACK_VOLUME_MULTIPLE) :
+      (volumeMetrics.zScore >= CLASSIC_V2_CONFIG.MIN_VOLUME_ZSCORE || 
+       volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.MIN_VOLUME_MULTIPLE);
+       
+    if (volumeScore) {
       score += 15;
-      const volType = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.MIN_VOLUME_ZSCORE ? 
+      const volType = volumeMetrics.zScore >= 1.0 ? 
         `alto (z-score: ${volumeMetrics.zScore.toFixed(1)})` : 
-        `acima da média (${(volumeMetrics.current / volumeMetrics.sma20).toFixed(1)}x)`;
+        `adequado (${(volumeMetrics.current / volumeMetrics.sma20).toFixed(1)}x SMA)`;
       reasons.push(`Volume ${volType}`);
     }
     
