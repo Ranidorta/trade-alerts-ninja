@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import ClassicSignalCard from "./ClassicSignalCard";
-import { fetchClassicSignals } from "@/lib/classicSignalsApi";
+import { generateClassicV2Signals } from "@/lib/classicSignalsApi";
 import { useFirebaseSignals } from "@/hooks/useFirebaseSignals";
 import { verifyAllSignals } from "@/lib/signalVerification";
 import { useSignalPersistence } from "@/hooks/useSignalPersistence";
@@ -106,7 +106,7 @@ const ClassicSignalsTab = () => {
           description: "Analisando mercado com critérios rigorosos"
         });
         
-        const newSignals = await fetchClassicSignals();
+        const newSignals = await generateClassicV2Signals();
         
         if (newSignals && newSignals.length > 0) {
           // Save new signals to Firebase
