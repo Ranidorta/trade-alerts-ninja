@@ -42,6 +42,7 @@ const CLASSIC_V2_CONFIG = {
   // Entry validation (slightly relaxed)
   EMA21_TOUCH_TOLERANCE: 0.01,   // 1.0% tolerance for EMA21 touch (relaxed)
   MIN_SR_DISTANCE: 0.4,          // Minimum 0.4×SL distance from S/R (relaxed)
+  TREND_TOLERANCE: 0.002,        // 0.2% tolerance for near EMA stack
   
   // Confidence scoring
   MIN_CONFIDENCE_SCORE: 60,      // Minimum score to publish
@@ -222,16 +223,24 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     const currentEMA21_15m = ema21_15m[ema21_15m.length - 1];
     const currentPrice15m = prices15m[prices15m.length - 1];
     
-    // Determine trend direction (15m)
+    // Determine trend direction (15m) with soft tolerance
     let trendDirection: 'LONG' | 'SHORT' | null = null;
     let trend15mState = '';
+    const tol = CLASSIC_V2_CONFIG.TREND_TOLERANCE;
     
-    if (validateEMAStack(currentEMA9_15m, currentEMA14_15m, currentEMA21_15m, 'LONG') && currentPrice15m >= currentEMA9_15m) {
+    const strictLong = validateEMAStack(currentEMA9_15m, currentEMA14_15m, currentEMA21_15m, 'LONG') && currentPrice15m >= currentEMA9_15m * (1 - tol);
+    const strictShort = validateEMAStack(currentEMA9_15m, currentEMA14_15m, currentEMA21_15m, 'SHORT') && currentPrice15m <= currentEMA9_15m * (1 + tol);
+    
+    // Soft stack: allow slight overlaps within tolerance
+    const softLong = (currentEMA9_15m > currentEMA21_15m) && (currentEMA14_15m >= currentEMA21_15m * (1 - tol)) && (currentEMA14_15m <= currentEMA9_15m * (1 + tol)) && currentPrice15m >= currentEMA9_15m * (1 - tol);
+    const softShort = (currentEMA9_15m < currentEMA21_15m) && (currentEMA14_15m <= currentEMA21_15m * (1 + tol)) && (currentEMA14_15m >= currentEMA9_15m * (1 - tol)) && currentPrice15m <= currentEMA9_15m * (1 + tol);
+    
+    if (strictLong || softLong) {
       trendDirection = 'LONG';
-      trend15mState = 'LONG: EMA9 > EMA14 > EMA21 & Preço ≥ EMA9';
-    } else if (validateEMAStack(currentEMA9_15m, currentEMA14_15m, currentEMA21_15m, 'SHORT') && currentPrice15m <= currentEMA9_15m) {
+      trend15mState = 'LONG: EMA stack (soft/strict) + preço ~ EMA9';
+    } else if (strictShort || softShort) {
       trendDirection = 'SHORT';
-      trend15mState = 'SHORT: EMA9 < EMA14 < EMA21 & Preço ≤ EMA9';
+      trend15mState = 'SHORT: EMA stack (soft/strict) + preço ~ EMA9';
     }
     
     if (!trendDirection) {
@@ -271,9 +280,9 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
       vwapState = vwapData.rejected ? 'rejected' : (!vwapData.priceAbove ? 'below' : 'above');
     }
     
-    // MTF rule: 5m must follow 15m direction OR valid VWAP reclaim/reject
-    if (!mtfAlignment && !vwapData.reclaimed && !vwapData.rejected) {
-      console.log(`❌ ${symbol}: 5m timeframe diverges without valid VWAP reclaim/reject`);
+    // MTF rule: 5m must follow 15m direction OR be on correct VWAP side (reclaim/reject or position)
+    if (!mtfAlignment && !vwapCondition) {
+      console.log(`❌ ${symbol}: 5m diverges and VWAP not favorable`);
       return null;
     }
     
@@ -294,23 +303,27 @@ const analyzeSymbolForSignal = async (symbol: string): Promise<ClassicV2Signal |
     // A) Pullback entry (preferred) - relaxed volume requirements
     const lastKline5m = data5m[data5m.length - 1];
     if (trendDirection === 'LONG') {
-      const touchedEMA21 = lastKline5m.low <= currentEMA21_5m * (1 + CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE);
+      const touchTol = CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE;
+      const emaTouchRef = Math.max(currentEMA21_5m * (1 + touchTol), currentEMA14_5m * (1 + touchTol));
+      const touchedPullback = lastKline5m.low <= emaTouchRef; // allow EMA21 or EMA14 zone
       const closedAboveEMA9 = lastKline5m.close > currentEMA9_5m;
       const pullbackVolumeOk = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.PULLBACK_VOLUME_ZSCORE || 
                                volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.PULLBACK_VOLUME_MULTIPLE;
       
-      if (touchedEMA21 && closedAboveEMA9 && macdFavor && pullbackVolumeOk) {
-        setupType = 'Pullback EMA21 + fechamento acima EMA9';
+      if (touchedPullback && closedAboveEMA9 && macdFavor && pullbackVolumeOk) {
+        setupType = 'Pullback EMA21/EMA14 + fechamento acima EMA9';
         entryValid = true;
       }
     } else {
-      const touchedEMA21 = lastKline5m.high >= currentEMA21_5m * (1 - CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE);
+      const touchTol = CLASSIC_V2_CONFIG.EMA21_TOUCH_TOLERANCE;
+      const emaTouchRef = Math.min(currentEMA21_5m * (1 - touchTol), currentEMA14_5m * (1 - touchTol));
+      const touchedPullback = lastKline5m.high >= emaTouchRef; // allow EMA21 or EMA14 zone
       const closedBelowEMA9 = lastKline5m.close < currentEMA9_5m;
       const pullbackVolumeOk = volumeMetrics.zScore >= CLASSIC_V2_CONFIG.PULLBACK_VOLUME_ZSCORE || 
                                volumeMetrics.current >= volumeMetrics.sma20 * CLASSIC_V2_CONFIG.PULLBACK_VOLUME_MULTIPLE;
       
-      if (touchedEMA21 && closedBelowEMA9 && macdFavor && pullbackVolumeOk) {
-        setupType = 'Pullback EMA21 + fechamento abaixo EMA9';
+      if (touchedPullback && closedBelowEMA9 && macdFavor && pullbackVolumeOk) {
+        setupType = 'Pullback EMA21/EMA14 + fechamento abaixo EMA9';
         entryValid = true;
       }
     }
