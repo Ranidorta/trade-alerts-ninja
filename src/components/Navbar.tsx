@@ -15,7 +15,7 @@ import {
 import NinjaLogo from "@/components/NinjaLogo";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import UserMenuButton from "@/components/UserMenuButton";
+import AuthButton from "@/components/AuthButton";
 import { useAuth } from "@/hooks/useAuth";
 
 const Navbar = () => {
@@ -23,7 +23,7 @@ const Navbar = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hasActiveSubscription } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -32,7 +32,6 @@ const Navbar = () => {
   const navLinks = [
     { path: "/signals", name: "Sinais", icon: <BarChart4 size={18} /> },
     { path: "/history", name: "Histórico", icon: <Clock size={18} /> },
-    { path: "/classic-history", name: "Classic", icon: <Clock size={18} /> },
     { 
       path: "/performance", 
       name: "Performance", 
@@ -42,11 +41,6 @@ const Navbar = () => {
       path: "/market", 
       name: "Mercado", 
       icon: <Presentation size={18} /> 
-    },
-    { 
-      path: "/trading-esportivo", 
-      name: "Trading Esportivo", 
-      icon: <Crown size={18} /> 
     }
   ];
 
@@ -99,22 +93,22 @@ const Navbar = () => {
                     ))}
                     
                     {/* Botão de assinatura premium para mobile */}
-                    {user && (
+                    {user && !hasActiveSubscription() && (
                       <Button 
                         onClick={() => {
                           navigate("/checkout");
                           setIsMenuOpen(false);
                         }}
-                        variant="default" 
+                        variant="success" 
                         className="w-full mt-2 flex items-center justify-center gap-2"
                       >
                         <Crown size={16} />
-                        <span>Upgrade Premium</span>
+                        <span>Assinar Plano Premium</span>
                       </Button>
                     )}
                     
                     <div className="pt-2 flex justify-between items-center border-t border-border">
-                      <UserMenuButton />
+                      <AuthButton />
                       <ThemeToggle />
                     </div>
                   </div>
@@ -140,22 +134,22 @@ const Navbar = () => {
               ))}
               
               {/* Botão de assinatura premium para desktop */}
-              {user && (
+              {user && !hasActiveSubscription() && (
                 <Button 
                   onClick={() => navigate("/checkout")}
-                  variant="default"
+                  variant="success"
                   size="sm"
                   className="ml-1 flex items-center gap-1"
                 >
                   <Crown size={14} />
-                  <span>Upgrade</span>
+                  <span>Assinar Premium</span>
                 </Button>
               )}
             </div>
           )}
 
           <div className="hidden md:flex items-center space-x-2">
-            <UserMenuButton />
+            <AuthButton />
             <ThemeToggle />
           </div>
         </div>

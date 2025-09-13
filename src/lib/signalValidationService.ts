@@ -332,55 +332,36 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
     let minPrice = Math.min(...relevantPrices.map(p => p.low));
     let validationDetails = "";
 
-    // REGRA ESPECIAL: Se o sinal já tem resultado PARTIAL, só pode virar WINNER se bater todos os alvos
-    // Se bater SL, mantém o primeiro resultado (PARTIAL)
-    const currentResult = signal.result;
-    const isRevalidation = currentResult === "PARTIAL";
-    
     // Validate signal based on direction
     if (direction === 'BUY') {
       // For BUY signals, check if price went up to targets or down to stop loss
       const hitStopLoss = relevantPrices.some(p => p.low <= stopLoss);
       
-      // Check targets hit
-      const hitTP1 = tp1 > 0 && relevantPrices.some(p => p.high >= tp1);
-      const hitTP2 = tp2 > 0 && relevantPrices.some(p => p.high >= tp2);
-      const hitTP3 = tp3 > 0 && relevantPrices.some(p => p.high >= tp3);
-      
-      if (hitStopLoss && !isRevalidation) {
-        // SL hit em primeira validação = LOSER
+      if (hitStopLoss) {
         result = "LOSER";
         validationDetails = `Stop Loss hit at ${stopLoss}. Min price: ${minPrice}`;
         console.log(`❌ [SIGNAL_VALIDATION] BUY signal stopped out at ${stopLoss}`);
-      } else if (hitStopLoss && isRevalidation) {
-        // SL hit em revalidação = mantém resultado anterior (PARTIAL)
-        result = "PARTIAL";
-        validationDetails = `Stop Loss hit but keeping previous PARTIAL result. SL: ${stopLoss}, Min price: ${minPrice}`;
-        console.log(`🔄 [SIGNAL_VALIDATION] BUY signal hit SL but keeping PARTIAL result`);
-        
-        // Manter targets previamente atingidos
-        hitTargets = signal.targets?.filter(t => t.hit).map(t => t.level) || [];
       } else {
         // Check targets in order
-        if (hitTP3) {
+        if (tp3 > 0 && relevantPrices.some(p => p.high >= tp3)) {
           hitTargets = [1, 2, 3];
           result = "WINNER";
           validationDetails = `All targets hit. TP3 reached at ${tp3}. Max price: ${maxPrice}`;
-        } else if (hitTP2) {
+        } else if (tp2 > 0 && relevantPrices.some(p => p.high >= tp2)) {
           hitTargets = [1, 2];
-          result = isRevalidation ? "WINNER" : "PARTIAL"; // Se revalidação e TP2, vira WINNER
+          result = "PARTIAL";
           validationDetails = `TP2 reached at ${tp2}. Max price: ${maxPrice}`;
-        } else if (hitTP1) {
+        } else if (tp1 > 0 && relevantPrices.some(p => p.high >= tp1)) {
           hitTargets = [1];
           result = "PARTIAL";
           validationDetails = `TP1 reached at ${tp1}. Max price: ${maxPrice}`;
         } else {
           // Check if signal expired (24+ hours old)
           if (now.getTime() - signalTime.getTime() > 24 * 60 * 60 * 1000) {
-            result = isRevalidation ? currentResult : "FALSE"; // Mantém resultado se revalidação
+            result = "FALSE";
             validationDetails = `Signal expired after 24h without hitting targets. Max price: ${maxPrice}`;
           } else {
-            result = isRevalidation ? currentResult : "PENDING"; // Mantém resultado se revalidação
+            result = "PENDING";
             validationDetails = `Still pending. Current max price: ${maxPrice}`;
           }
         }
@@ -389,45 +370,31 @@ export async function validateSignalWithBybitData(signal: TradingSignal): Promis
       // For SELL signals, check if price went down to targets or up to stop loss
       const hitStopLoss = relevantPrices.some(p => p.high >= stopLoss);
       
-      // Check targets hit
-      const hitTP1 = tp1 > 0 && relevantPrices.some(p => p.low <= tp1);
-      const hitTP2 = tp2 > 0 && relevantPrices.some(p => p.low <= tp2);
-      const hitTP3 = tp3 > 0 && relevantPrices.some(p => p.low <= tp3);
-      
-      if (hitStopLoss && !isRevalidation) {
-        // SL hit em primeira validação = LOSER
+      if (hitStopLoss) {
         result = "LOSER";
         validationDetails = `Stop Loss hit at ${stopLoss}. Max price: ${maxPrice}`;
         console.log(`❌ [SIGNAL_VALIDATION] SELL signal stopped out at ${stopLoss}`);
-      } else if (hitStopLoss && isRevalidation) {
-        // SL hit em revalidação = mantém resultado anterior (PARTIAL)
-        result = "PARTIAL";
-        validationDetails = `Stop Loss hit but keeping previous PARTIAL result. SL: ${stopLoss}, Max price: ${maxPrice}`;
-        console.log(`🔄 [SIGNAL_VALIDATION] SELL signal hit SL but keeping PARTIAL result`);
-        
-        // Manter targets previamente atingidos
-        hitTargets = signal.targets?.filter(t => t.hit).map(t => t.level) || [];
       } else {
         // Check targets (for SELL, targets should be below entry)
-        if (hitTP3) {
+        if (tp3 > 0 && relevantPrices.some(p => p.low <= tp3)) {
           hitTargets = [1, 2, 3];
           result = "WINNER";
           validationDetails = `All targets hit. TP3 reached at ${tp3}. Min price: ${minPrice}`;
-        } else if (hitTP2) {
+        } else if (tp2 > 0 && relevantPrices.some(p => p.low <= tp2)) {
           hitTargets = [1, 2];
-          result = isRevalidation ? "WINNER" : "PARTIAL"; // Se revalidação e TP2, vira WINNER
+          result = "PARTIAL";
           validationDetails = `TP2 reached at ${tp2}. Min price: ${minPrice}`;
-        } else if (hitTP1) {
+        } else if (tp1 > 0 && relevantPrices.some(p => p.low <= tp1)) {
           hitTargets = [1];
           result = "PARTIAL";
           validationDetails = `TP1 reached at ${tp1}. Min price: ${minPrice}`;
         } else {
           // Check if signal expired (24+ hours old)
           if (now.getTime() - signalTime.getTime() > 24 * 60 * 60 * 1000) {
-            result = isRevalidation ? currentResult : "FALSE"; // Mantém resultado se revalidação
+            result = "FALSE";
             validationDetails = `Signal expired after 24h without hitting targets. Min price: ${minPrice}`;
           } else {
-            result = isRevalidation ? currentResult : "PENDING"; // Mantém resultado se revalidação
+            result = "PENDING";
             validationDetails = `Still pending. Current min price: ${minPrice}`;
           }
         }

@@ -11,7 +11,6 @@ import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { analyzeSignalsHistory } from "@/lib/signalHistoryService";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import PerformanceCalendar from "@/components/signals/PerformanceCalendar";
 import { useToast } from "@/components/ui/use-toast";
 import {
   Card,
@@ -147,15 +146,6 @@ const PerformanceDashboard = () => {
         </TabsList>
         
         <TabsContent value="overview" className="space-y-6">
-          {/* Performance Calendar */}
-          <PerformanceCalendar 
-            signals={signals}
-            onDateClick={(date) => {
-              console.log("Data clicada:", date);
-              // Implementar navegação para detalhes do dia
-            }}
-          />
-          
           {/* Performance Summary Cards */}
           {performanceData && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -17,17 +17,12 @@ from signals.quick_candle_reversal import validate_reversal_signal, get_candle_r
 from signals.rapid_volume_spike import validate_volume_support, get_institutional_flow_score
 from signals.quick_momentum_validator import validate_momentum_alignment, get_momentum_score
 from core.intraday_risk_management import calculate_intraday_targets, validate_intraday_risk
-from core.risk_management import DynamicRiskManager
 from utils.quick_intraday_performance_alert import should_halt_intraday_trading, record_intraday_trade
-from utils.performance_tracker import log_signal_opened, log_signal_closed
 
 class IntradaySignalGenerator:
     def __init__(self):
         self.min_combined_score = 0.65  # Score mínimo para aprovação
         self.required_validations = 4   # Mínimo de validações aprovadas
-        self.risk_manager = DynamicRiskManager()  # Risk manager específico
-        self.ml_threshold_default = 0.60  # Threshold padrão ML
-        self.ml_threshold_defense = 0.65  # Threshold em modo defesa
         
     def generate_intraday_signal(self, symbol: str) -> Optional[Dict]:
         """
@@ -42,14 +37,9 @@ class IntradaySignalGenerator:
         try:
             logger.info(f"🔍 [INTRADAY] Analisando {symbol} com validações rápidas...")
             
-            # 1. VERIFICAÇÕES PRELIMINARES + MODO DEFESA
+            # 1. VERIFICAÇÕES PRELIMINARES
             if should_halt_intraday_trading():
                 logger.warning(f"🛑 Trading intradiário suspenso por performance")
-                return None
-            
-            # Verifica se está em modo defesa (após 3 stops consecutivos)
-            if self.risk_manager.is_intraday_trading_paused():
-                logger.warning(f"🛡️ Trading intradiário PAUSADO - Modo defesa ativo")
                 return None
             
             if not validate_intraday_risk(symbol, '5m'):
@@ -79,75 +69,49 @@ class IntradaySignalGenerator:
                 df_1m, df_5m, df_15m, symbol, intended_direction
             )
             
-            # 5. CALCULA SCORES E VERIFICA APROVAÇÃO + ML THRESHOLD DINÂMICO
+            # 5. CALCULA SCORES E VERIFICA APROVAÇÃO
             combined_score, approval_result = self._evaluate_validations(validations)
-            
-            # Verifica threshold ML dinâmico (aumenta em modo defesa)
-            ml_threshold = self.ml_threshold_defense if self.risk_manager.consecutive_losses >= 2 else self.ml_threshold_default
-            
-            if combined_score < ml_threshold:
-                logger.info(f"🛑 ML Score insuficiente: {combined_score:.3f} < {ml_threshold:.3f} ({'defesa' if ml_threshold > 0.60 else 'normal'})")
-                return None
             
             if not approval_result['approved']:
                 logger.info(f"🛑 Sinal não aprovado: {approval_result['reason']}")
                 return None
             
-            # 6. CALCULA NÍVEIS DE ENTRADA E SAÍDA COM NOVA GESTÃO DE RISCO
+            # 6. CALCULA NÍVEIS DE ENTRADA E SAÍDA
             entry_price = df_5m['close'].iloc[-1]
-            
-            # Usa o novo sistema de risk management para Intraday
-            from ta.volatility import AverageTrueRange
-            atr = AverageTrueRange(df_5m['high'], df_5m['low'], df_5m['close'], window=14).average_true_range().iloc[-1]
-            
-            take_profits, stop_loss = self.risk_manager.calculate_targets(
-                entry_price, atr, intended_direction, 0, symbol, agent_type="intraday"
+            risk_levels = calculate_intraday_targets(
+                df_5m, entry_price, intended_direction, '5m'
             )
             
-            if not take_profits or not stop_loss:
+            if not risk_levels:
                 logger.error(f"Erro no cálculo de níveis de risco")
                 return None
             
-            # 7. MONTA SINAL FINAL COM TRACKING DE R/R
-            # Calcula Risk/Reward esperado para logging
-            risk = abs(entry_price - stop_loss)
-            reward = abs(take_profits[2] - entry_price)  # TP3 como target principal
-            expected_rr = reward / risk if risk > 0 else 0
-            
+            # 7. MONTA SINAL FINAL
             signal = {
-                'id': f"{symbol}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_INTRADAY",
                 'symbol': symbol,
                 'direction': intended_direction,
                 'entry_price': round(entry_price, 6),
-                'sl': round(stop_loss, 6),
-                'tp': round(take_profits[2], 6),  # TP3 como target principal
-                'tp1': round(take_profits[0], 6),
-                'tp2': round(take_profits[1], 6), 
-                'tp3': round(take_profits[2], 6),
-                'atr': round(atr, 6),
+                'stop_loss': risk_levels['stop_loss'],
+                'take_profits': risk_levels['take_profits'],
+                'tp1': risk_levels['take_profits'][0],
+                'tp2': risk_levels['take_profits'][1], 
+                'tp3': risk_levels['take_profits'][2],
+                'rr_ratios': risk_levels['rr_ratios'],
+                'atr': risk_levels['atr_used'],
                 'timestamp': datetime.utcnow().isoformat(),
                 'timeframe': 'intraday_5m',
-                'strategy': 'intraday_signal',
+                'strategy': 'intraday_integrated',
                 'combined_score': round(combined_score, 3),
                 'validations_passed': approval_result['validations_passed'],
                 'validations_details': validations,
-                'expires': (datetime.utcnow().timestamp() + 300),  # 5 minutos
-                'expected_rr': round(expected_rr, 2),
-                'risk_amount': round(risk, 6),
-                'reward_amount': round(reward, 6),
-                'ml_threshold_used': ml_threshold,
-                'consecutive_losses': self.risk_manager.consecutive_losses
+                'expires': (datetime.utcnow().timestamp() + 300)  # 5 minutos
             }
             
-            # 8. LOG DE SUCESSO + PERFORMANCE TRACKING
-            # Log no sistema de performance tracking
-            log_signal_opened(signal)
-            
+            # 8. LOG DE SUCESSO
             logger.info(f"✅ SINAL INTRADIÁRIO gerado para {symbol}:")
             logger.info(f"   🎯 {signal['direction']} @ {signal['entry_price']}")
             logger.info(f"   📊 Score: {combined_score:.3f}, Validações: {approval_result['validations_passed']}/{len(validations)}")
-            logger.info(f"   💰 R/R Esperado: {expected_rr:.2f} (Risco: {risk:.6f}, Reward: {reward:.6f})")
-            logger.info(f"   🤖 ML Threshold: {ml_threshold:.2f}, Perdas consecutivas: {self.risk_manager.consecutive_losses}")
+            logger.info(f"   💰 RR: {risk_levels['rr_ratios'][0]:.2f} | {risk_levels['rr_ratios'][1]:.2f} | {risk_levels['rr_ratios'][2]:.2f}")
             
             return signal
             

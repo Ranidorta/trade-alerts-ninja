@@ -227,19 +227,9 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   };
   
   const shouldShowVerifyButton = (signal: TradingSignal) => {
-    // REGRA: Botão ativo apenas para PENDING ou PARTIAL
-    // WINNER e LOSER não podem ser revalidados
-    const hasUndefinedResult = signal.result === undefined || signal.result === "PENDING";
-    const hasPartialResult = signal.result === "PARTIAL";
-    const hasFinalResult = signal.result === "WINNER" || signal.result === "LOSER" || signal.result === 1 || signal.result === 0;
-    
-    // Só mostrar botão se não tiver resultado final
-    return (hasUndefinedResult || hasPartialResult) && !hasFinalResult;
-  };
-
-  const canRevalidate = (signal: TradingSignal) => {
-    // REGRA: Apenas sinais PARCIAIS podem ser revalidados
-    return signal.result === "PARTIAL";
+    return signal.result === undefined && 
+           signal.status !== "COMPLETED" && 
+           signal.status !== "WAITING";
   };
   
   if (signals.length === 0) {
@@ -387,20 +377,13 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
                     {shouldShowVerifyButton(signal) ? (
                       <Button
                         size="sm"
-                        variant={canRevalidate(signal) ? "default" : "outline"}
+                        variant="outline"
                         onClick={() => handleVerifySignal(signal.id)}
                         disabled={verifyingSignal === signal.id}
                       >
-                        {verifyingSignal === signal.id ? 'Verificando...' : 
-                         canRevalidate(signal) ? 'Revalidar' : 'Verificar'}
+                        {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
                       </Button>
-                    ) : (
-                      signal.result === "WINNER" || signal.result === "LOSER" ? (
-                        <Badge variant="outline" className="text-xs">
-                          Finalizado
-                        </Badge>
-                      ) : null
-                    )}
+                    ) : null}
                   </TableCell>
                 )}
               </TableRow>

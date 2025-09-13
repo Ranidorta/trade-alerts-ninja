@@ -57,15 +57,4 @@ def run_pipeline(symbol='BTCUSDT', interval='1h'):
     }
 
 if __name__ == "__main__":
-    try:
-        # Iniciar o sistema de aprendizado contínuo
-        from ml.continuous_learning import start_continuous_learning
-        start_continuous_learning()
-        print("🧠 Sistema de aprendizado contínuo iniciado")
-        
-        # Executar pipeline principal
-        run_pipeline()
-    except Exception as e:
-        print(f"Erro no sistema principal: {e}")
-        import traceback
-        traceback.print_exc()
+    run_pipeline()

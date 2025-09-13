@@ -69,11 +69,6 @@ export interface TradingSignal {
   success_prob?: number;  // Added for monster signals success probability
   validationDetails?: string; // Added for validation information
   analysis?: string;      // Added for signal analysis details
-  // New risk management properties
-  risk_reward_ratio?: number;
-  position_size?: number;
-  risk_amount?: number;
-  current_price?: number;
 }
 
 export interface Feature {
