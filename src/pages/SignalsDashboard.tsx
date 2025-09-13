@@ -181,32 +181,18 @@ const SignalsDashboard = () => {
       description: "Você receberá alertas quando novos sinais forem postados"
     });
   };
-  // Generate signals with different strategies
-  const handleGenerateStrategy = async (strategy: string) => {
+  // Generate signals with different strategies - simplified for v3 only
+  const handleGenerateStrategy = async (strategy: string = 'monster-v3-lucrativo') => {
     setIsGenerating(true);
     
     try {
-      let title = "";
-      let description = "";
+      toast({
+        title: "Gerando Monster v3 Lucrativo",
+        description: "Analisando mercado com critérios de alto payoff (score ≥65)..."
+      });
       
-      switch (strategy) {
-        case 'monster-v3-lucrativo':
-          title = "Gerando Monster v3 Lucrativo";
-          description = "Focado em alto lucro líquido e payoff vantajoso (score ≥65)...";
-          break;
-        case 'monster-v2-top5':
-          title = "Gerando Monster v2 Top5";
-          description = "Analisando os 10 pares mais líquidos para selecionar os top 5...";
-          break;
-        default:
-          title = "Gerando sinais Monster v2 Ajustado";
-          description = "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50%...";
-      }
-      
-      toast({ title, description });
-      
-      // Use the new generateSignals function from the API
-      const newSignals = await generateSignals(strategy);
+      // Force v3 strategy
+      const newSignals = await generateSignals('monster-v3-lucrativo');
       
       if (newSignals.length > 0) {
         localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
@@ -220,21 +206,9 @@ const SignalsDashboard = () => {
               setActiveSignal(uniqueNewSignals[0]);
             }
             
-            let successTitle = "";
-            switch (strategy) {
-              case 'monster-v3-lucrativo':
-                successTitle = "Monster v3 Lucrativo gerados";
-                break;
-              case 'monster-v2-top5':
-                successTitle = "Top 5 Monster v2 gerados";
-                break;
-              default:
-                successTitle = "Sinais Monster v2 Ajustado gerados";
-            }
-            
             toast({
-              title: successTitle,
-              description: `${uniqueNewSignals.length} sinais com critérios ${strategy}`
+              title: "✅ Monster v3 Lucrativo Gerados!",
+              description: `${uniqueNewSignals.length} sinais de alto payoff com score ≥65 pontos`
             });
             saveSignalsToHistory(uniqueNewSignals);
             return [...uniqueNewSignals, ...prevSignals];
@@ -243,15 +217,15 @@ const SignalsDashboard = () => {
         });
       } else {
         toast({
-          title: `Nenhum sinal ${strategy} encontrado`,
-          description: "Os critérios rigorosos não identificaram oportunidades no momento"
+          title: "⚠️ Nenhum sinal v3 encontrado",
+          description: "Os critérios rigorosos (score ≥65) não identificaram oportunidades no momento. Tente novamente em alguns minutos."
         });
       }
     } catch (error) {
-      console.error('Error generating signals:', error);
+      console.error('Error generating v3 signals:', error);
       toast({
-        title: "Erro ao gerar sinais",
-        description: error.message || "Ocorreu um erro ao analisar dados de mercado",
+        title: "❌ Erro ao gerar sinais v3",
+        description: "Falha na conexão ou análise. Tente novamente em alguns instantes.",
         variant: "destructive"
       });
     } finally {
@@ -337,13 +311,13 @@ const SignalsDashboard = () => {
     <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-6 gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">💰 Sinais Monster v3 Lucrativo</h1>
           <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base">
-            Oportunidades de trading com estratégias avançadas
+            Sistema de alta rentabilidade com score mínimo de 65 pontos
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs bg-gradient-to-r from-blue-100 to-green-100 text-green-800 font-medium px-3 py-1 rounded-full">
-            Monster v2 Ajustado | v2 Top5 | v3 Lucrativo (Score ≥65)
+          <span className="text-xs bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 font-medium px-3 py-1 rounded-full">
+            💰 Monster v3 Lucrativo - Alto Payoff (Score ≥65) - RSI ≤45/≥55
           </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
               Última atualização: {formatLastUpdated()}
@@ -351,75 +325,21 @@ const SignalsDashboard = () => {
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-          <Button 
-            onClick={() => handleGenerateStrategy('monster-v2')}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-primary to-primary-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Gerando Sinais...
-              </>
-            ) : (
-              <>
-                <Zap className="mr-2 h-4 w-4" />
-                Gerar Monster v2
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={() => handleGenerateStrategy('monster-v2-top5')}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-accent to-accent-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Gerando Top 5...
-              </>
-            ) : (
-              <>
-                <Trophy className="mr-2 h-4 w-4" />
-                Gerar Top 5
-              </>
-            )}
-          </Button>
-          
+        <div className="flex items-center justify-center">
           <Button 
             onClick={() => handleGenerateStrategy('monster-v3-lucrativo')}
             disabled={isGenerating}
-            className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-8 py-3 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 text-lg"
           >
             {isGenerating ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Gerando v3...
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Gerando Sinais v3 Lucrativo...
               </>
             ) : (
               <>
                 💰
-                <span className="ml-1">v3 Lucrativo</span>
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            onClick={() => handleGenerateStrategy('monster-v3-lucrativo')}
-            disabled={isGenerating}
-            className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Gerando v3...
-              </>
-            ) : (
-              <>
-                💰
-                <span className="ml-1">v3 Lucrativo</span>
+                <span className="ml-2">Gerar Sinais Monster v3 Lucrativo</span>
               </>
             )}
           </Button>
@@ -434,12 +354,11 @@ const SignalsDashboard = () => {
       <Tabs defaultValue="normal" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="normal">
-            🎯 Monster v2/v3 Signals
+            💰 Monster v3 Lucrativo
           </TabsTrigger>
           <TabsTrigger value="classic">
             📊 Classic v2
           </TabsTrigger>
-          
         </TabsList>
         
         <TabsContent value="normal">
