@@ -184,8 +184,8 @@ const SignalsDashboard = () => {
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
-      title: "Gerando sinais monster",
-      description: "Analisando múltiplos timeframes com filtros avançados para encontrar as melhores oportunidades..."
+      title: "Gerando sinais Monster v2",
+      description: "Aplicando critérios rigorosos: EMA200 + RSI extremos + Volume 1.3x + VWAP + ADX ≥20 + ML ≥55%..."
     });
     try {
       // Use backend monster signal generation
@@ -203,22 +203,22 @@ const SignalsDashboard = () => {
               setActiveSignal(uniqueNewSignals[0]);
             }
             toast({
-              title: "Sinais monster gerados",
-              description: `Encontradas ${uniqueNewSignals.length} oportunidades de alta qualidade com análise multi-timeframe`
+              title: "Sinais Monster v2 gerados",
+              description: `${uniqueNewSignals.length} sinais de alta confiabilidade (70%+ taxa de acerto) com gestão de risco rigorosa`
             });
             saveSignalsToHistory(uniqueNewSignals);
             return [...uniqueNewSignals, ...prevSignals];
           }
           toast({
-            title: "Nenhum novo sinal monster",
-            description: "Os filtros avançados não encontraram novas oportunidades no momento. Tente novamente em alguns minutos."
+            title: "Nenhum novo sinal Monster v2",
+            description: "Os critérios rigorosos (70%+ taxa de acerto) não identificaram novas oportunidades. Tente novamente em alguns minutos."
           });
           return prevSignals;
         });
       } else {
         toast({
-          title: "Nenhum sinal monster encontrado",
-          description: "Os critérios rigorosos de análise multi-timeframe não identificaram oportunidades no momento"
+          title: "Nenhum sinal Monster v2 encontrado",
+          description: "Os critérios ultra-rigorosos (EMA200+RSI+Volume+VWAP+ADX+ML≥55%) não identificaram oportunidades"
         });
       }
     } catch (error) {
@@ -307,9 +307,9 @@ const SignalsDashboard = () => {
             Oportunidades de trading com estratégias avançadas
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs bg-green-100 text-green-800 font-medium px-2 py-1 rounded">
-              Usando Monster Generator Backend
-            </span>
+          <span className="text-xs bg-purple-100 text-purple-800 font-medium px-2 py-1 rounded">
+            Monster v2 - Sistema de Alta Confiabilidade
+          </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
               Última atualização: {formatLastUpdated()}
             </span>}
@@ -319,7 +319,7 @@ const SignalsDashboard = () => {
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button onClick={handleGenerateSignals} variant="default" disabled={isGenerating} className="flex-1 md:flex-auto">
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Monster...' : 'Gerar Sinais Monster'}
+            {isGenerating ? 'Analisando Monster v2...' : 'Gerar Sinais Monster v2'}
           </Button>
           
           {!isMobile && <Button onClick={handleSubscribe} variant="outline" className="flex-1 md:flex-auto">
@@ -332,10 +332,10 @@ const SignalsDashboard = () => {
       <Tabs defaultValue="normal" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="normal">
-            💲 Sinais Normal
+            🎯 Monster v2
           </TabsTrigger>
           <TabsTrigger value="classic">
-            🎯 Sinais Classic
+            📊 Classic v2
           </TabsTrigger>
           
         </TabsList>

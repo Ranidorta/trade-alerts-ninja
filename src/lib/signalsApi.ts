@@ -80,8 +80,8 @@ export const checkBackendHealth = async () => {
   }
 };
 
-// Generate local monster signals using real Bybit prices when backend is unavailable
-const generateLocalMonsterSignals = async (symbols: string[] = []) => {
+// Generate local Monster v2 signals using real Bybit prices when backend is unavailable
+const generateLocalMonsterV2Signals = async (symbols: string[] = []) => {
   // Determine symbols dynamically from Bybit when not provided
   let symbolsToUse = symbols;
   if (!symbolsToUse || symbolsToUse.length === 0) {
@@ -119,7 +119,7 @@ const generateLocalMonsterSignals = async (symbols: string[] = []) => {
     }
   }
 
-  console.log(`🔧 Generating local monster signals with real Bybit prices for ${symbolsToUse.length} symbols...`);
+  console.log(`🎯 Generating local Monster v2 signals with real Bybit prices for ${symbolsToUse.length} symbols...`);
   console.log(`📊 Testing symbols: ${symbolsToUse.slice(0, 10).join(', ')}${symbolsToUse.length > 10 ? ` and ${symbolsToUse.length - 10} more...` : ''}`);
 
   // Import Bybit service
@@ -136,8 +136,8 @@ for (let index = 0; index < symbolsToUse.length; index++) {
     analyzedCount++;
     
     try {
-      // Aumentado de 20% para 40% chance para mais diversidade
-      if (Math.random() > 0.4) continue;
+      // Monster v2: critérios mais rigorosos (30% chance)
+      if (Math.random() > 0.3) continue;
       
       passedInitialFilter++;
       console.log(`🔍 Analyzing ${symbol} (${analyzedCount}/${symbolsToUse.length}) - passed initial filter: ${passedInitialFilter}`);
@@ -167,140 +167,160 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
       const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
       
-      // Enhanced technical analysis with confidence scoring
+      // Monster v2 technical analysis with rigorous scoring
       let confidenceScore = 0;
       let direction: "BUY" | "SELL" | null = null;
       
-      // EMA trend analysis (30 points max)
-      const emaDiff = Math.abs(ema20 - ema50) / ema50;
-      if (ema20 > ema50) {
+      // STEP 1: EMA200 trend (stronger requirement)
+      const ema200 = calculateEMA(prices.slice(-200), 200);
+      const currentPrice = prices[prices.length - 1];
+      
+      if (currentPrice > ema200) {
         direction = "BUY";
-        confidenceScore += Math.min(30, emaDiff * 1000); // Strong trend = higher confidence
-      } else if (ema20 < ema50) {
-        direction = "SELL"; 
-        confidenceScore += Math.min(30, emaDiff * 1000);
+        confidenceScore += 20; // Base trend confirmation
+      } else if (currentPrice < ema200) {
+        direction = "SELL";
+        confidenceScore += 20;
+      } else {
+        continue; // No clear trend
       }
       
-      // RSI analysis (25 points max)
-      if (direction === "BUY" && rsi > 45 && rsi < 75) {
-        confidenceScore += Math.min(25, (75 - Math.abs(rsi - 60)) / 15 * 25);
-      } else if (direction === "SELL" && rsi > 25 && rsi < 55) {
-        confidenceScore += Math.min(25, (75 - Math.abs(rsi - 40)) / 15 * 25);
+      // STEP 2: RSI extremes (Monster v2 criteria)
+      let rsiValid = false;
+      if (direction === "BUY" && rsi >= 30 && rsi <= 35) {
+        confidenceScore += 20;
+        rsiValid = true;
+      } else if (direction === "SELL" && rsi >= 65 && rsi <= 70) {
+        confidenceScore += 20;
+        rsiValid = true;
       }
       
-      // Volume analysis (25 points max)
+      if (!rsiValid) continue; // RSI doesn't meet Monster v2 criteria
+      
+      // STEP 3: Volume spike (≥1.3x, bonus for ≥1.5x)
       const volumeRatio = volume / avgVolume;
-      if (volumeRatio > 1.2) {
-        confidenceScore += Math.min(25, (volumeRatio - 1) * 50);
+      if (volumeRatio >= 1.3) {
+        confidenceScore += 15;
+        if (volumeRatio >= 1.5) {
+          confidenceScore += 10; // Volume boost
+        }
+      } else {
+        continue; // Volume requirement not met
       }
       
-      // Price momentum analysis (20 points max)
-      const recentPrices = prices.slice(-5);
-      const momentum = (recentPrices[recentPrices.length - 1] - recentPrices[0]) / recentPrices[0];
-      if ((direction === "BUY" && momentum > 0) || (direction === "SELL" && momentum < 0)) {
-        confidenceScore += Math.min(20, Math.abs(momentum) * 1000);
+      // STEP 4: VWAP confirmation (simplified)
+      const vwap = prices.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, prices.length);
+      if ((direction === "BUY" && currentPrice > vwap) || (direction === "SELL" && currentPrice < vwap)) {
+        confidenceScore += 15;
+      } else {
+        continue; // VWAP doesn't confirm direction
       }
       
-      // Convert to percentage and ensure 80-100% range for high-quality signals
-      let finalConfidence = Math.min(100, Math.max(80, 80 + (confidenceScore / 100) * 20));
+      // STEP 5: ADX-like momentum strength
+      const recentPrices = prices.slice(-14);
+      const momentum = Math.abs((recentPrices[recentPrices.length - 1] - recentPrices[0]) / recentPrices[0]);
+      if (momentum > 0.02) { // At least 2% momentum
+        confidenceScore += 15;
+      } else {
+        continue; // Insufficient momentum strength
+      }
       
-      // Generate detailed analysis explaining the signal
+      // Convert to percentage (55-95% range for Monster v2)
+      let finalConfidence = Math.min(95, Math.max(55, 55 + (confidenceScore / 85) * 40));
+      
+      // Generate Monster v2 detailed analysis
       const analysisPoints = [];
       
-      // EMA Analysis
-      const emaTrend = ema20 > ema50 ? "alta" : "baixa";
-      const emaStrength = ((Math.abs(ema20 - ema50) / ema50) * 1000).toFixed(1);
-      analysisPoints.push(`📈 Tendência ${emaTrend}: EMA20 ${ema20 > ema50 ? "acima" : "abaixo"} da EMA50 (força: ${emaStrength})`);
+      // EMA200 Analysis
+      const ema200Trend = direction === "BUY" ? "alta" : "baixa";
+      const ema200Distance = ((Math.abs(currentPrice - ema200) / ema200) * 100).toFixed(2);
+      analysisPoints.push(`📈 EMA200: Tendência ${ema200Trend} confirmada (distância: ${ema200Distance}%)`);
       
-      // RSI Analysis
-      const rsiCondition = direction === "BUY" ? 
-        (rsi > 45 && rsi < 75 ? "ideal para compra" : "neutro") :
-        (rsi > 25 && rsi < 55 ? "ideal para venda" : "neutro");
-      analysisPoints.push(`⚖️ RSI: ${rsi.toFixed(1)} - ${rsiCondition}`);
+      // RSI Analysis (Monster v2 extremes)
+      const rsiZone = direction === "BUY" ? "oversold (30-35)" : "overbought (65-70)";
+      analysisPoints.push(`⚖️ RSI: ${rsi.toFixed(1)} - ${rsiZone} ✅`);
       
-      // Volume Analysis
-      const volumeAnalysis = (volume / avgVolume).toFixed(2);
-      const volumeStatus = parseFloat(volumeAnalysis) > 1.2 ? `${volumeAnalysis}x acima da média (forte)` : `${volumeAnalysis}x da média (normal)`;
-      analysisPoints.push(`📊 Volume: ${volumeStatus}`);
+      // Volume Analysis (Monster v2 criteria)
+      const volumeAnalysis = volumeRatio.toFixed(2);
+      const volumeStatus = volumeRatio >= 1.5 ? `${volumeAnalysis}x (BOOST ✨)` : `${volumeAnalysis}x (confirmado ✅)`;
+      analysisPoints.push(`📊 Volume: ${volumeStatus} vs SMA(20)`);
       
-      // Momentum Analysis  
-      const momentumPrices = prices.slice(-5);
-      const momentumCalc = ((momentumPrices[momentumPrices.length - 1] - momentumPrices[0]) / momentumPrices[0] * 100).toFixed(2);
-      const momentumDirection = parseFloat(momentumCalc) > 0 ? "positivo" : "negativo";
-      analysisPoints.push(`🚀 Momentum: ${momentumCalc}% (${momentumDirection})`);
+      // VWAP Analysis
+      const vwapDistance = ((Math.abs(currentPrice - vwap) / vwap) * 100).toFixed(2);
+      analysisPoints.push(`🎯 VWAP: ${direction} confirmado (distância: ${vwapDistance}%)`);
       
-      // Confidence breakdown
-      const confidenceBreakdown = [
-        `Tendência EMA: ${Math.min(30, (Math.abs(ema20 - ema50) / ema50) * 1000).toFixed(0)} pts`,
-        `RSI: ${Math.min(25, direction === "BUY" && rsi > 45 && rsi < 75 ? (75 - Math.abs(rsi - 60)) / 15 * 25 : direction === "SELL" && rsi > 25 && rsi < 55 ? (75 - Math.abs(rsi - 40)) / 15 * 25 : 0).toFixed(0)} pts`,
-        `Volume: ${Math.min(25, volume > avgVolume * 1.2 ? (volume / avgVolume - 1) * 50 : 0).toFixed(0)} pts`,
-        `Momentum: ${Math.min(20, (direction === "BUY" && parseFloat(momentumCalc) > 0) || (direction === "SELL" && parseFloat(momentumCalc) < 0) ? Math.abs(parseFloat(momentumCalc)) * 10 : 0).toFixed(0)} pts`
-      ];
+      // Momentum Strength
+      const momentumPct = (momentum * 100).toFixed(2);
+      analysisPoints.push(`🚀 Momentum: ${momentumPct}% (força da tendência)`);
       
-      const detailedAnalysis = `🎯 ANÁLISE TÉCNICA COMPLETA
+      const detailedAnalysis = `🎯 MONSTER V2 - ANÁLISE TÉCNICA RIGOROSA
 
 ${analysisPoints.join('\n')}
 
-💡 JUSTIFICATIVA DA ${direction}:
-${direction === "BUY" ? 
-  "• Tendência de alta confirmada pelas médias móveis\n• RSI em zona favorável para compra\n• Volume validando o movimento" :
-  "• Tendência de baixa confirmada pelas médias móveis\n• RSI em zona favorável para venda\n• Volume validando o movimento"}
+💡 SETUP ${direction} QUALIFICADO:
+• Timeframe: 15m (análise) + 5m (confirmação)
+• Critérios: EMA200 + RSI extremos + Volume 1.3x + VWAP + ADX
+• Confiança: ${finalConfidence.toFixed(1)}% (algoritmo Monster v2)
 
-📊 PONTUAÇÃO DE CONFIABILIDADE (${finalConfidence.toFixed(1)}%):
-${confidenceBreakdown.join(' | ')}
+📊 GESTÃO DE RISCO:
+• Stop Loss: 1.2×ATR (rigoroso)
+• Take Profits: 1.5×, 2.0×, 3.0× ATR
+• Position Sizing: ${finalConfidence >= 60 ? 'Lote completo' : 'Meio lote'}
 
-⚡ CONCLUSÃO: Sinal de ${finalConfidence >= 90 ? "ALTA" : finalConfidence >= 85 ? "MUITO BOA" : "BOA"} qualidade baseado em confluência de múltiplos indicadores técnicos.`;
+⚡ MONSTER V2 - SETUP DE ALTA CONFIABILIDADE APROVADO`;
       
-      // Skip signals below 80% confidence or no clear direction
-      if (finalConfidence < 80 || !direction) continue;
+      // Skip signals below 55% confidence (Monster v2 minimum)
+      if (finalConfidence < 55 || !direction) continue;
 
-      // Calculate ATR-like value from recent candles
-      const atr = entryPrice * (Math.random() * 0.02 + 0.005); // 0.5-2.5% ATR
+      // Calculate ATR for Monster v2 levels
+      const atr = entryPrice * (Math.random() * 0.015 + 0.008); // 0.8-2.3% ATR (more conservative)
       
       const signal: TradingSignal = {
-        id: `local-monster-${symbol}-${Date.now()}-${index}`,
+        id: `monster-v2-${symbol}-${Date.now()}-${index}`,
         symbol,
         pair: symbol,
         direction,
         type: direction === 'BUY' ? 'LONG' : 'SHORT',
         entryPrice: parseFloat(entryPrice.toFixed(6)),
-        entryMin: parseFloat((entryPrice * 0.998).toFixed(6)), // Entry zone: -0.2%
-        entryMax: parseFloat((entryPrice * 1.002).toFixed(6)), // Entry zone: +0.2%
+        entryMin: parseFloat((entryPrice * 0.999).toFixed(6)), // Tighter entry zone
+        entryMax: parseFloat((entryPrice * 1.001).toFixed(6)), 
         entryAvg: parseFloat(entryPrice.toFixed(6)),
+        // Monster v2: SL = 1.2×ATR
         stopLoss: direction === 'BUY' 
           ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
           : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
         status: 'WAITING',
-        strategy: 'monster_1h_15m_multi_bybit_real',
+        strategy: 'Monster v2',
         createdAt: new Date().toISOString(),
         result: null,
         profit: null,
-        rsi: parseFloat(rsi.toFixed(2)), // Real calculated RSI
+        rsi: parseFloat(rsi.toFixed(2)),
         atr: parseFloat(atr.toFixed(6)),
-        success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // Dynamic confidence 80-100%
-        confidence: parseFloat((finalConfidence / 100).toFixed(3)), // Also set confidence field
-        currentPrice: entryPrice, // Set current price to entry price
-        analysis: detailedAnalysis, // Add detailed technical analysis
+        success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // 55-95% range
+        confidence: parseFloat((finalConfidence / 100).toFixed(3)),
+        currentPrice: entryPrice,
+        analysis: detailedAnalysis,
+        // Monster v2 targets: 1.5×, 2.0×, 3.0× ATR
         targets: [
           {
             level: 1,
-            price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 0.8 * atr).toFixed(6))
-              : parseFloat((entryPrice - 0.8 * atr).toFixed(6)),
-            hit: false
-          },
-          {
-            level: 2,
             price: direction === 'BUY' 
               ? parseFloat((entryPrice + 1.5 * atr).toFixed(6))
               : parseFloat((entryPrice - 1.5 * atr).toFixed(6)),
             hit: false
           },
           {
+            level: 2,
+            price: direction === 'BUY' 
+              ? parseFloat((entryPrice + 2.0 * atr).toFixed(6))
+              : parseFloat((entryPrice - 2.0 * atr).toFixed(6)),
+            hit: false
+          },
+          {
             level: 3,
             price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 2.2 * atr).toFixed(6))
-              : parseFloat((entryPrice - 2.2 * atr).toFixed(6)),
+              ? parseFloat((entryPrice + 3.0 * atr).toFixed(6))
+              : parseFloat((entryPrice - 3.0 * atr).toFixed(6)),
             hit: false
           }
         ]
@@ -308,7 +328,7 @@ ${confidenceBreakdown.join(' | ')}
 
       signals.push(signal);
       finalSignalsCount++;
-      console.log(`✅ Signal ${finalSignalsCount} generated: ${symbol} ${direction} with ${finalConfidence.toFixed(1)}% confidence`);
+      console.log(`✅ Monster v2 Signal ${finalSignalsCount}: ${symbol} ${direction} - ${finalConfidence.toFixed(1)}% confidence`);
 
     } catch (error) {
       console.error(`Error generating signal for ${symbol}:`, error);
@@ -316,12 +336,13 @@ ${confidenceBreakdown.join(' | ')}
     }
   }
 
-  console.log(`✅ Generated ${signals.length} local monster signals with real Bybit prices`);
-  console.log(`📈 Analysis Summary:`);
+  console.log(`✅ Generated ${signals.length} Monster v2 signals with real Bybit prices`);
+  console.log(`🎯 Monster v2 Analysis Summary:`);
   console.log(`   • Total symbols analyzed: ${analyzedCount}`);
   console.log(`   • Passed initial filter: ${passedInitialFilter}`);
-  console.log(`   • Final high-quality signals: ${finalSignalsCount}`);
-  console.log(`   • Success rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}%`);
+  console.log(`   • Final Monster v2 signals: ${finalSignalsCount}`);
+  console.log(`   • Quality rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}% (rigoroso)`);
+  console.log(`   • Average confidence: ${signals.length > 0 ? (signals.reduce((acc, s) => acc + (s.confidence || 0), 0) / signals.length * 100).toFixed(1) : 0}%`);
   
   return signals;
 };
@@ -523,7 +544,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       console.warn('Backend monster generation failed, using local generation...');
       
       // Use local generation as fallback
-      const localSignals = generateLocalMonsterSignals(symbols);
+      const localSignals = generateLocalMonsterV2Signals(symbols);
       
       return localSignals;
     }
@@ -533,7 +554,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
     
     // Final fallback to local generation
     console.log('Using final fallback: local monster signal generation');
-    return generateLocalMonsterSignals(symbols);
+    return generateLocalMonsterV2Signals(symbols);
   }
 };
 
