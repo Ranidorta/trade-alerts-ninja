@@ -82,7 +82,12 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
       bValue = resultToNumber(b.result);
     }
     
-    if (aValue === bValue) return 0;
+    if (aValue === bValue) {
+      // Se valores iguais, sempre ordenar por data mais recente como critério secundário
+      const aDate = new Date(a.createdAt || 0).getTime();
+      const bDate = new Date(b.createdAt || 0).getTime();
+      return bDate - aDate; // Mais recente primeiro
+    }
     
     const comparison = aValue < bValue ? -1 : 1;
     return sortDirection === "asc" ? comparison : -comparison;
@@ -222,9 +227,19 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
   };
   
   const shouldShowVerifyButton = (signal: TradingSignal) => {
-    return signal.result === undefined && 
-           signal.status !== "COMPLETED" && 
-           signal.status !== "WAITING";
+    // REGRA: Botão ativo apenas para PENDING ou PARTIAL
+    // WINNER e LOSER não podem ser revalidados
+    const hasUndefinedResult = signal.result === undefined || signal.result === "PENDING";
+    const hasPartialResult = signal.result === "PARTIAL";
+    const hasFinalResult = signal.result === "WINNER" || signal.result === "LOSER" || signal.result === 1 || signal.result === 0;
+    
+    // Só mostrar botão se não tiver resultado final
+    return (hasUndefinedResult || hasPartialResult) && !hasFinalResult;
+  };
+
+  const canRevalidate = (signal: TradingSignal) => {
+    // REGRA: Apenas sinais PARCIAIS podem ser revalidados
+    return signal.result === "PARTIAL";
   };
   
   if (signals.length === 0) {
@@ -372,13 +387,20 @@ export default function SignalHistoryTable({ signals, onVerifySingleSignal }: Si
                     {shouldShowVerifyButton(signal) ? (
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant={canRevalidate(signal) ? "default" : "outline"}
                         onClick={() => handleVerifySignal(signal.id)}
                         disabled={verifyingSignal === signal.id}
                       >
-                        {verifyingSignal === signal.id ? 'Verificando...' : 'Verificar'}
+                        {verifyingSignal === signal.id ? 'Verificando...' : 
+                         canRevalidate(signal) ? 'Revalidar' : 'Verificar'}
                       </Button>
-                    ) : null}
+                    ) : (
+                      signal.result === "WINNER" || signal.result === "LOSER" ? (
+                        <Badge variant="outline" className="text-xs">
+                          Finalizado
+                        </Badge>
+                      ) : null
+                    )}
                   </TableCell>
                 )}
               </TableRow>
