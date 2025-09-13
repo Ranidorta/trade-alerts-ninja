@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { TradingSignal, SignalStatus } from "@/lib/types";
-import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
+import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -19,12 +20,20 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import HybridSignalsTab from "@/components/signals/HybridSignalsTab";
+import TradingEsportivoTab from "@/components/signals/TradingEsportivoTab";
 
 // Key for storing whether signals have been generated before
 const SIGNALS_GENERATED_KEY = "signals_generated_before";
 
 const SignalsDashboard = () => {
+  const [searchParams] = useSearchParams();
   const [signals, setSignals] = useState<TradingSignal[]>([]);
   const [filteredSignals, setFilteredSignals] = useState<TradingSignal[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,6 +48,15 @@ const SignalsDashboard = () => {
   const [signalsGeneratedBefore, setSignalsGeneratedBefore] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("classic");
   const isMobile = useIsMobile();
+
+  // Get tab from URL params
+  const tabFromUrl = searchParams.get('tab');
+  
+  useEffect(() => {
+    if (tabFromUrl === 'esportivo') {
+      setActiveTab('esportivo');
+    }
+  }, [tabFromUrl]);
   
   const {
     toast
@@ -323,7 +341,17 @@ const SignalsDashboard = () => {
   const showEmptyState = !signalsGeneratedBefore || (signalsGeneratedBefore && signals.length === 0 && activeTab === "classic");
   
   return (
-    <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AppSidebar />
+        <SidebarInset>
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold">Trading Ninja Dashboard</h1>
+            </div>
+          </header>
+          <div className="flex-1 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-6 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
@@ -364,15 +392,18 @@ const SignalsDashboard = () => {
         </div>
       </div>
       
-      <Tabs defaultValue="classic" className="w-full" onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="classic">
-            💲 Trade Ninja Classic
-          </TabsTrigger>
-          <TabsTrigger value="hybrid">
-            🧠 Trade Ninja Híbrido
-          </TabsTrigger>
-        </TabsList>
+        <Tabs value={activeTab} className="w-full" onValueChange={setActiveTab}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="classic">
+              💲 Trade Ninja Classic
+            </TabsTrigger>
+            <TabsTrigger value="hybrid">
+              🧠 Trade Ninja Híbrido
+            </TabsTrigger>
+            <TabsTrigger value="esportivo">
+              🏆 Trading Esportivo
+            </TabsTrigger>
+          </TabsList>
         
         <TabsContent value="classic">
           {isMobile ? (
@@ -593,11 +624,18 @@ const SignalsDashboard = () => {
           )}
         </TabsContent>
         
-        <TabsContent value="hybrid">
-          <HybridSignalsTab />
-        </TabsContent>
-      </Tabs>
-    </div>
+          <TabsContent value="hybrid">
+            <HybridSignalsTab />
+          </TabsContent>
+          
+          <TabsContent value="esportivo">
+            <TradingEsportivoTab />
+          </TabsContent>
+        </Tabs>
+          </div>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 };
 
