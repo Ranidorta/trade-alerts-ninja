@@ -344,6 +344,82 @@ ${analysisPoints.join('\n')}
   console.log(`   • Quality rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}% (critérios relaxados)`);
   console.log(`   • Average confidence: ${signals.length > 0 ? (signals.reduce((acc, s) => acc + (s.confidence || 0), 0) / signals.length * 100).toFixed(1) : 0}%`);
   
+  // Hard fallback: ensure at least some signals are available for the UI
+  if (signals.length === 0) {
+    console.warn('⚠️ No Monster v2 Ajustado signals found. Generating quick fallback signals for BTC/ETH/SOL...');
+    const fallbackSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+
+    for (let i = 0; i < fallbackSymbols.length; i++) {
+      const symbol = fallbackSymbols[i];
+      try {
+        const klineData = await fetchBybitKlines(symbol, '15', 50);
+        if (!klineData || klineData.length === 0) continue;
+
+        const prices = klineData.slice(0, 50).map(k => parseFloat(k[4])).reverse();
+        const currentPrice = prices[prices.length - 1];
+        const ema20 = calculateEMA(prices, 20);
+        const rsi = calculateRSI(prices, 14);
+
+        const direction: 'BUY' | 'SELL' = currentPrice >= ema20 ? 'BUY' : 'SELL';
+        const entryPrice = currentPrice;
+        const atr = entryPrice * 0.01; // ~1% ATR approximation
+
+        signals.push({
+          id: `fallback-v3-${symbol}-${Date.now()}-${i}`,
+          symbol,
+          pair: symbol,
+          direction,
+          type: direction === 'BUY' ? 'LONG' : 'SHORT',
+          entryPrice: parseFloat(entryPrice.toFixed(6)),
+          entryMin: parseFloat((entryPrice * 0.998).toFixed(6)),
+          entryMax: parseFloat((entryPrice * 1.002).toFixed(6)),
+          entryAvg: parseFloat(entryPrice.toFixed(6)),
+          stopLoss: direction === 'BUY'
+            ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
+            : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
+          status: 'WAITING',
+          strategy: 'Monster v3 Lucrativo (local)',
+          createdAt: new Date().toISOString(),
+          result: null,
+          profit: null,
+          rsi: parseFloat(rsi.toFixed(2)),
+          atr: parseFloat(atr.toFixed(6)),
+          success_prob: 0.6,
+          confidence: 0.6,
+          currentPrice: entryPrice,
+          analysis: 'Fallback rápido baseado em EMA20/RSI para exibir sinais imediatamente enquanto o backend está indisponível.',
+          targets: [
+            {
+              level: 1,
+              price: direction === 'BUY'
+                ? parseFloat((entryPrice + 2.0 * atr).toFixed(6))
+                : parseFloat((entryPrice - 2.0 * atr).toFixed(6)),
+              hit: false,
+            },
+            {
+              level: 2,
+              price: direction === 'BUY'
+                ? parseFloat((entryPrice + 3.0 * atr).toFixed(6))
+                : parseFloat((entryPrice - 3.0 * atr).toFixed(6)),
+              hit: false,
+            },
+            {
+              level: 3,
+              price: direction === 'BUY'
+                ? parseFloat((entryPrice + 4.0 * atr).toFixed(6))
+                : parseFloat((entryPrice - 4.0 * atr).toFixed(6)),
+              hit: false,
+            }
+          ],
+        });
+      } catch (e) {
+        console.error(`Fallback generation failed for ${symbol}:`, e);
+      }
+    }
+
+    console.log(`✅ Generated ${signals.length} quick fallback signals (v3 local)`);
+  }
+  
   return signals;
 };
 

@@ -483,13 +483,13 @@ const SignalsDashboard = () => {
               <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-100 text-blue-600 mb-2 sm:mb-4">
                 <Zap className="h-6 w-6 sm:h-8 sm:w-8" />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais monster</h3>
+              <h3 className="text-lg sm:text-xl font-semibold mb-1 sm:mb-2">Gere seus primeiros sinais Monster v3 Lucrativo</h3>
               <p className="text-slate-600 dark:text-slate-300 text-sm sm:text-base max-w-md mx-auto mb-3 sm:mb-6">
-                Clique no botão "Gerar Sinais Monster" para usar análise multi-timeframe avançada e encontrar as melhores oportunidades.
+                Clique no botão "Gerar Sinais Monster v3 Lucrativo" para usar análise de alto payoff (score ≥65) e encontrar as melhores oportunidades.
               </p>
-              <Button onClick={handleGenerateSignals} disabled={isGenerating}>
+              <Button onClick={() => handleGenerateStrategy('monster-v3-lucrativo')} disabled={isGenerating}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-                {isGenerating ? 'Analisando Monster...' : 'Gerar Sinais Monster Agora'}
+                {isGenerating ? 'Analisando v3 Lucrativo...' : 'Gerar Sinais Monster v3 Lucrativo'}
               </Button>
             </div>}
           
