@@ -181,16 +181,8 @@ const SignalsDashboard = () => {
       description: "Você receberá alertas quando novos sinais forem postados"
     });
   };
-  // Function to call the correct generation method  
-  const handleGenerateSignals = async () => {
-    setIsGenerating(true);
-    toast({
-      title: "Gerando sinais Monster v2 Ajustado",
-      description: "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50% para mais oportunidades..."
-    });
-    try {
-      // Use backend monster signal generation
-      const newSignals = await generateMonsterSignals();
+  // Generate signals with different strategies
+  const handleGenerateStrategy = async (strategy: string) => {
     setIsGenerating(true);
     
     try {
@@ -263,6 +255,20 @@ const SignalsDashboard = () => {
         variant: "destructive"
       });
     } finally {
+      setIsGenerating(false);
+      setLastUpdated(new Date());
+    }
+  };
+
+  const handleGenerateSignals = async () => {
+    setIsGenerating(true);
+    toast({
+      title: "Gerando sinais Monster v2 Ajustado",
+      description: "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50% para mais oportunidades..."
+    });
+    try {
+      // Use backend monster signal generation
+      const newSignals = await generateMonsterSignals();
       if (newSignals.length > 0) {
         // Mark that signals have been generated before
         localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
@@ -307,104 +313,6 @@ const SignalsDashboard = () => {
     }
   };
 
-  const handleGenerateSignals = async () => {
-    setIsGenerating(true);
-    toast({
-      title: "Gerando sinais Monster v2 Ajustado",
-      description: "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50% para mais oportunidades..."
-    });
-    try {
-      // Use backend monster signal generation
-      const newSignals = await generateMonsterSignals();
-      if (newSignals.length > 0) {
-        // Mark that signals have been generated before
-        localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
-        setSignalsGeneratedBefore(true);
-        setSignals(prevSignals => {
-          const existingIds = new Set(prevSignals.map(s => s.id));
-          const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
-          if (uniqueNewSignals.length > 0) {
-            addSignals(uniqueNewSignals);
-            if (!activeSignal) {
-              setActiveSignal(uniqueNewSignals[0]);
-            }
-            toast({
-              title: "Sinais Monster v2 Ajustado gerados",
-              description: `${uniqueNewSignals.length} sinais com critérios relaxados para mais oportunidades mantendo qualidade`
-            });
-            saveSignalsToHistory(uniqueNewSignals);
-            return [...uniqueNewSignals, ...prevSignals];
-          }
-          toast({
-            title: "Nenhum novo sinal Monster v2",
-            description: "Os critérios rigorosos (70%+ taxa de acerto) não identificaram novas oportunidades. Tente novamente em alguns minutos."
-          });
-          return prevSignals;
-        });
-      } else {
-        toast({
-          title: "Nenhum sinal Monster v2 encontrado",
-          description: "Os critérios ultra-rigorosos (EMA200+RSI+Volume+VWAP+ADX+ML≥55%) não identificaram oportunidades"
-        });
-      }
-    } catch (error) {
-      console.error("Error generating monster signals:", error);
-
-      // Fallback to local generation if backend fails
-      if (error.message?.includes('Cannot connect to backend')) {
-        toast({
-          title: "Backend indisponível",
-          description: "Tentando geração local como fallback...",
-          variant: "destructive"
-        });
-
-        // Import and use local generation as fallback
-        try {
-          const {
-            generateAllSignals
-          } = await import("@/lib/apiServices");
-          const fallbackSignals = await generateAllSignals();
-          if (fallbackSignals.length > 0) {
-            localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
-            setSignalsGeneratedBefore(true);
-            setSignals(prevSignals => {
-              const existingIds = new Set(prevSignals.map(s => s.id));
-              const uniqueNewSignals = fallbackSignals.filter(s => !existingIds.has(s.id));
-              if (uniqueNewSignals.length > 0) {
-                addSignals(uniqueNewSignals);
-                if (!activeSignal) {
-                  setActiveSignal(uniqueNewSignals[0]);
-                }
-                toast({
-                  title: "Sinais locais gerados",
-                  description: `Gerados ${uniqueNewSignals.length} sinais usando análise local`
-                });
-                saveSignalsToHistory(uniqueNewSignals);
-                return [...uniqueNewSignals, ...prevSignals];
-              }
-              return prevSignals;
-            });
-          }
-        } catch (fallbackError) {
-          console.error("Fallback generation also failed:", fallbackError);
-          toast({
-            title: "Erro na geração de sinais",
-            description: "Tanto o backend quanto a geração local falharam",
-            variant: "destructive"
-          });
-        }
-      } else {
-        toast({
-          title: "Erro ao gerar sinais monster",
-          description: error.message || "Ocorreu um erro ao analisar dados de mercado",
-          variant: "destructive"
-        });
-      }
-    } finally {
-      setIsGenerating(false);
-      setLastUpdated(new Date());
-    }
-  };
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh);
     toast({
@@ -425,7 +333,8 @@ const SignalsDashboard = () => {
 
   // Show empty state based on whether signals have been generated before
   const showEmptyState = !signalsGeneratedBefore || signalsGeneratedBefore && signals.length === 0 && activeTab === "normal";
-  return <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
+  return (
+    <div className="container mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-6 gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-1 sm:mb-2">Sinais de Trading</h1>
@@ -444,7 +353,7 @@ const SignalsDashboard = () => {
         
         <div className="flex items-center gap-4">
           <Button 
-            onClick={() => generateSignals('monster-v2')}
+            onClick={() => handleGenerateStrategy('monster-v2')}
             disabled={isGenerating}
             className="bg-gradient-to-r from-primary to-primary-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
@@ -462,7 +371,7 @@ const SignalsDashboard = () => {
           </Button>
           
           <Button 
-            onClick={() => generateSignals('monster-v2-top5')}
+            onClick={() => handleGenerateStrategy('monster-v2-top5')}
             disabled={isGenerating}
             className="bg-gradient-to-r from-accent to-accent-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
@@ -480,7 +389,25 @@ const SignalsDashboard = () => {
           </Button>
           
           <Button 
-            onClick={() => generateSignals('monster-v3-lucrativo')}
+            onClick={() => handleGenerateStrategy('monster-v3-lucrativo')}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando v3...
+              </>
+            ) : (
+              <>
+                💰
+                <span className="ml-1">v3 Lucrativo</span>
+              </>
+            )}
+          </Button>
+          
+          <Button 
+            onClick={() => handleGenerateStrategy('monster-v3-lucrativo')}
             disabled={isGenerating}
             className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
@@ -667,6 +594,7 @@ const SignalsDashboard = () => {
           <HybridSignalsTab />
         </TabsContent>
       </Tabs>
-    </div>;
+    </div>
+  );
 };
 export default SignalsDashboard;
