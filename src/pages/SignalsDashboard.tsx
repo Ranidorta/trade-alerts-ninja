@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { generateMonsterSignals } from "@/lib/signalsApi";
+import { generateMonsterSignals, generateSignals } from "@/lib/signalsApi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useTradingSignals } from "@/hooks/useTradingSignals";
 import { saveSignalsToHistory } from "@/lib/signalHistoryService";
@@ -181,44 +181,79 @@ const SignalsDashboard = () => {
       description: "Você receberá alertas quando novos sinais forem postados"
     });
   };
-  // Function to call the correct generation method
-  const generateSignals = async (strategy: string = 'monster-v2') => {
+  // Function to call the correct generation method  
+  const handleGenerateSignals = async () => {
+    setIsGenerating(true);
+    toast({
+      title: "Gerando sinais Monster v2 Ajustado",
+      description: "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50% para mais oportunidades..."
+    });
+    try {
+      // Use backend monster signal generation
+      const newSignals = await generateMonsterSignals();
     setIsGenerating(true);
     
     try {
-      if (strategy === 'monster-v2-top5') {
-        toast({
-          title: "Gerando Monster v2 Top5",
-          description: "Analisando os 10 pares mais líquidos para selecionar os top 5..."
-        });
-        // For now, call the same monster generation
-        // In the future, this will call the Top5 API
-        const newSignals = await generateMonsterSignals();
-        
-        if (newSignals.length > 0) {
-          localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
-          setSignalsGeneratedBefore(true);
-          setSignals(prevSignals => {
-            const existingIds = new Set(prevSignals.map(s => s.id));
-            const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
-            if (uniqueNewSignals.length > 0) {
-              addSignals(uniqueNewSignals);
-              if (!activeSignal) {
-                setActiveSignal(uniqueNewSignals[0]);
-              }
-              toast({
-                title: "Top 5 Monster v2 gerados",
-                description: `${uniqueNewSignals.length} sinais selecionados dos pares mais líquidos`
-              });
-              saveSignalsToHistory(uniqueNewSignals);
-              return [...uniqueNewSignals, ...prevSignals];
+      let title = "";
+      let description = "";
+      
+      switch (strategy) {
+        case 'monster-v3-lucrativo':
+          title = "Gerando Monster v3 Lucrativo";
+          description = "Focado em alto lucro líquido e payoff vantajoso (score ≥65)...";
+          break;
+        case 'monster-v2-top5':
+          title = "Gerando Monster v2 Top5";
+          description = "Analisando os 10 pares mais líquidos para selecionar os top 5...";
+          break;
+        default:
+          title = "Gerando sinais Monster v2 Ajustado";
+          description = "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50%...";
+      }
+      
+      toast({ title, description });
+      
+      // Use the new generateSignals function from the API
+      const newSignals = await generateSignals(strategy);
+      
+      if (newSignals.length > 0) {
+        localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
+        setSignalsGeneratedBefore(true);
+        setSignals(prevSignals => {
+          const existingIds = new Set(prevSignals.map(s => s.id));
+          const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+          if (uniqueNewSignals.length > 0) {
+            addSignals(uniqueNewSignals);
+            if (!activeSignal) {
+              setActiveSignal(uniqueNewSignals[0]);
             }
-            return prevSignals;
-          });
-        }
+            
+            let successTitle = "";
+            switch (strategy) {
+              case 'monster-v3-lucrativo':
+                successTitle = "Monster v3 Lucrativo gerados";
+                break;
+              case 'monster-v2-top5':
+                successTitle = "Top 5 Monster v2 gerados";
+                break;
+              default:
+                successTitle = "Sinais Monster v2 Ajustado gerados";
+            }
+            
+            toast({
+              title: successTitle,
+              description: `${uniqueNewSignals.length} sinais com critérios ${strategy}`
+            });
+            saveSignalsToHistory(uniqueNewSignals);
+            return [...uniqueNewSignals, ...prevSignals];
+          }
+          return prevSignals;
+        });
       } else {
-        // Regular Monster v2 generation
-        await handleGenerateSignals();
+        toast({
+          title: `Nenhum sinal ${strategy} encontrado`,
+          description: "Os critérios rigorosos não identificaram oportunidades no momento"
+        });
       }
     } catch (error) {
       console.error('Error generating signals:', error);
@@ -228,7 +263,47 @@ const SignalsDashboard = () => {
         variant: "destructive"
       });
     } finally {
+      if (newSignals.length > 0) {
+        // Mark that signals have been generated before
+        localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
+        setSignalsGeneratedBefore(true);
+        setSignals(prevSignals => {
+          const existingIds = new Set(prevSignals.map(s => s.id));
+          const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+          if (uniqueNewSignals.length > 0) {
+            addSignals(uniqueNewSignals);
+            if (!activeSignal) {
+              setActiveSignal(uniqueNewSignals[0]);
+            }
+            toast({
+              title: "Sinais Monster v2 Ajustado gerados",
+              description: `${uniqueNewSignals.length} sinais com critérios relaxados para mais oportunidades mantendo qualidade`
+            });
+            saveSignalsToHistory(uniqueNewSignals);
+            return [...uniqueNewSignals, ...prevSignals];
+          }
+          toast({
+            title: "Nenhum novo sinal Monster v2",
+            description: "Os critérios rigorosos (70%+ taxa de acerto) não identificaram novas oportunidades. Tente novamente em alguns minutos."
+          });
+          return prevSignals;
+        });
+      } else {
+        toast({
+          title: "Nenhum sinal Monster v2 encontrado",
+          description: "Os critérios ultra-rigorosos não identificaram oportunidades"
+        });
+      }
+    } catch (error) {
+      console.error("Error generating monster signals:", error);
+      toast({
+        title: "Erro ao gerar sinais monster",
+        description: error.message || "Ocorreu um erro ao analisar dados de mercado",
+        variant: "destructive"
+      });
+    } finally {
       setIsGenerating(false);
+      setLastUpdated(new Date());
     }
   };
 
@@ -358,8 +433,8 @@ const SignalsDashboard = () => {
             Oportunidades de trading com estratégias avançadas
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
-            Monster v2 Ajustado - Critérios Relaxados
+          <span className="text-xs bg-gradient-to-r from-blue-100 to-green-100 text-green-800 font-medium px-3 py-1 rounded-full">
+            Monster v2 Ajustado | v2 Top5 | v3 Lucrativo (Score ≥65)
           </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
               Última atualização: {formatLastUpdated()}
@@ -404,6 +479,24 @@ const SignalsDashboard = () => {
             )}
           </Button>
           
+          <Button 
+            onClick={() => generateSignals('monster-v3-lucrativo')}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando v3...
+              </>
+            ) : (
+              <>
+                💰
+                <span className="ml-1">v3 Lucrativo</span>
+              </>
+            )}
+          </Button>
+          
           {!isMobile && <Button onClick={handleSubscribe} variant="outline" className="flex-1 md:flex-auto">
               <Bell className="mr-2 h-4 w-4" />
               Receber Alertas
@@ -414,7 +507,7 @@ const SignalsDashboard = () => {
       <Tabs defaultValue="normal" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="normal">
-            🎯 Monster v2 Ajustado
+            🎯 Monster v2/v3 Signals
           </TabsTrigger>
           <TabsTrigger value="classic">
             📊 Classic v2

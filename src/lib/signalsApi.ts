@@ -583,3 +583,61 @@ export const getMonsterSignalStatus = async () => {
     };
   }
 };
+
+// Generic signal generation function for different strategies
+export const generateSignals = async (strategy: string = 'monster-v2', symbols?: string[]) => {
+  try {
+    console.log(`🚀 Starting ${strategy} signal generation...`);
+    
+    let endpoint = '';
+    let fallbackFunction = null;
+    
+    switch (strategy) {
+      case 'monster-v2':
+        endpoint = '/api/signals/generate/monster-v2';
+        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
+        break;
+      case 'monster-v2-top5':
+        endpoint = '/api/signals/generate/monster-v2-top5';
+        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
+        break;
+      case 'monster-v3-lucrativo':
+        endpoint = '/api/signals/generate/monster-v3-lucrativo';
+        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
+        break;
+      default:
+        endpoint = '/api/signals/generate/monster';
+        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
+    }
+    
+    // Try backend first
+    try {
+      console.log(`Attempting backend ${strategy} signal generation...`);
+      
+      const response = await tryBackendUrls(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        data: symbols ? { symbols } : {}
+      });
+      
+      console.log(`✅ Backend generated ${response.data.signals.length} ${strategy} signals`);
+      return response.data.signals as TradingSignal[];
+      
+    } catch (backendError) {
+      console.warn(`Backend ${strategy} generation failed, using local generation...`);
+      
+      // Use local generation as fallback
+      const localSignals = fallbackFunction();
+      return localSignals;
+    }
+    
+  } catch (error) {
+    console.error(`❌ Error in ${strategy} signal generation:`, error);
+    
+    // Final fallback to local generation
+    console.log(`Using final fallback: local ${strategy} signal generation`);
+    return generateLocalMonsterV2Signals(symbols);
+  }
+};
