@@ -1,86 +1,59 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Eye, EyeOff } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { SecurityService, securityService } from "@/lib/securityService";
+
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  createUserWithEmailAndPassword, 
+  updateProfile 
+} from 'firebase/auth';
+import { auth, googleProvider } from '@/lib/firebase';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { useToast } from '@/components/ui/use-toast';
+import { Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user, signIn, signUp } = useAuth();
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate('/signals');
-    }
-  }, [user, navigate]);
+  
+  if (auth.currentUser) {
+    navigate('/signals');
+    return null;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      console.log('🔐 Attempting login with:', { email, passwordLength: password.length });
-      
-      // Basic validations
-      if (!email || !password) {
-        throw new Error('Email e senha são obrigatórios');
-      }
-
-      if (!SecurityService.validateEmail(email)) {
-        throw new Error('Email inválido');
-      }
-
-      // Check rate limiting
-      const rateCheck = securityService.checkRateLimit(email);
-      if (!rateCheck.allowed) {
-        throw new Error(`Muitas tentativas. Tente novamente em ${rateCheck.timeRemaining} segundos.`);
-      }
-
-      const { error } = await signIn(email, password);
-      
-      if (error) {
-        console.error('❌ Login error:', error);
-        securityService.recordLoginAttempt(email, false);
-        throw error;
-      }
-
-      console.log('✅ Login successful!');
-      securityService.recordLoginAttempt(email, true);
-      
-      toast({
-        title: "Login realizado",
-        description: "Bem-vindo de volta!",
-      });
-      
-      // Redirect after successful login
-      setTimeout(() => {
-        navigate('/signals');
-      }, 500);
-      
+      await signInWithEmailAndPassword(auth, email, password);
+      navigate('/signals');
     } catch (error: any) {
-      console.error('❌ Login catch error:', error);
-      const errorMessage = SecurityService.sanitizeErrorMessage(error);
+      console.error("Login error:", error);
+      
+      let errorMessage = 'Erro ao fazer login. Tente novamente.';
+      if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'E-mail ou senha inválidos.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'Usuário não encontrado.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Senha incorreta.';
+      }
       
       toast({
         variant: "destructive",
-        title: "Erro no login",
+        title: "Erro de autenticação",
         description: errorMessage,
       });
     } finally {
@@ -93,55 +66,45 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      console.log('📝 Attempting registration with:', { email, name, passwordLength: password.length });
-      
-      // Basic validations
-      if (!email || !password || !name || !confirmPassword) {
-        throw new Error('Todos os campos são obrigatórios');
-      }
-
-      if (!SecurityService.validateEmail(email)) {
-        throw new Error('Email inválido');
-      }
-
-      if (password !== confirmPassword) {
-        throw new Error('As senhas não coincidem');
-      }
-
       if (password.length < 6) {
-        throw new Error('A senha deve ter pelo menos 6 caracteres');
+        throw new Error('A senha precisa ter pelo menos 6 caracteres.');
       }
-
-      const { error } = await signUp(email, password);
       
-      if (error) {
-        console.error('❌ Registration error:', error);
-        throw error;
+      if (password !== confirmPassword) {
+        throw new Error('As senhas não coincidem.');
       }
-
-      console.log('✅ Registration successful!');
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      if (userCredential.user && name) {
+        await updateProfile(userCredential.user, {
+          displayName: name
+        });
+      }
       
       toast({
-        title: "Cadastro realizado",
-        description: "Conta criada com sucesso! Fazendo login...",
+        title: "Conta criada com sucesso",
+        description: "Bem-vindo ao Trading Ninja!",
       });
       
-      // Auto-login after successful registration
-      setTimeout(async () => {
-        console.log('🔄 Auto-login after registration...');
-        const loginResult = await signIn(email, password);
-        if (!loginResult.error) {
-          navigate('/signals');
-        }
-      }, 1000);
-      
+      navigate('/signals');
     } catch (error: any) {
-      console.error('❌ Registration catch error:', error);
-      const errorMessage = SecurityService.sanitizeErrorMessage(error);
+      console.error("Registration error:", error);
+      
+      let errorMessage = 'Erro ao criar conta. Tente novamente.';
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Este e-mail já está sendo usado.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'E-mail inválido.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'A senha é muito fraca.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
       
       toast({
         variant: "destructive",
-        title: "Erro no cadastro",
+        title: "Erro no registro",
         description: errorMessage,
       });
     } finally {
@@ -153,29 +116,33 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      console.log('🔐 Attempting Google login...');
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Google login successful:", result.user);
       
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/signals`
-        }
+      toast({
+        title: "Login com Google realizado",
+        description: "Bem-vindo ao Trading Ninja!",
       });
       
-      if (error) {
-        console.error('❌ Google login error:', error);
-        throw error;
-      }
-
-      console.log('✅ Google login initiated');
-      
+      navigate('/signals');
     } catch (error: any) {
-      console.error('❌ Google login catch error:', error);
+      console.error("Google login error:", error);
+      
+      let errorMessage = 'Erro ao fazer login com Google. Tente novamente.';
+      if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Popup de login fechado antes da conclusão.';
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMessage = 'O navegador bloqueou o popup. Permita popups para este site.';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        errorMessage = 'Operação cancelada. Tente novamente.';
+      } else if (error.code === 'auth/account-exists-with-different-credential') {
+        errorMessage = 'Este e-mail já está associado a outro método de login.';
+      }
       
       toast({
         variant: "destructive",
         title: "Erro de autenticação",
-        description: "Erro ao fazer login com Google. Tente novamente.",
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
@@ -191,7 +158,7 @@ const Login = () => {
   };
 
   return (
-    <div className="container flex items-center justify-center min-h-screen py-8">
+    <div className="container flex items-center justify-center h-screen">
       <div className="w-full max-w-md">
         <Tabs defaultValue="login" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -202,75 +169,66 @@ const Login = () => {
           <TabsContent value="login">
             <Card>
               <CardHeader>
-                <CardTitle>Entrar</CardTitle>
+                <CardTitle>Login</CardTitle>
                 <CardDescription>
-                  Acesse sua conta para ver os sinais de trading
+                  Entre com sua conta para acessar seus sinais de trading
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleLogin}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
+                    <Label htmlFor="email">Email</Label>
                     <Input
-                      id="login-email"
+                      id="email"
                       type="email"
+                      placeholder="seu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="seu@email.com"
                       required
-                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="login-password">Senha</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Senha</Label>
+                      <Link 
+                        to="/forgot-password" 
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Esqueceu a senha?
+                      </Link>
+                    </div>
                     <div className="relative">
                       <Input
-                        id="login-password"
+                        id="password"
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Sua senha"
                         required
-                        disabled={isLoading}
                       />
-                      <Button
+                      <button 
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         onClick={togglePasswordVisibility}
-                        disabled={isLoading}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
+                </CardContent>
+                <CardFooter className="flex flex-col space-y-4">
                   <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Entrando...
-                      </>
-                    ) : (
-                      "Entrar"
-                    )}
+                    {isLoading ? 'Carregando...' : 'Entrar'}
                   </Button>
-                  
-                  <div className="relative">
+                  <div className="relative w-full">
                     <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
+                      <span className="w-full border-t border-muted" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
+                      <span className="bg-card px-2 text-muted-foreground">
                         Ou continue com
                       </span>
                     </div>
                   </div>
-                  
                   <Button
                     type="button"
                     variant="outline"
@@ -278,31 +236,12 @@ const Login = () => {
                     onClick={handleGoogleLogin}
                     disabled={isLoading}
                   >
-                    {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                        <path
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                          fill="#4285F4"
-                        />
-                        <path
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                          fill="#34A853"
-                        />
-                        <path
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                          fill="#FBBC05"
-                        />
-                        <path
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                          fill="#EA4335"
-                        />
-                      </svg>
-                    )}
+                    <svg className="w-4 h-4 mr-2" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                      <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                    </svg>
                     Entrar com Google
                   </Button>
-                </CardContent>
+                </CardFooter>
               </form>
             </Card>
           </TabsContent>
@@ -318,14 +257,12 @@ const Login = () => {
               <form onSubmit={handleRegister}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="register-name">Nome</Label>
+                    <Label htmlFor="name">Nome</Label>
                     <Input
-                      id="register-name"
+                      id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Seu nome completo"
                       required
-                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -333,11 +270,10 @@ const Login = () => {
                     <Input
                       id="register-email"
                       type="email"
+                      placeholder="seu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="seu@email.com"
                       required
-                      disabled={isLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -348,108 +284,42 @@ const Login = () => {
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
                         required
-                        disabled={isLoading}
                       />
-                      <Button
+                      <button 
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         onClick={togglePasswordVisibility}
-                        disabled={isLoading}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="register-confirm-password">Confirmar Senha</Label>
+                    <Label htmlFor="confirm-password">Confirmar Senha</Label>
                     <div className="relative">
                       <Input
-                        id="register-confirm-password"
+                        id="confirm-password"
                         type={showConfirmPassword ? "text" : "password"}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirme sua senha"
                         required
-                        disabled={isLoading}
                       />
-                      <Button
+                      <button 
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         onClick={toggleConfirmPasswordVisibility}
-                        disabled={isLoading}
                       >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Criando conta...
-                      </>
-                    ) : (
-                      "Criar conta"
-                    )}
-                  </Button>
-                  
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
-                        Ou continue com
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleGoogleLogin}
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
-                        <path
-                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                          fill="#4285F4"
-                        />
-                        <path
-                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                          fill="#34A853"
-                        />
-                        <path
-                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                          fill="#FBBC05"
-                        />
-                        <path
-                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                          fill="#EA4335"
-                        />
-                      </svg>
-                    )}
-                    Cadastrar com Google
-                  </Button>
                 </CardContent>
+                <CardFooter>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
+                    {isLoading ? 'Carregando...' : 'Criar conta'}
+                  </Button>
+                </CardFooter>
               </form>
             </Card>
           </TabsContent>

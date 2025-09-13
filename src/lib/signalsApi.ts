@@ -80,67 +80,27 @@ export const checkBackendHealth = async () => {
   }
 };
 
-// Generate local Monster v2 signals using real Bybit prices when backend is unavailable
-const generateLocalMonsterV2Signals = async (symbols: string[] = []) => {
-  // Determine symbols dynamically from Bybit when not provided
-  let symbolsToUse = symbols;
-  if (!symbolsToUse || symbolsToUse.length === 0) {
-    try {
-      const resp = await axios.get('https://api.bybit.com/v5/market/instruments-info', {
-        params: { category: 'linear' },
-        timeout: 8000,
-      });
-      symbolsToUse = (resp.data?.result?.list || [])
-        .filter((i: any) => i.symbol?.endsWith('USDT') && i.status === 'Trading' && i.quoteCoin === 'USDT')
-        .map((i: any) => i.symbol)
-        .slice(0, 100); // Aumentado de 20 para 100 símbolos
-    } catch (e) {
-      console.warn('Failed to fetch Bybit symbols for local monster, using defaults:', e);
-      symbolsToUse = [
-        // Major cryptos
-        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT',
-        'MATICUSDT', 'LINKUSDT', 'AVAXUSDT', 'UNIUSDT', 'LTCUSDT', 'ATOMUSDT',
-        
-        // Mid caps
-        'DOTUSDT', 'NEARUSDT', 'ICPUSDT', 'APTUSDT', 'FILUSDT', 'VETUSDT', 'SANDUSDT',
-        'MANAUSDT', 'AXSUSDT', 'CHZUSDT', 'GALAUSDT', 'ENJUSDT', 'HBARUSDT',
-        
-        // Small/Trending caps  
-        'PEPEUSDT', 'SHIBUSDT', 'FLOKIUSDT', 'BONKUSDT', 'WIFUSDT', 'BOMEUSDT',
-        '1000RATSUSDT', 'ORDIUSDT', 'SATSUSDT', 'INJUSDT', 'TIAUSDT', 'SUIUSDT',
-        
-        // DeFi tokens
-        'AAVEUSDT', 'COMPUSDT', 'MKRUSDT', 'SNXUSDT', 'CRVUSDT', 'YFIUSDT',
-        'SUSHIUSDT', 'BALAUSDT', '1INCHUSDT', 'ALPHAUSDT',
-        
-        // Layer 2 & Scaling
-        'OPUSDT', 'ARBUSDT', 'STRKUSDT', 'POLYUSDT', 'LDOUSDT', 'IMXUSDT'
-      ];
-    }
-  }
+// Generate local monster signals using real Bybit prices when backend is unavailable
+const generateLocalMonsterSignals = async (symbols: string[] = []) => {
+  const defaultSymbols = symbols.length > 0 ? symbols : [
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+    'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+  ];
 
-  console.log(`🎯 Generating local Monster v2 signals with real Bybit prices for ${symbolsToUse.length} symbols...`);
-  console.log(`📊 Testing symbols: ${symbolsToUse.slice(0, 10).join(', ')}${symbolsToUse.length > 10 ? ` and ${symbolsToUse.length - 10} more...` : ''}`);
+  console.log('🔧 Generating local monster signals with real Bybit prices...');
 
   // Import Bybit service
   const { fetchBybitKlines } = await import('@/lib/apiServices');
 
   const signals: TradingSignal[] = [];
-  let analyzedCount = 0;
-  let passedInitialFilter = 0;
-  let finalSignalsCount = 0;
 
   // Generate signals for each symbol using real market data
-for (let index = 0; index < symbolsToUse.length; index++) {
-    const symbol = symbolsToUse[index];
-    analyzedCount++;
+  for (let index = 0; index < defaultSymbols.length; index++) {
+    const symbol = defaultSymbols[index];
     
     try {
-      // Monster v2 Ajustado: critérios mais flexíveis (50% chance vs 30%)
-      if (Math.random() > 0.5) continue;
-      
-      passedInitialFilter++;
-      console.log(`🔍 Analyzing ${symbol} (${analyzedCount}/${symbolsToUse.length}) - passed initial filter: ${passedInitialFilter}`);
+      // 70% chance for each symbol (relaxed monster filter)
+      if (Math.random() > 0.3) continue;
 
       // Get real market data from Bybit
       const klineData = await fetchBybitKlines(symbol, "15", 50);
@@ -167,168 +127,68 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       const volumes = klineData.slice(0, 20).map(k => parseFloat(k[5]));
       const avgVolume = volumes.reduce((a, b) => a + b, 0) / volumes.length;
       
-      // Monster v2 technical analysis with rigorous scoring
-      let confidenceScore = 0;
-      let direction: "BUY" | "SELL" | null = null;
+      // Technical analysis for direction (RELAXED CRITERIA)
+      const direction = ema20 > ema50 && rsi > 40 && rsi < 80 && volume > avgVolume * 1.1 ? "BUY" : 
+                       ema20 < ema50 && rsi < 60 && rsi > 20 && volume > avgVolume * 1.1 ? "SELL" : 
+                       // Fallback: use only EMA trend if volume/RSI requirements not met
+                       ema20 > ema50 ? "BUY" :
+                       ema20 < ema50 ? "SELL" :
+                       "NEUTRAL";
       
-      // STEP 1: EMA200 trend (stronger requirement)
-      const ema200 = calculateEMA(prices.slice(-200), 200);
-      const currentPrice = prices[prices.length - 1];
-      
-      if (currentPrice > ema200) {
-        direction = "BUY";
-        confidenceScore += 20; // Base trend confirmation
-      } else if (currentPrice < ema200) {
-        direction = "SELL";
-        confidenceScore += 20;
-      } else {
-        continue; // No clear trend
-      }
-      
-      // STEP 2: RSI faixas ajustadas (Monster v2 Ajustado)
-      let rsiValid = false;
-      if (direction === "BUY" && rsi >= 25 && rsi <= 40) {  // Ajustado: 25-40
-        confidenceScore += 20;
-        rsiValid = true;
-      } else if (direction === "SELL" && rsi >= 60 && rsi <= 75) {  // Ajustado: 60-75
-        confidenceScore += 20;
-        rsiValid = true;
-      }
-      
-      if (!rsiValid) continue; // RSI não atende critérios ajustados
-      
-      // STEP 3: Volume spike ajustado (≥1.2x, bonus for ≥1.5x)
-      const volumeRatio = volume / avgVolume;
-      if (volumeRatio >= 1.2) {  // Reduzido de 1.3 para 1.2
-        confidenceScore += 15;
-        if (volumeRatio >= 1.5) {
-          confidenceScore += 10; // Volume boost
-        }
-      } else {
-        continue; // Volume requirement not met
-      }
-      
-      // STEP 4: VWAP confirmation (simplified)
-      const vwap = prices.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, prices.length);
-      if ((direction === "BUY" && currentPrice > vwap) || (direction === "SELL" && currentPrice < vwap)) {
-        confidenceScore += 15;
-      } else {
-        continue; // VWAP doesn't confirm direction
-      }
-      
-      // STEP 5: ADX-like momentum strength
-      const recentPrices = prices.slice(-14);
-      const momentum = Math.abs((recentPrices[recentPrices.length - 1] - recentPrices[0]) / recentPrices[0]);
-      if (momentum > 0.02) { // At least 2% momentum
-        confidenceScore += 15;
-      } else {
-        continue; // Insufficient momentum strength
-      }
-      
-      // Convert to percentage (50-95% range for Monster v2 Ajustado)
-      let finalConfidence = Math.min(95, Math.max(50, 50 + (confidenceScore / 85) * 45));
-      
-      // Generate Monster v2 detailed analysis
-      const analysisPoints = [];
-      
-      // EMA200 Analysis
-      const ema200Trend = direction === "BUY" ? "alta" : "baixa";
-      const ema200Distance = ((Math.abs(currentPrice - ema200) / ema200) * 100).toFixed(2);
-      analysisPoints.push(`📈 EMA200: Tendência ${ema200Trend} confirmada (distância: ${ema200Distance}%)`);
-      
-      // RSI Analysis (Monster v2 Ajustado)
-      const rsiZone = direction === "BUY" ? "faixa LONG (25-40)" : "faixa SHORT (60-75)";
-      analysisPoints.push(`⚖️ RSI: ${rsi.toFixed(1)} - ${rsiZone} ✅`);
-      
-      // Volume Analysis (Monster v2 Ajustado)
-      const volumeAnalysis = volumeRatio.toFixed(2);
-      const volumeStatus = volumeRatio >= 1.5 ? `${volumeAnalysis}x (BOOST ✨)` : `${volumeAnalysis}x (confirmado ≥1.2x ✅)`;
-      analysisPoints.push(`📊 Volume: ${volumeStatus} vs SMA(20)`);
-      
-      // VWAP Analysis
-      const vwapDistance = ((Math.abs(currentPrice - vwap) / vwap) * 100).toFixed(2);
-      analysisPoints.push(`🎯 VWAP: ${direction} confirmado (distância: ${vwapDistance}%)`);
-      
-      // Momentum Strength
-      const momentumPct = (momentum * 100).toFixed(2);
-      analysisPoints.push(`🚀 Momentum: ${momentumPct}% (força da tendência)`);
-      
-      const detailedAnalysis = `🎯 MONSTER V2 AJUSTADO - ANÁLISE TÉCNICA RELAXADA
+      // Skip if no clear direction
+      if (direction === "NEUTRAL") continue;
 
-${analysisPoints.join('\n')}
-
-💡 SETUP ${direction} QUALIFICADO:
-• Timeframe: 15m (análise) + 5m (confirmação)
-• Critérios Ajustados: EMA200 + RSI 25-40/60-75 + Volume 1.2x + VWAP + ADX
-• Confiança: ${finalConfidence.toFixed(1)}% (algoritmo Monster v2 Ajustado)
-
-📊 GESTÃO DE RISCO:
-• Stop Loss: 1.2×ATR (rigoroso)
-• Take Profits: 1.5×, 2.0×, 3.0× ATR
-• Position Sizing: ${finalConfidence >= 60 ? 'Lote completo' : 'Meio lote'}
-
-⚡ MONSTER V2 AJUSTADO - MAIS OPORTUNIDADES COM QUALIDADE`;
-      
-      // Skip signals below 50% confidence (Monster v2 Ajustado minimum)
-      if (finalConfidence < 50 || !direction) continue;
-
-      // Calculate ATR for Monster v2 levels
-      const atr = entryPrice * (Math.random() * 0.015 + 0.008); // 0.8-2.3% ATR (more conservative)
+      // Calculate ATR-like value from recent candles
+      const atr = entryPrice * (Math.random() * 0.02 + 0.005); // 0.5-2.5% ATR
       
       const signal: TradingSignal = {
-        id: `monster-v2-${symbol}-${Date.now()}-${index}`,
+        id: `local-monster-${symbol}-${Date.now()}-${index}`,
         symbol,
         pair: symbol,
         direction,
         type: direction === 'BUY' ? 'LONG' : 'SHORT',
         entryPrice: parseFloat(entryPrice.toFixed(6)),
-        entryMin: parseFloat((entryPrice * 0.999).toFixed(6)), // Tighter entry zone
-        entryMax: parseFloat((entryPrice * 1.001).toFixed(6)), 
+        entryMin: parseFloat((entryPrice * 0.998).toFixed(6)), // Entry zone: -0.2%
+        entryMax: parseFloat((entryPrice * 1.002).toFixed(6)), // Entry zone: +0.2%
         entryAvg: parseFloat(entryPrice.toFixed(6)),
-        // Monster v2: SL = 1.2×ATR
         stopLoss: direction === 'BUY' 
           ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
           : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
         status: 'WAITING',
-        strategy: 'Monster v2 Ajustado',
+        strategy: 'monster_1h_15m_multi_bybit_real',
         createdAt: new Date().toISOString(),
         result: null,
         profit: null,
-        rsi: parseFloat(rsi.toFixed(2)),
+        rsi: parseFloat(rsi.toFixed(2)), // Real calculated RSI
         atr: parseFloat(atr.toFixed(6)),
-        success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // 50-95% range ajustado
-        confidence: parseFloat((finalConfidence / 100).toFixed(3)),
-        currentPrice: entryPrice,
-        analysis: detailedAnalysis,
-        // Monster v2 targets: 1.5×, 2.0×, 3.0× ATR
+        success_prob: 0.72, // High confidence for monster signals
+        currentPrice: entryPrice, // Set current price to entry price
         targets: [
           {
             level: 1,
+            price: direction === 'BUY' 
+              ? parseFloat((entryPrice + 0.8 * atr).toFixed(6))
+              : parseFloat((entryPrice - 0.8 * atr).toFixed(6)),
+            hit: false
+          },
+          {
+            level: 2,
             price: direction === 'BUY' 
               ? parseFloat((entryPrice + 1.5 * atr).toFixed(6))
               : parseFloat((entryPrice - 1.5 * atr).toFixed(6)),
             hit: false
           },
           {
-            level: 2,
-            price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 2.0 * atr).toFixed(6))
-              : parseFloat((entryPrice - 2.0 * atr).toFixed(6)),
-            hit: false
-          },
-          {
             level: 3,
             price: direction === 'BUY' 
-              ? parseFloat((entryPrice + 3.0 * atr).toFixed(6))
-              : parseFloat((entryPrice - 3.0 * atr).toFixed(6)),
+              ? parseFloat((entryPrice + 2.2 * atr).toFixed(6))
+              : parseFloat((entryPrice - 2.2 * atr).toFixed(6)),
             hit: false
           }
         ]
       };
 
       signals.push(signal);
-      finalSignalsCount++;
-      console.log(`✅ Monster v2 Ajustado Signal ${finalSignalsCount}: ${symbol} ${direction} - ${finalConfidence.toFixed(1)}% confidence`);
 
     } catch (error) {
       console.error(`Error generating signal for ${symbol}:`, error);
@@ -336,90 +196,7 @@ ${analysisPoints.join('\n')}
     }
   }
 
-  console.log(`✅ Generated ${signals.length} Monster v2 Ajustado signals with real Bybit prices`);
-  console.log(`🎯 Monster v2 Ajustado Analysis Summary:`);
-  console.log(`   • Total symbols analyzed: ${analyzedCount}`);
-  console.log(`   • Passed initial filter: ${passedInitialFilter}`);
-  console.log(`   • Final Monster v2 Ajustado signals: ${finalSignalsCount}`);
-  console.log(`   • Quality rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}% (critérios relaxados)`);
-  console.log(`   • Average confidence: ${signals.length > 0 ? (signals.reduce((acc, s) => acc + (s.confidence || 0), 0) / signals.length * 100).toFixed(1) : 0}%`);
-  
-  // Hard fallback: ensure at least some signals are available for the UI
-  if (signals.length === 0) {
-    console.warn('⚠️ No Monster v2 Ajustado signals found. Generating quick fallback signals for BTC/ETH/SOL...');
-    const fallbackSymbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-
-    for (let i = 0; i < fallbackSymbols.length; i++) {
-      const symbol = fallbackSymbols[i];
-      try {
-        const klineData = await fetchBybitKlines(symbol, '15', 50);
-        if (!klineData || klineData.length === 0) continue;
-
-        const prices = klineData.slice(0, 50).map(k => parseFloat(k[4])).reverse();
-        const currentPrice = prices[prices.length - 1];
-        const ema20 = calculateEMA(prices, 20);
-        const rsi = calculateRSI(prices, 14);
-
-        const direction: 'BUY' | 'SELL' = currentPrice >= ema20 ? 'BUY' : 'SELL';
-        const entryPrice = currentPrice;
-        const atr = entryPrice * 0.01; // ~1% ATR approximation
-
-        signals.push({
-          id: `fallback-v3-${symbol}-${Date.now()}-${i}`,
-          symbol,
-          pair: symbol,
-          direction,
-          type: direction === 'BUY' ? 'LONG' : 'SHORT',
-          entryPrice: parseFloat(entryPrice.toFixed(6)),
-          entryMin: parseFloat((entryPrice * 0.998).toFixed(6)),
-          entryMax: parseFloat((entryPrice * 1.002).toFixed(6)),
-          entryAvg: parseFloat(entryPrice.toFixed(6)),
-          stopLoss: direction === 'BUY'
-            ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
-            : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
-          status: 'WAITING',
-          strategy: 'Monster v3 Lucrativo (local)',
-          createdAt: new Date().toISOString(),
-          result: null,
-          profit: null,
-          rsi: parseFloat(rsi.toFixed(2)),
-          atr: parseFloat(atr.toFixed(6)),
-          success_prob: 0.6,
-          confidence: 0.6,
-          currentPrice: entryPrice,
-          analysis: 'Fallback rápido baseado em EMA20/RSI para exibir sinais imediatamente enquanto o backend está indisponível.',
-          targets: [
-            {
-              level: 1,
-              price: direction === 'BUY'
-                ? parseFloat((entryPrice + 2.0 * atr).toFixed(6))
-                : parseFloat((entryPrice - 2.0 * atr).toFixed(6)),
-              hit: false,
-            },
-            {
-              level: 2,
-              price: direction === 'BUY'
-                ? parseFloat((entryPrice + 3.0 * atr).toFixed(6))
-                : parseFloat((entryPrice - 3.0 * atr).toFixed(6)),
-              hit: false,
-            },
-            {
-              level: 3,
-              price: direction === 'BUY'
-                ? parseFloat((entryPrice + 4.0 * atr).toFixed(6))
-                : parseFloat((entryPrice - 4.0 * atr).toFixed(6)),
-              hit: false,
-            }
-          ],
-        });
-      } catch (e) {
-        console.error(`Fallback generation failed for ${symbol}:`, e);
-      }
-    }
-
-    console.log(`✅ Generated ${signals.length} quick fallback signals (v3 local)`);
-  }
-  
+  console.log(`✅ Generated ${signals.length} local monster signals with real Bybit prices`);
   return signals;
 };
 
@@ -610,7 +387,12 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
         headers: {
           'Content-Type': 'application/json'
         },
-        data: symbols ? { symbols } : {}
+        data: {
+          symbols: symbols || [
+            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+          ]
+        }
       });
       
       console.log(`✅ Backend generated ${response.data.signals.length} monster signals`);
@@ -620,7 +402,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
       console.warn('Backend monster generation failed, using local generation...');
       
       // Use local generation as fallback
-      const localSignals = generateLocalMonsterV2Signals(symbols);
+      const localSignals = generateLocalMonsterSignals(symbols);
       
       return localSignals;
     }
@@ -630,7 +412,7 @@ export const generateMonsterSignals = async (symbols?: string[]) => {
     
     // Final fallback to local generation
     console.log('Using final fallback: local monster signal generation');
-    return generateLocalMonsterV2Signals(symbols);
+    return generateLocalMonsterSignals(symbols);
   }
 };
 
@@ -657,63 +439,5 @@ export const getMonsterSignalStatus = async () => {
       description: 'Local monster signal generation (backend unavailable)',
       mode: 'local_fallback'
     };
-  }
-};
-
-// Generic signal generation function for different strategies
-export const generateSignals = async (strategy: string = 'monster-v2', symbols?: string[]) => {
-  try {
-    console.log(`🚀 Starting ${strategy} signal generation...`);
-    
-    let endpoint = '';
-    let fallbackFunction = null;
-    
-    switch (strategy) {
-      case 'monster-v2':
-        endpoint = '/api/signals/generate/monster-v2';
-        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
-        break;
-      case 'monster-v2-top5':
-        endpoint = '/api/signals/generate/monster-v2-top5';
-        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
-        break;
-      case 'monster-v3-lucrativo':
-        endpoint = '/api/signals/generate/monster-v3-lucrativo';
-        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
-        break;
-      default:
-        endpoint = '/api/signals/generate/monster';
-        fallbackFunction = () => generateLocalMonsterV2Signals(symbols);
-    }
-    
-    // Try backend first
-    try {
-      console.log(`Attempting backend ${strategy} signal generation...`);
-      
-      const response = await tryBackendUrls(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        data: symbols ? { symbols } : {}
-      });
-      
-      console.log(`✅ Backend generated ${response.data.signals.length} ${strategy} signals`);
-      return response.data.signals as TradingSignal[];
-      
-    } catch (backendError) {
-      console.warn(`Backend ${strategy} generation failed, using local generation...`);
-      
-      // Use local generation as fallback
-      const localSignals = fallbackFunction();
-      return localSignals;
-    }
-    
-  } catch (error) {
-    console.error(`❌ Error in ${strategy} signal generation:`, error);
-    
-    // Final fallback to local generation
-    console.log(`Using final fallback: local ${strategy} signal generation`);
-    return generateLocalMonsterV2Signals(symbols);
   }
 };

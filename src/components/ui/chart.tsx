@@ -65,7 +65,6 @@ const ChartContainer = React.forwardRef<
 })
 ChartContainer.displayName = "Chart"
 
-// Secure style injection without dangerouslySetInnerHTML
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
     ([_, config]) => config.theme || config.color
@@ -75,43 +74,28 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
-  // Create secure CSS rules
-  React.useEffect(() => {
-    const styleId = `chart-style-${id}`
-    let existingStyle = document.getElementById(styleId)
-    
-    if (!existingStyle) {
-      existingStyle = document.createElement('style')
-      existingStyle.id = styleId
-      document.head.appendChild(existingStyle)
-    }
-
-    const cssRules = Object.entries(THEMES)
-      .map(([theme, prefix]) => {
-        const rules = colorConfig
-          .map(([key, itemConfig]) => {
-            const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme] || itemConfig.color
-            return color ? `  --color-${key}: ${color};` : null
-          })
-          .filter(Boolean)
-          .join("\n")
-        
-        return `${prefix} [data-chart="${id}"] {\n${rules}\n}`
-      })
-      .join("\n")
-
-    existingStyle.textContent = cssRules
-
-    return () => {
-      // Cleanup on unmount
-      const style = document.getElementById(styleId)
-      if (style) {
-        style.remove()
-      }
-    }
-  }, [id, config, colorConfig])
-
-  return null
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: Object.entries(THEMES)
+          .map(
+            ([theme, prefix]) => `
+${prefix} [data-chart=${id}] {
+${colorConfig
+  .map(([key, itemConfig]) => {
+    const color =
+      itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
+      itemConfig.color
+    return color ? `  --color-${key}: ${color};` : null
+  })
+  .join("\n")}
+}
+`
+          )
+          .join("\n"),
+      }}
+    />
+  )
 }
 
 const ChartTooltip = RechartsPrimitive.Tooltip

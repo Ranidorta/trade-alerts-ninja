@@ -1,7 +1,8 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,12 +30,7 @@ const ForgotPassword = () => {
     setIsLoading(true);
     
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`
-      });
-      
-      if (error) throw error;
-      
+      await sendPasswordResetEmail(auth, email);
       console.log("E-mail de recuperação enviado para:", email);
       
       toast({
@@ -49,13 +45,17 @@ const ForgotPassword = () => {
       
       let errorMessage = "Não foi possível enviar o e-mail de recuperação.";
       
-      // Tratar mensagens de erro específicas do Supabase
-      if (error.message?.includes('User not found')) {
+      // Tratar mensagens de erro específicas do Firebase
+      if (error.code === 'auth/user-not-found') {
         errorMessage = "Não existe uma conta associada a este e-mail.";
-      } else if (error.message?.includes('Invalid email')) {
+      } else if (error.code === 'auth/invalid-email') {
         errorMessage = "O formato do e-mail é inválido.";
-      } else if (error.message?.includes('Too many requests')) {
+      } else if (error.code === 'auth/too-many-requests') {
         errorMessage = "Muitas tentativas. Tente novamente mais tarde.";
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = "Falha na conexão de rede. Verifique sua internet.";
+      } else if (error.code === 'auth/internal-error') {
+        errorMessage = "Erro interno do servidor. Tente novamente mais tarde.";
       }
       
       toast({
