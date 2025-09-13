@@ -7,7 +7,7 @@ import {
   updateAllSignalsStatus,
   reprocessAllHistory
 } from "@/lib/signalHistoryService";
-import { logTradeSignal } from "@/lib/firebase";
+// Removed Firebase dependency
 import { saveSignalToHistory, saveSignalsToHistory } from "@/lib/signal-storage";
 import { generateMonsterSignals } from "@/lib/signalsApi";
 
@@ -145,8 +145,28 @@ export const useTradingSignals = () => {
         }
       }
       
-      // Process signals to ensure they have all required fields
+      // Process signals to ensure they have all required fields and apply confidence filter
       const processedSignals = newSignals.map((signal: TradingSignal) => {
+        // Normalize confidence from various possible fields
+        const normalizeConfidence = (signal: TradingSignal): number | undefined => {
+          const confidenceFields = [
+            signal.confidence,
+            signal.success_prob,
+            (signal as any).confidence_score,
+            signal.score,
+            (signal as any).probability
+          ];
+          
+          for (const field of confidenceFields) {
+            if (typeof field === 'number' && field > 0) {
+              // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+              return field > 1 ? field / 100 : field;
+            }
+          }
+          
+          return undefined;
+        };
+        
         if (signal.result === undefined) {
           if (signal.profit !== undefined) {
             signal.result = signal.profit > 0 ? "WINNER" as SignalResult : "LOSER" as SignalResult;
@@ -177,7 +197,25 @@ export const useTradingSignals = () => {
           entryPrice: signal.entryPrice || signal.entryAvg || 0,
           targets: signal.targets || [],
           createdAt: signal.createdAt || new Date().toISOString(),
+          confidence: normalizeConfidence(signal), // Normalize confidence
         };
+      }).filter(signal => {
+        // Filter signals with confidence between 80% and 100%
+        const confidence = signal.confidence;
+        if (confidence === undefined || confidence === null) {
+          console.log(`❌ Signal ${signal.symbol} rejected: no confidence data`);
+          return false;
+        }
+        
+        const isValidConfidence = confidence >= 0.8 && confidence <= 1.0;
+        
+        if (isValidConfidence) {
+          console.log(`✅ Signal ${signal.symbol} accepted: ${(confidence * 100).toFixed(1)}% confidence`);
+        } else {
+          console.log(`❌ Signal ${signal.symbol} rejected: ${(confidence * 100).toFixed(1)}% confidence (outside 80-100% range)`);
+        }
+        
+        return isValidConfidence;
       });
       
       // Update state with processed signals
@@ -232,12 +270,6 @@ export const useTradingSignals = () => {
       
       processedNewSignals.forEach(signal => {
         saveSignalToHistory(signal);
-        
-        logTradeSignal(signal)
-          .then(success => {
-            if (!success) console.warn(`Failed to log signal ${signal.id} to Firebase`);
-          })
-          .catch(err => console.error("Error logging signal to Firebase:", err));
       });
       
       return updatedSignals;
@@ -246,8 +278,72 @@ export const useTradingSignals = () => {
 
   const updateSignalStatuses = useCallback(async (currentPrices?: {[symbol: string]: number}) => {
     try {
+      // First update statuses based on current prices
       const updatedSignals = await updateAllSignalsStatus(currentPrices);
       setSignals(updatedSignals);
+      
+      // Then validate signals against historical data for completed ones
+      const { validateSignalWithBybitData } = await import("@/lib/signalValidationService");
+      const { useFirebaseSignals } = await import("@/hooks/useFirebaseSignals");
+      const { updateSignalInFirebase, saveSignalToFirebase } = useFirebaseSignals();
+      
+      // Find signals that need validation:
+      // - Completed signals without final result
+      // - Signals with PARTIAL result (for re-evaluation)
+      const signalsToValidate = updatedSignals.filter(signal => 
+        (signal.status === "COMPLETED" && (!signal.result || signal.result === "PENDING")) ||
+        signal.result === "PARTIAL"
+      ).filter(signal => 
+        // Skip signals that already have final results
+        signal.result !== "WINNER" && 
+        signal.result !== "LOSER" && 
+        signal.result !== 1 && 
+        signal.result !== 0
+      );
+
+      if (signalsToValidate.length > 0) {
+        console.log(`🔍 Validating ${signalsToValidate.length} completed signals...`);
+        
+        // Validate each signal
+        for (const signal of signalsToValidate) {
+          try {
+            console.log(`🔍 Validating signal ${signal.id} with result: ${signal.result}`);
+            const validatedSignal = await validateSignalWithBybitData(signal);
+            
+            if (validatedSignal.result && validatedSignal.result !== "PENDING") {
+              console.log(`📈 Signal ${validatedSignal.id} validation result: ${validatedSignal.result}`);
+              
+              // Update signal in the array
+              const signalIndex = updatedSignals.findIndex(s => s.id === validatedSignal.id);
+              if (signalIndex !== -1) {
+                updatedSignals[signalIndex] = validatedSignal;
+              }
+              
+              // Update in local storage (signal-storage key)
+              saveSignalToHistory(validatedSignal);
+              
+              // Save to Supabase - try to save first, then update
+              let firebaseSuccess = await saveSignalToFirebase(validatedSignal);
+              if (!firebaseSuccess) {
+                // If save failed (signal might already exist), try to update
+                firebaseSuccess = await updateSignalInFirebase(validatedSignal);
+              }
+              
+              if (firebaseSuccess) {
+                console.log(`✅ Signal ${validatedSignal.id} saved to Supabase with result: ${validatedSignal.result}`);
+              } else {
+                console.warn(`⚠️ Failed to save signal ${validatedSignal.id} to Supabase`);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Error validating signal ${signal.id}:`, error);
+          }
+        }
+      }
+      
+      // Update state with validated signals
+      setSignals(updatedSignals);
+      
       toast({
         title: "Signals updated",
         description: `Updated ${updatedSignals.length} signals with current status`,

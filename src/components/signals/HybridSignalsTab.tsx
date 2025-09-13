@@ -171,7 +171,7 @@ const HybridSignalsTab: React.FC<HybridSignalsTabProps> = ({ filter }) => {
     );
   }
 
-  // Filter signals by selected timeframe if needed
+  // Filter signals by selected timeframe
   let filteredSignals = hybridSignals;
   
   return (

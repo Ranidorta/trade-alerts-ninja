@@ -19,6 +19,7 @@ from utils.false_breakout_detector import FalseBreakoutDetector, check_rsi_diver
 from utils.macro_events_filter import check_fundamental_filter
 from ml.model_integration import AdvancedMLPredictor
 from core.risk_management import DynamicRiskManager, detect_market_stress
+from utils.performance_tracker import log_signal_opened, log_signal_closed
 from signals.intraday_signal_integrator import generate_intraday_signal
 from utils.quick_intraday_performance_alert import should_halt_intraday_trading
 
@@ -238,10 +239,10 @@ class TradeAgent:
             from ta.trend import ADXIndicator
             adx = ADXIndicator(df_15m['high'], df_15m['low'], df_15m['close'], window=14).adx().iloc[-1]
             
-            # GESTÃO DE RISCO DINÂMICA
+            # GESTÃO DE RISCO DINÂMICA MONSTER V2
             market_volatility = self.risk_manager.is_acceptable_volatility(atr, atr)
             take_profits, stop_loss = self.risk_manager.calculate_targets(
-                entry, atr, direction, adx, symbol
+                entry, atr, direction, adx, symbol, agent_type="monster"
             )
 
             # 10. ADVANCED ML PREDICTION
@@ -266,8 +267,14 @@ class TradeAgent:
                     logger.info(f"🛑 Contexto fraco ({context_score:.2f}). Sinal descartado.")
                     return None
 
-            # 12. CREATE ENHANCED SIGNAL
+            # 12. CREATE ENHANCED SIGNAL COM TRACKING DE R/R
+            # Calcula Risk/Reward esperado para logging
+            risk = abs(entry - stop_loss)
+            reward = abs(take_profits[2] - entry)  # TP3 como target principal
+            expected_rr = reward / risk if risk > 0 else 0
+            
             signal = {
+                'id': f"{symbol}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
                 'symbol': symbol,
                 'direction': direction,
                 'entry_price': round(entry, 6),
@@ -290,16 +297,23 @@ class TradeAgent:
                 'market_stress': market_stress,
                 'breakout_valid': is_valid_breakout,
                 'rsi_divergence': has_favorable_divergence,
-                'ml_prediction': ml_result
+                'ml_prediction': ml_result,
+                'expected_rr': round(expected_rr, 2),
+                'risk_amount': round(risk, 6),
+                'reward_amount': round(reward, 6)
             }
 
-            # 13. SAVE TO DATABASE AND STORAGE
+            # 13. SAVE TO DATABASE AND STORAGE + PERFORMANCE TRACKING
             save_signal(signal)
+            
+            # Log no sistema de performance tracking
+            log_signal_opened(signal)
             
             logger.info(f"✅ SINAL MONSTER V2 gerado para {symbol}:")
             logger.info(f"   🎯 {signal['direction']} @ {signal['entry_price']}")
             logger.info(f"   📊 RSI: {rsi:.2f}, ADX: {adx:.2f}, ATR: {atr:.6f}")
             logger.info(f"   🤖 ML: {ml_result} ({ml_confidence:.3f})")
+            logger.info(f"   💰 R/R Esperado: {expected_rr:.2f} (Risco: {risk:.6f}, Reward: {reward:.6f})")
             logger.info(f"   🔄 Divergência: {has_favorable_divergence}, Stress: {market_stress}")
             
             return signal

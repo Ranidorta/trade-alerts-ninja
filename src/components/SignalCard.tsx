@@ -2,17 +2,15 @@
 import { useState, useEffect } from "react";
 import { TradingSignal } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check, BarChart } from "lucide-react";
-import StatusBadge from "./StatusBadge";
+import { ArrowUp, ArrowDown, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Layers, Check, BarChart, Target, Shield, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import CryptoChart from "./CryptoChart";
@@ -29,8 +27,30 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
   const { toast } = useToast();
   
   const isShort = signal.type === "SHORT";
-  const typeColor = isShort ? "crypto-red" : "crypto-green";
-  const typeIcon = isShort ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />;
+  const isBuy = !isShort;
+  
+  // Normalize confidence from various possible fields
+  const normalizeConfidence = (signal: TradingSignal): number | null => {
+    const confidenceFields = [
+      signal.confidence,
+      signal.success_prob,
+      (signal as any).confidence_score,
+      signal.score,
+      (signal as any).probability
+    ];
+    
+    for (const field of confidenceFields) {
+      if (typeof field === 'number' && field > 0) {
+        // Convert to 0-1 scale if needed (assuming values > 1 are percentages)
+        return field > 1 ? field / 100 : field;
+      }
+    }
+    
+    return null;
+  };
+  
+  const confidence = normalizeConfidence(signal);
+  const isHighConfidence = confidence ? confidence >= 0.65 : false;
   
   // Effect to periodically check if targets are hit based on current price
   useEffect(() => {
@@ -121,100 +141,181 @@ const SignalCard = ({ signal: initialSignal, refreshInterval = 60000 }: SignalCa
   
   const priceMovement = getPriceMovement();
 
+  // Calculate confidence level
+  const getConfidenceLevel = (conf: number) => {
+    if (conf >= 0.75) return { label: "Alta", color: "bg-green-500" };
+    if (conf >= 0.65) return { label: "Média", color: "bg-yellow-500" };
+    return { label: "Baixa", color: "bg-red-500" };
+  };
+
+  const confidenceInfo = confidence ? getConfidenceLevel(confidence) : { label: "N/A", color: "bg-slate-500" };
+
   const copySignalDetails = () => {
-    // Format signal details as text
     const details = `
-${signal.type} ${signal.symbol} (${signal.pair})
-Entry: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})
-SL: ${signal.stopLoss}
-${signal.targets ? signal.targets.map((t, i) => `TP${i+1}: ${t.price}`).join('\n') : ''}
-Leverage: ${signal.leverage}x
+🎯 SINAL ${signal.type}
+💰 ${signal.symbol} (${signal.pair})
+📈 Entrada: ${signal.entryMin} - ${signal.entryMax} (avg: ${signal.entryAvg})
+🛡️ Stop Loss: ${signal.stopLoss}
+${signal.targets ? signal.targets.map((t, i) => `🎯 TP${i+1}: ${t.price}`).join('\n') : ''}
+⚡ Leverage: ${signal.leverage}x
+⭐ Status: ${signal.status}
     `.trim();
     
     navigator.clipboard.writeText(details);
     
     toast({
-      title: "Details copied!",
-      description: "Signal details copied to clipboard",
+      title: "Sinal copiado!",
+      description: "Detalhes do sinal copiados para área de transferência",
     });
   };
   
   return (
-    <Card className={cn(
-      "overflow-hidden transition-all duration-300 hover:shadow-md border-slate-200 animate-scale-in",
-      expanded ? "shadow-md" : "shadow-sm"
-    )}>
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center space-x-2">
-            <div className={`bg-${typeColor} h-7 w-7 rounded-full flex items-center justify-center text-white`}>
-              {typeIcon}
+    <Card 
+      className={cn(
+        "overflow-hidden transition-all duration-300 hover:shadow-md animate-scale-in",
+        // Background colors based on direction
+        isBuy 
+          ? "bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/20 dark:to-blue-900/20 border-blue-200 dark:border-blue-800" 
+          : "bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/20 dark:to-red-900/20 border-red-200 dark:border-red-800",
+        // Low confidence transparency
+        !isHighConfidence && "opacity-60",
+        expanded ? "shadow-lg" : "shadow-sm"
+      )}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center space-x-3">
+            <div className={cn(
+              "h-10 w-10 rounded-full flex items-center justify-center text-white font-bold",
+              isBuy ? "bg-blue-500" : "bg-red-500"
+            )}>
+              {isBuy ? <ArrowUp className="h-5 w-5" /> : <ArrowDown className="h-5 w-5" />}
             </div>
-            <CardTitle className="text-lg font-bold flex items-center">
-              <span className={`text-${typeColor}`}>{signal.type}</span>
-              <span className="ml-2 font-semibold text-slate-800 dark:text-slate-200">
-                {signal.symbol} ({signal.pair})
-              </span>
-            </CardTitle>
-          </div>
-          <StatusBadge status={signal.status} />
-        </div>
-        <CardDescription className="flex items-center justify-between">
-          <span>Created {timeAgo}</span>
-          {priceMovement && signal.status === "ACTIVE" && (
-            <div className={`flex items-center text-sm ${priceMovement.isProfit ? 'text-success' : 'text-error'}`}>
-              {priceMovement.icon}
-              <span className="ml-1 truncate">
-                {priceMovement.percentChange.toFixed(2)}% 
-                ({priceMovement.isProfit ? '+' : ''}{priceMovement.diff.toFixed(isShort && signal.entryAvg < 1 ? 4 : 2)})
-              </span>
+            <div>
+              <CardTitle className="text-lg font-bold flex items-center gap-2">
+                <span className={isBuy ? "text-blue-600 dark:text-blue-400" : "text-red-600 dark:text-red-400"}>
+                  {signal.type}
+                </span>
+                <span className="text-slate-800 dark:text-slate-200">
+                  {signal.symbol}
+                </span>
+                {signal.pair && (
+                  <span className="text-slate-600 dark:text-slate-400 text-sm">
+                    ({signal.pair})
+                  </span>
+                )}
+              </CardTitle>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {timeAgo}
+              </p>
             </div>
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="space-y-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Entry Zone</div>
-            <div className="font-medium truncate">{signal.entryMin} - {signal.entryMax}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 truncate">Average: {signal.entryAvg}</div>
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Stop Loss</div>
-            <div className="font-medium text-error truncate">{signal.stopLoss}</div>
-            {signal.entryAvg && (
-              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                Risk: {((Math.abs(signal.stopLoss - signal.entryAvg) / signal.entryAvg) * 100).toFixed(2)}%
+          
+          <div className="flex flex-col items-end gap-2">
+            {confidence !== null && (
+              <Badge 
+                className={cn(
+                  "text-white font-medium",
+                  confidenceInfo.color
+                )}
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                {confidenceInfo.label} {(confidence * 100).toFixed(1)}%
+              </Badge>
+            )}
+            <Badge 
+              variant={
+                signal.status === "COMPLETED" ? "secondary" : 
+                signal.status === "ACTIVE" ? "default" : 
+                "outline"
+              }
+              className="text-xs"
+            >
+              {signal.status}
+            </Badge>
+            {priceMovement && signal.status === "ACTIVE" && (
+              <div className={`flex items-center text-xs ${priceMovement.isProfit ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {priceMovement.icon}
+                <span className="ml-1">
+                  {priceMovement.percentChange.toFixed(2)}%
+                </span>
               </div>
             )}
           </div>
         </div>
-        
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400">Targets</div>
-            {signal.status === "ACTIVE" && calculateProgress() > 0 && (
-              <div className="text-xs text-success">{Math.round(calculateProgress())}% Complete</div>
-            )}
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Entry Zone */}
+        <div className="flex justify-between items-center p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
+          <div className="text-sm text-slate-600 dark:text-slate-400">Zona de Entrada</div>
+          <div className="text-right">
+            <div className="text-lg font-bold">
+              {signal.entryMin} - {signal.entryMax}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Média: {signal.entryAvg}
+            </div>
           </div>
-          {signal.status === "ACTIVE" && (
-            <Progress value={calculateProgress()} className="h-1 mb-2" />
-          )}
+        </div>
+
+        {/* Stop Loss */}
+        <div className="flex justify-between items-center p-3 bg-white/50 dark:bg-slate-800/50 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <Shield className="h-4 w-4" />
+            Stop Loss
+          </div>
+          <div className="text-lg font-bold text-red-600 dark:text-red-400">
+            {signal.stopLoss}
+          </div>
+        </div>
+
+        {/* Progress bar for active signals */}
+        {signal.status === "ACTIVE" && signal.targets && calculateProgress() > 0 && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-slate-600 dark:text-slate-400">Progresso</span>
+              <span className="text-green-600 dark:text-green-400 font-medium">
+                {Math.round(calculateProgress())}% Completo
+              </span>
+            </div>
+            <Progress value={calculateProgress()} className="h-2" />
+          </div>
+        )}
+
+        {/* Targets */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            <Target className="h-4 w-4" />
+            Alvos de Lucro
+          </div>
           
-          <div className={cn("grid gap-2", expanded ? "grid-cols-1" : "grid-cols-3")}>
+          <div className="grid grid-cols-3 gap-2">
             {signal.targets?.map((target, index) => (
               <div 
-                key={index} 
+                key={index}
                 className={cn(
-                  "rounded-md border p-2 flex justify-between items-center",
-                  target.hit ? "bg-success/10 border-success/30" : "bg-slate-50 dark:bg-slate-800/50"
+                  "p-2 border rounded text-center transition-all duration-200",
+                  target.hit 
+                    ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" 
+                    : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
                 )}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium">{`TP${index + 1}`}</div>
-                  <div className="font-medium truncate">{target.price}</div>
+                <div className={cn(
+                  "text-xs font-medium mb-1",
+                  target.hit ? "text-green-600 dark:text-green-400" : "text-slate-600 dark:text-slate-400"
+                )}>
+                  TP{index + 1}
                 </div>
-                {target.hit && <Check className="h-4 w-4 text-success flex-shrink-0" />}
+                <div className={cn(
+                  "text-sm font-bold",
+                  target.hit ? "text-green-700 dark:text-green-300" : "text-slate-800 dark:text-slate-200"
+                )}>
+                  {target.price}
+                </div>
+                {target.hit && (
+                  <Check className="h-3 w-3 text-green-600 dark:text-green-400 mx-auto mt-1" />
+                )}
               </div>
             ))}
           </div>
@@ -327,9 +428,14 @@ Leverage: ${signal.leverage}x
             
             {signal.analysis && (
               <div className="mt-4 pt-4 border-t">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Análise do Sinal</div>
-                <div className="text-sm mt-1 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-md">
-                  <pre className="whitespace-pre-wrap font-sans">{signal.analysis}</pre>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                    <BarChart className="h-4 w-4 text-primary" />
+                    Análise Técnica do Sinal
+                  </div>
+                </div>
+                <div className="text-sm p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-blue-200 dark:border-slate-600">
+                  <pre className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-300 leading-relaxed">{signal.analysis}</pre>
                 </div>
               </div>
             )}
@@ -342,21 +448,26 @@ Leverage: ${signal.leverage}x
             )}
           </div>
         )}
+
+        {/* Action buttons */}
+        <div className="flex justify-between pt-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium"
+          >
+            {expanded ? "Ocultar detalhes" : "Ver detalhes"}
+          </button>
+          <button
+            onClick={copySignalDetails}
+            className={cn(
+              "text-sm font-medium hover:underline",
+              isBuy ? "text-blue-600 hover:text-blue-800" : "text-red-600 hover:text-red-800"
+            )}
+          >
+            Copiar sinal
+          </button>
+        </div>
       </CardContent>
-      <CardFooter className="flex justify-between pt-0">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-sm text-primary font-medium hover:underline"
-        >
-          {expanded ? "Show Less" : "Show More"}
-        </button>
-        <button
-          onClick={copySignalDetails}
-          className="text-sm text-slate-500 hover:text-slate-700 font-medium"
-        >
-          Copy Details
-        </button>
-      </CardFooter>
     </Card>
   );
 };

@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import logging
 import traceback
+import requests
 
 # Import our data services
 from api.fetch_data import fetch_data, get_current_price
@@ -18,6 +19,27 @@ from api.market_data_service import market_data_service
 monster_signals_api = Blueprint('monster_signals', __name__)
 
 logger = logging.getLogger("MonsterSignalsAPI")
+
+# Dynamically fetch USDT perpetual symbols from Bybit (v5)
+def get_usdt_symbols_from_bybit(limit: int = 20):
+    try:
+        url = "https://api.bybit.com/v5/market/instruments-info"
+        params = {"category": "linear"}
+        resp = requests.get(url, params=params, timeout=8)
+        data = resp.json()
+        instruments = data.get("result", {}).get("list", [])
+        # Filter tradable USDT pairs
+        symbols = [
+            inst.get("symbol")
+            for inst in instruments
+            if inst.get("symbol", "").endswith("USDT")
+            and inst.get("quoteCoin") == "USDT"
+            and inst.get("status") == "Trading"
+        ]
+        return symbols[:limit] if symbols else []
+    except Exception as e:
+        logger.warning(f"Failed to fetch symbols from Bybit: {e}")
+        return []
 
 # ============================================================================
 # SIMPLIFIED PROFESSIONAL INDICATORS (EMA 200, ATR, Volume, RSI)
@@ -386,6 +408,12 @@ def generate_monster_signal(symbol):
 ⚡ SETUP DE ALTA QUALIDADE - APROVADO PARA EXECUÇÃO
 """
         
+        # IMPROVED: Add position sizing (2% risk per trade)
+        account_balance = 1000.0  # Default balance - should come from config  
+        risk_per_trade = 0.02  # 2% risk per trade
+        risk_amount = account_balance * risk_per_trade
+        position_size = risk_amount / risk if risk > 0 else 0
+        
         # Create professional signal
         signal = {
             'symbol': symbol,
@@ -404,6 +432,8 @@ def generate_monster_signal(symbol):
             'strategy': 'monster_professional_simplified',
             'success_prob': round(ml_confidence, 2),  # Realistic confidence
             'risk_reward_ratio': round(risk_reward_ratio, 2),
+            'position_size': round(position_size, 6),
+            'risk_amount': round(risk_amount, 2),
             'analysis': analysis_text
         }
         
@@ -423,15 +453,17 @@ def generate_monster_signals():
     Generate monster signals using real Bybit market data
     """
     try:
-        # Get symbols from request or use default list
-        data = request.get_json() or {}
-        symbols = data.get('symbols', [
-            'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT', 
-            'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
-        ])
+        # Get symbols from request or dynamically from Bybit if not provided
+        data = request.get_json(silent=True) or {}
+        symbols = data.get('symbols')
+        if not symbols:
+            symbols = get_usdt_symbols_from_bybit(limit=20) or [
+                'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'ADAUSDT',
+                'BNBUSDT', 'XRPUSDT', 'MATICUSDT', 'LINKUSDT', 'AVAXUSDT'
+            ]
         
         logger.info(f"Starting monster signal generation for {len(symbols)} symbols using Bybit data")
-        
+
         # Get current market prices for all symbols
         current_prices = market_data_service.get_current_prices(symbols)
         logger.info(f"Retrieved current prices for {len(current_prices)} symbols")

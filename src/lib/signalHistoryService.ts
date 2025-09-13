@@ -332,7 +332,7 @@ export const saveSignalsToHistory = (signals: TradingSignal[]) => {
   });
   
   // Save back to localStorage
-  localStorage.setItem("trade_signal_history", JSON.stringify(existing.slice(0, 100)));
+  localStorage.setItem("trade_signal_history", JSON.stringify(existing));
   
   return existing;
 };
