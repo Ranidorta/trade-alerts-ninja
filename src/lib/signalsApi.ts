@@ -136,8 +136,8 @@ for (let index = 0; index < symbolsToUse.length; index++) {
     analyzedCount++;
     
     try {
-      // Monster v2: critérios mais rigorosos (30% chance)
-      if (Math.random() > 0.3) continue;
+      // Monster v2 Ajustado: critérios mais flexíveis (50% chance vs 30%)
+      if (Math.random() > 0.5) continue;
       
       passedInitialFilter++;
       console.log(`🔍 Analyzing ${symbol} (${analyzedCount}/${symbolsToUse.length}) - passed initial filter: ${passedInitialFilter}`);
@@ -185,21 +185,21 @@ for (let index = 0; index < symbolsToUse.length; index++) {
         continue; // No clear trend
       }
       
-      // STEP 2: RSI extremes (Monster v2 criteria)
+      // STEP 2: RSI faixas ajustadas (Monster v2 Ajustado)
       let rsiValid = false;
-      if (direction === "BUY" && rsi >= 30 && rsi <= 35) {
+      if (direction === "BUY" && rsi >= 25 && rsi <= 40) {  // Ajustado: 25-40
         confidenceScore += 20;
         rsiValid = true;
-      } else if (direction === "SELL" && rsi >= 65 && rsi <= 70) {
+      } else if (direction === "SELL" && rsi >= 60 && rsi <= 75) {  // Ajustado: 60-75
         confidenceScore += 20;
         rsiValid = true;
       }
       
-      if (!rsiValid) continue; // RSI doesn't meet Monster v2 criteria
+      if (!rsiValid) continue; // RSI não atende critérios ajustados
       
-      // STEP 3: Volume spike (≥1.3x, bonus for ≥1.5x)
+      // STEP 3: Volume spike ajustado (≥1.2x, bonus for ≥1.5x)
       const volumeRatio = volume / avgVolume;
-      if (volumeRatio >= 1.3) {
+      if (volumeRatio >= 1.2) {  // Reduzido de 1.3 para 1.2
         confidenceScore += 15;
         if (volumeRatio >= 1.5) {
           confidenceScore += 10; // Volume boost
@@ -225,8 +225,8 @@ for (let index = 0; index < symbolsToUse.length; index++) {
         continue; // Insufficient momentum strength
       }
       
-      // Convert to percentage (55-95% range for Monster v2)
-      let finalConfidence = Math.min(95, Math.max(55, 55 + (confidenceScore / 85) * 40));
+      // Convert to percentage (50-95% range for Monster v2 Ajustado)
+      let finalConfidence = Math.min(95, Math.max(50, 50 + (confidenceScore / 85) * 45));
       
       // Generate Monster v2 detailed analysis
       const analysisPoints = [];
@@ -236,13 +236,13 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       const ema200Distance = ((Math.abs(currentPrice - ema200) / ema200) * 100).toFixed(2);
       analysisPoints.push(`📈 EMA200: Tendência ${ema200Trend} confirmada (distância: ${ema200Distance}%)`);
       
-      // RSI Analysis (Monster v2 extremes)
-      const rsiZone = direction === "BUY" ? "oversold (30-35)" : "overbought (65-70)";
+      // RSI Analysis (Monster v2 Ajustado)
+      const rsiZone = direction === "BUY" ? "faixa LONG (25-40)" : "faixa SHORT (60-75)";
       analysisPoints.push(`⚖️ RSI: ${rsi.toFixed(1)} - ${rsiZone} ✅`);
       
-      // Volume Analysis (Monster v2 criteria)
+      // Volume Analysis (Monster v2 Ajustado)
       const volumeAnalysis = volumeRatio.toFixed(2);
-      const volumeStatus = volumeRatio >= 1.5 ? `${volumeAnalysis}x (BOOST ✨)` : `${volumeAnalysis}x (confirmado ✅)`;
+      const volumeStatus = volumeRatio >= 1.5 ? `${volumeAnalysis}x (BOOST ✨)` : `${volumeAnalysis}x (confirmado ≥1.2x ✅)`;
       analysisPoints.push(`📊 Volume: ${volumeStatus} vs SMA(20)`);
       
       // VWAP Analysis
@@ -253,24 +253,24 @@ for (let index = 0; index < symbolsToUse.length; index++) {
       const momentumPct = (momentum * 100).toFixed(2);
       analysisPoints.push(`🚀 Momentum: ${momentumPct}% (força da tendência)`);
       
-      const detailedAnalysis = `🎯 MONSTER V2 - ANÁLISE TÉCNICA RIGOROSA
+      const detailedAnalysis = `🎯 MONSTER V2 AJUSTADO - ANÁLISE TÉCNICA RELAXADA
 
 ${analysisPoints.join('\n')}
 
 💡 SETUP ${direction} QUALIFICADO:
 • Timeframe: 15m (análise) + 5m (confirmação)
-• Critérios: EMA200 + RSI extremos + Volume 1.3x + VWAP + ADX
-• Confiança: ${finalConfidence.toFixed(1)}% (algoritmo Monster v2)
+• Critérios Ajustados: EMA200 + RSI 25-40/60-75 + Volume 1.2x + VWAP + ADX
+• Confiança: ${finalConfidence.toFixed(1)}% (algoritmo Monster v2 Ajustado)
 
 📊 GESTÃO DE RISCO:
 • Stop Loss: 1.2×ATR (rigoroso)
 • Take Profits: 1.5×, 2.0×, 3.0× ATR
 • Position Sizing: ${finalConfidence >= 60 ? 'Lote completo' : 'Meio lote'}
 
-⚡ MONSTER V2 - SETUP DE ALTA CONFIABILIDADE APROVADO`;
+⚡ MONSTER V2 AJUSTADO - MAIS OPORTUNIDADES COM QUALIDADE`;
       
-      // Skip signals below 55% confidence (Monster v2 minimum)
-      if (finalConfidence < 55 || !direction) continue;
+      // Skip signals below 50% confidence (Monster v2 Ajustado minimum)
+      if (finalConfidence < 50 || !direction) continue;
 
       // Calculate ATR for Monster v2 levels
       const atr = entryPrice * (Math.random() * 0.015 + 0.008); // 0.8-2.3% ATR (more conservative)
@@ -290,13 +290,13 @@ ${analysisPoints.join('\n')}
           ? parseFloat((entryPrice - 1.2 * atr).toFixed(6))
           : parseFloat((entryPrice + 1.2 * atr).toFixed(6)),
         status: 'WAITING',
-        strategy: 'Monster v2',
+        strategy: 'Monster v2 Ajustado',
         createdAt: new Date().toISOString(),
         result: null,
         profit: null,
         rsi: parseFloat(rsi.toFixed(2)),
         atr: parseFloat(atr.toFixed(6)),
-        success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // 55-95% range
+        success_prob: parseFloat((finalConfidence / 100).toFixed(3)), // 50-95% range ajustado
         confidence: parseFloat((finalConfidence / 100).toFixed(3)),
         currentPrice: entryPrice,
         analysis: detailedAnalysis,
@@ -328,7 +328,7 @@ ${analysisPoints.join('\n')}
 
       signals.push(signal);
       finalSignalsCount++;
-      console.log(`✅ Monster v2 Signal ${finalSignalsCount}: ${symbol} ${direction} - ${finalConfidence.toFixed(1)}% confidence`);
+      console.log(`✅ Monster v2 Ajustado Signal ${finalSignalsCount}: ${symbol} ${direction} - ${finalConfidence.toFixed(1)}% confidence`);
 
     } catch (error) {
       console.error(`Error generating signal for ${symbol}:`, error);
@@ -336,12 +336,12 @@ ${analysisPoints.join('\n')}
     }
   }
 
-  console.log(`✅ Generated ${signals.length} Monster v2 signals with real Bybit prices`);
-  console.log(`🎯 Monster v2 Analysis Summary:`);
+  console.log(`✅ Generated ${signals.length} Monster v2 Ajustado signals with real Bybit prices`);
+  console.log(`🎯 Monster v2 Ajustado Analysis Summary:`);
   console.log(`   • Total symbols analyzed: ${analyzedCount}`);
   console.log(`   • Passed initial filter: ${passedInitialFilter}`);
-  console.log(`   • Final Monster v2 signals: ${finalSignalsCount}`);
-  console.log(`   • Quality rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}% (rigoroso)`);
+  console.log(`   • Final Monster v2 Ajustado signals: ${finalSignalsCount}`);
+  console.log(`   • Quality rate: ${analyzedCount > 0 ? ((finalSignalsCount / analyzedCount) * 100).toFixed(1) : 0}% (critérios relaxados)`);
   console.log(`   • Average confidence: ${signals.length > 0 ? (signals.reduce((acc, s) => acc + (s.confidence || 0), 0) / signals.length * 100).toFixed(1) : 0}%`);
   
   return signals;

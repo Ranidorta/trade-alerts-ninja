@@ -184,8 +184,8 @@ const SignalsDashboard = () => {
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
-      title: "Gerando sinais Monster v2",
-      description: "Aplicando critérios rigorosos: EMA200 + RSI extremos + Volume 1.3x + VWAP + ADX ≥20 + ML ≥55%..."
+      title: "Gerando sinais Monster v2 Ajustado",
+      description: "Critérios relaxados: RSI 25-40/60-75 + Volume 1.2x + ML ≥50% para mais oportunidades..."
     });
     try {
       // Use backend monster signal generation
@@ -203,8 +203,8 @@ const SignalsDashboard = () => {
               setActiveSignal(uniqueNewSignals[0]);
             }
             toast({
-              title: "Sinais Monster v2 gerados",
-              description: `${uniqueNewSignals.length} sinais de alta confiabilidade (70%+ taxa de acerto) com gestão de risco rigorosa`
+              title: "Sinais Monster v2 Ajustado gerados",
+              description: `${uniqueNewSignals.length} sinais com critérios relaxados para mais oportunidades mantendo qualidade`
             });
             saveSignalsToHistory(uniqueNewSignals);
             return [...uniqueNewSignals, ...prevSignals];
@@ -307,8 +307,8 @@ const SignalsDashboard = () => {
             Oportunidades de trading com estratégias avançadas
           </p>
           <div className="mt-1 sm:mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-xs bg-purple-100 text-purple-800 font-medium px-2 py-1 rounded">
-            Monster v2 - Sistema de Alta Confiabilidade
+          <span className="text-xs bg-blue-100 text-blue-800 font-medium px-2 py-1 rounded">
+            Monster v2 Ajustado - Critérios Relaxados
           </span>
             {signals.length > 0 && <span className="text-xs text-slate-500">
               Última atualização: {formatLastUpdated()}
@@ -319,7 +319,7 @@ const SignalsDashboard = () => {
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button onClick={handleGenerateSignals} variant="default" disabled={isGenerating} className="flex-1 md:flex-auto">
             <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Monster v2...' : 'Gerar Sinais Monster v2'}
+            {isGenerating ? 'Analisando Monster v2 Ajustado...' : 'Gerar Sinais Monster v2 Ajustado'}
           </Button>
           
           {!isMobile && <Button onClick={handleSubscribe} variant="outline" className="flex-1 md:flex-auto">
@@ -332,7 +332,7 @@ const SignalsDashboard = () => {
       <Tabs defaultValue="normal" className="w-full" onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="normal">
-            🎯 Monster v2
+            🎯 Monster v2 Ajustado
           </TabsTrigger>
           <TabsTrigger value="classic">
             📊 Classic v2

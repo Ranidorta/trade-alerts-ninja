@@ -143,29 +143,29 @@ def check_ema200_trend(df_15m):
     return None
 
 def check_rsi_conditions(df_15m, direction, market_context="neutral"):
-    """RSI (14): Long ≤30-35, Short ≥65-70, ajuste dinâmico bull/bear"""
+    """RSI (14): Long 25-40, Short 60-75, ajuste dinâmico bull/bear"""
     rsi = calculate_rsi(df_15m['close'], window=14).iloc[-1]
     
     if direction == "LONG":
         if market_context == "bull":
-            # Em bull market, considerar compra se RSI ≥40
-            return rsi >= 40 and rsi <= 65, rsi
+            # Em bull market, permitir Long se RSI ≥40
+            return rsi >= 40 and rsi <= 75, rsi
         else:
-            # Condição normal: RSI ≤30-35 (oversold)
-            return rsi >= 30 and rsi <= 35, rsi
+            # Condição ajustada: RSI entre 25-40
+            return rsi >= 25 and rsi <= 40, rsi
     
     elif direction == "SHORT":
         if market_context == "bear":
-            # Em bear market, considerar venda se RSI ≤60
-            return rsi <= 60 and rsi >= 35, rsi
+            # Em bear market, permitir Short se RSI ≤60
+            return rsi <= 60 and rsi >= 25, rsi
         else:
-            # Condição normal: RSI ≥65-70 (overbought)
-            return rsi >= 65 and rsi <= 70, rsi
+            # Condição ajustada: RSI entre 60-75
+            return rsi >= 60 and rsi <= 75, rsi
     
     return False, rsi
 
 def check_volume_conditions(df_15m):
-    """Volume: candle atual ≥1.3× SMA(20). Se ≥1.5×, aumentar score/confiança"""
+    """Volume: candle atual ≥1.2× SMA(20). Se ≥1.5×, aumentar score/confiança"""
     if len(df_15m) < 20:
         return False, 1.0, False
     
@@ -174,8 +174,8 @@ def check_volume_conditions(df_15m):
     
     volume_ratio = current_volume / sma_20_volume if sma_20_volume > 0 else 1.0
     
-    # Volume deve ser ≥1.3× SMA(20)
-    volume_confirmed = volume_ratio >= 1.3
+    # Volume deve ser ≥1.2× SMA(20) (ajustado de 1.3×)
+    volume_confirmed = volume_ratio >= 1.2
     
     # Se ≥1.5×, aumentar score/confiança
     volume_boost = volume_ratio >= 1.5
@@ -246,11 +246,11 @@ def get_ml_confidence_v2(df_15m, rsi, atr, volume_ratio, adx_value):
             max_confidence = max(confidence_scores.values())
             logger.info(f"🤖 ML V2: {ml_prediction} | Confiança: {max_confidence:.3f}")
             
-            # Monster v2: confiança mínima ≥55%
-            if ml_prediction in ['WINNER', 'PARTIAL'] and max_confidence >= 0.55:
+            # Monster v2 Ajustado: confiança mínima ≥50% (reduzido de 55%)
+            if ml_prediction in ['WINNER', 'PARTIAL'] and max_confidence >= 0.50:
                 return max_confidence
             else:
-                logger.info(f"🛑 ML V2 rejeitou: {ml_prediction} com confiança {max_confidence:.3f}")
+                logger.info(f"🛑 ML V2 Ajustado rejeitou: {ml_prediction} com confiança {max_confidence:.3f}")
                 return 0.0
         else:
             return 0.60  # Fallback conservador
@@ -260,19 +260,19 @@ def get_ml_confidence_v2(df_15m, rsi, atr, volume_ratio, adx_value):
         return calculate_technical_confidence_v2(rsi, volume_ratio, adx_value)
 
 def calculate_technical_confidence_v2(rsi, volume_ratio, adx_value):
-    """Fallback técnico para confiança quando ML não disponível"""
-    confidence = 0.55  # Base mínima
+    """Fallback técnico para confiança quando ML não disponível - Critérios Ajustados"""
+    confidence = 0.50  # Base mínima ajustada para 50%
     
-    # RSI factor
-    if 30 <= rsi <= 70:
-        confidence += 0.05
-    if rsi <= 35 or rsi >= 65:  # Extremes
-        confidence += 0.10
+    # RSI factor (faixas mais amplas)
+    if 25 <= rsi <= 75:
+        confidence += 0.08
+    if (25 <= rsi <= 40) or (60 <= rsi <= 75):  # Faixas ajustadas
+        confidence += 0.12
     
-    # Volume factor
+    # Volume factor (threshold reduzido)
     if volume_ratio >= 1.5:
         confidence += 0.15
-    elif volume_ratio >= 1.3:
+    elif volume_ratio >= 1.2:  # Reduzido de 1.3 para 1.2
         confidence += 0.10
     
     # ADX factor
@@ -284,10 +284,10 @@ def calculate_technical_confidence_v2(rsi, volume_ratio, adx_value):
     return min(confidence, 0.95)  # Cap at 95%
 
 def calculate_position_sizing(ml_confidence, risk_amount):
-    """Ajuste de posição: 55-60% meio lote, >60% lote completo"""
+    """Ajuste de posição: 50-60% meio lote, >60% lote completo (ajustado)"""
     if ml_confidence >= 0.60:
         return risk_amount, "LOTE_COMPLETO"
-    elif ml_confidence >= 0.55:
+    elif ml_confidence >= 0.50:  # Reduzido de 0.55 para 0.50
         return risk_amount * 0.5, "MEIO_LOTE"
     else:
         return 0, "REJEITADO"
@@ -310,7 +310,7 @@ def generate_monster_v2_signal(symbol):
     Objetivo: 70%+ taxa de acerto com critérios rigorosos
     """
     try:
-        logger.info(f"🎯 [MONSTER V2] Analyzing {symbol}...")
+        logger.info(f"🎯 [MONSTER V2 AJUSTADO] Analyzing {symbol}...")
         
         # Get current market price
         current_price = get_current_price(symbol)
@@ -396,13 +396,13 @@ def generate_monster_v2_signal(symbol):
         logger.info(f"✅ ADX força confirmada: {adx_value:.2f}")
         
         # ============================================================================
-        # STEP 7: Machine Learning - ≥55% confiança
+        # STEP 7: Machine Learning - ≥50% confiança (ajustado)
         # ============================================================================
         ml_confidence = get_ml_confidence_v2(df_15m, rsi_value, 
                                            calculate_atr(df_15m['high'], df_15m['low'], df_15m['close']).iloc[-1],
                                            volume_ratio, adx_value)
         
-        if ml_confidence < 0.55:
+        if ml_confidence < 0.50:  # Reduzido de 0.55 para 0.50
             logger.info(f"🛑 ML confiança muito baixa: {ml_confidence:.3f}")
             return None
         
@@ -438,24 +438,24 @@ def generate_monster_v2_signal(symbol):
         logger.info(f"✅ Posição calculada: {position_type} - ${position_amount}")
         
         # Generate detailed analysis
-        analysis_text = f"""🎯 MONSTER V2 - ANÁLISE COMPLETA
+        analysis_text = f"""🎯 MONSTER V2 AJUSTADO - ANÁLISE COMPLETA
 
 📊 CONFIGURAÇÃO TÉCNICA:
 • Timeframe Principal: 15m (análise/execução)
 • Timeframe Confirmação: 5m
 • Direção EMA200: {direction}
-• RSI: {rsi_value:.2f} {'(Extremo favorável)' if (direction == 'LONG' and rsi_value <= 35) or (direction == 'SHORT' and rsi_value >= 65) else '(Dinâmico)'}
+• RSI: {rsi_value:.2f} {'(Faixa LONG 25-40)' if direction == 'LONG' and 25 <= rsi_value <= 40 else '(Faixa SHORT 60-75)' if direction == 'SHORT' and 60 <= rsi_value <= 75 else '(Ajuste dinâmico)'}
 
-📈 CONFIRMAÇÕES DE QUALIDADE:
-• Volume: {volume_ratio:.2f}x SMA(20) {'✨ BOOST' if volume_boost else '✅ Confirmado'}
+📈 CONFIRMAÇÕES AJUSTADAS:
+• Volume: {volume_ratio:.2f}x SMA(20) {'✨ BOOST' if volume_boost else '✅ Confirmado (≥1.2x)'}
 • VWAP(50): Rompimento {direction} confirmado
 • Volume Profile POC: Breakout ±0.2% detectado
-• ADX: {adx_value:.2f} (Tendência forte)
+• ADX: {adx_value:.2f} (Tendência forte ≥20)
 
-🤖 MACHINE LEARNING:
-• Confiança: {ml_confidence:.1%}
+🤖 MACHINE LEARNING AJUSTADO:
+• Confiança: {ml_confidence:.1%} (Threshold: ≥50%)
 • Posição: {position_type}
-• Status: {'APROVADO' if ml_confidence >= 0.55 else 'REJEITADO'}
+• Status: {'APROVADO' if ml_confidence >= 0.50 else 'REJEITADO'}
 
 💰 GESTÃO MONSTER V2:
 • Stop Loss: {sl:.6f} (1.2×ATR)
@@ -464,12 +464,12 @@ def generate_monster_v2_signal(symbol):
 • Take Profit 3: {tp3:.6f} (3.0×ATR)
 • Risk/Reward: {risk_reward_ratio:.2f}:1
 
-⚡ SETUP MONSTER V2 - ALTA CONFIABILIDADE APROVADO
+⚡ MONSTER V2 AJUSTADO - CRITÉRIOS RELAXADOS PARA MAIS OPORTUNIDADES
 """
         
-        # Create Monster v2 signal
+        # Create Monster v2 Ajustado signal
         signal = {
-            'estrategia': 'Monster v2',
+            'estrategia': 'Monster v2 Ajustado',
             'par': symbol,
             'direcao': direction,
             'entrada': round(entry_price, 6),
@@ -495,7 +495,7 @@ def generate_monster_v2_signal(symbol):
             'timeframe_confirmation': '5m'
         }
         
-        logger.info(f"✅ MONSTER V2 signal generated: {symbol} {direction} @ {entry_price}")
+        logger.info(f"✅ MONSTER V2 AJUSTADO signal generated: {symbol} {direction} @ {entry_price}")
         logger.info(f"   Confidence: {ml_confidence:.1%}, R/R: {risk_reward_ratio:.2f}, {position_type}")
         
         return signal
@@ -515,7 +515,7 @@ def generate_monster_v2_signals():
         if not symbols:
             symbols = get_usdt_symbols_from_bybit(20)
         
-        logger.info(f"🎯 Generating Monster v2 signals for {len(symbols)} symbols...")
+        logger.info(f"🎯 Generating Monster v2 Ajustado signals for {len(symbols)} symbols...")
         
         signals = []
         for symbol in symbols:
@@ -525,18 +525,18 @@ def generate_monster_v2_signals():
                     signals.append(signal)
                     
                     # Log successful signal
-                    logger.info(f"✅ {len(signals)}. Monster v2 signal: {signal['par']} {signal['direcao']} - {signal['confianca']}%")
+                    logger.info(f"✅ {len(signals)}. Monster v2 Ajustado signal: {signal['par']} {signal['direcao']} - {signal['confianca']}%")
                     
             except Exception as e:
                 logger.error(f"Error processing {symbol}: {str(e)}")
                 continue
         
-        logger.info(f"🎯 Monster v2 generation complete: {len(signals)} signals generated")
+        logger.info(f"🎯 Monster v2 Ajustado generation complete: {len(signals)} signals generated")
         
         return jsonify({
             'signals': signals,
             'count': len(signals),
-            'strategy': 'Monster v2',
+            'strategy': 'Monster v2 Ajustado',
             'timestamp': datetime.utcnow().isoformat()
         })
         
@@ -550,7 +550,7 @@ def monster_v2_health():
     """Health check for Monster v2 API"""
     return jsonify({
         'status': 'healthy',
-        'strategy': 'Monster v2',
-        'version': '2.0',
+        'strategy': 'Monster v2 Ajustado',
+        'version': '2.1',
         'timestamp': datetime.utcnow().isoformat()
     })
