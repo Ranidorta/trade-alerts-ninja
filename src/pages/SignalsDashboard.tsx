@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { TradingSignal, SignalStatus } from "@/lib/types";
-import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter } from "lucide-react";
+import { ArrowUpDown, BarChart3, Search, Bell, RefreshCw, Zap, Filter, Loader2, TrendingUp, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -181,6 +181,57 @@ const SignalsDashboard = () => {
       description: "Você receberá alertas quando novos sinais forem postados"
     });
   };
+  // Function to call the correct generation method
+  const generateSignals = async (strategy: string = 'monster-v2') => {
+    setIsGenerating(true);
+    
+    try {
+      if (strategy === 'monster-v2-top5') {
+        toast({
+          title: "Gerando Monster v2 Top5",
+          description: "Analisando os 10 pares mais líquidos para selecionar os top 5..."
+        });
+        // For now, call the same monster generation
+        // In the future, this will call the Top5 API
+        const newSignals = await generateMonsterSignals();
+        
+        if (newSignals.length > 0) {
+          localStorage.setItem(SIGNALS_GENERATED_KEY, "true");
+          setSignalsGeneratedBefore(true);
+          setSignals(prevSignals => {
+            const existingIds = new Set(prevSignals.map(s => s.id));
+            const uniqueNewSignals = newSignals.filter(s => !existingIds.has(s.id));
+            if (uniqueNewSignals.length > 0) {
+              addSignals(uniqueNewSignals);
+              if (!activeSignal) {
+                setActiveSignal(uniqueNewSignals[0]);
+              }
+              toast({
+                title: "Top 5 Monster v2 gerados",
+                description: `${uniqueNewSignals.length} sinais selecionados dos pares mais líquidos`
+              });
+              saveSignalsToHistory(uniqueNewSignals);
+              return [...uniqueNewSignals, ...prevSignals];
+            }
+            return prevSignals;
+          });
+        }
+      } else {
+        // Regular Monster v2 generation
+        await handleGenerateSignals();
+      }
+    } catch (error) {
+      console.error('Error generating signals:', error);
+      toast({
+        title: "Erro ao gerar sinais",
+        description: error.message || "Ocorreu um erro ao analisar dados de mercado",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleGenerateSignals = async () => {
     setIsGenerating(true);
     toast({
@@ -316,10 +367,41 @@ const SignalsDashboard = () => {
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 w-full md:w-auto">
-          <Button onClick={handleGenerateSignals} variant="default" disabled={isGenerating} className="flex-1 md:flex-auto">
-            <RefreshCw className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
-            {isGenerating ? 'Analisando Monster v2 Ajustado...' : 'Gerar Sinais Monster v2 Ajustado'}
+        <div className="flex items-center gap-4">
+          <Button 
+            onClick={() => generateSignals('monster-v2')}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-primary to-primary-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando Sinais...
+              </>
+            ) : (
+              <>
+                <Zap className="mr-2 h-4 w-4" />
+                Gerar Monster v2
+              </>
+            )}
+          </Button>
+          
+          <Button 
+            onClick={() => generateSignals('monster-v2-top5')}
+            disabled={isGenerating}
+            className="bg-gradient-to-r from-accent to-accent-foreground text-white font-semibold px-6 py-2 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Gerando Top 5...
+              </>
+            ) : (
+              <>
+                <Trophy className="mr-2 h-4 w-4" />
+                Gerar Top 5
+              </>
+            )}
           </Button>
           
           {!isMobile && <Button onClick={handleSubscribe} variant="outline" className="flex-1 md:flex-auto">
